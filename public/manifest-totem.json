@@ -1,0 +1,21 @@
+{
+  "name": "Cânone Autoatendimento",
+  "short_name": "Totem Cânone",
+  "description": "Totem de Autoatendimento - Cânone Burger",
+  "start_url": "/?totem=true",
+  "display": "fullscreen",
+  "background_color": "#0a0a0a",
+  "theme_color": "#f59e0b",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

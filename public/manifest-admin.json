@@ -1,0 +1,21 @@
+{
+  "name": "Cânone Admin Pro",
+  "short_name": "Admin Cânone",
+  "description": "Painel Administrativo - Cânone Burger",
+  "start_url": "/admin",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#f59e0b",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
