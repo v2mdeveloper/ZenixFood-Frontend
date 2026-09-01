@@ -37,17 +37,19 @@ export default function MasterDashboard() {
     setEditingStore({
       ...store,
       corporateName: store.corporateName || '',
-      cnpj: store.cnpj || '',
+      cnpj: store.documentCnpj || store.cnpj || '', // Ajustado para pegar documentCnpj do novo schema
       stateRegistration: store.stateRegistration || '',
       municipalRegistration: store.municipalRegistration || '',
-      companyEmail: store.companyEmail || '',
-      companyPhone: store.companyPhone || '',
+      companyEmail: store.email || store.companyEmail || '',
+      companyPhone: store.phone || store.companyPhone || '',
       ownerName: store.ownerName || '',
       ownerCpf: store.ownerCpf || '',
       ownerEmail: store.ownerEmail || '',
       ownerPhone: store.ownerPhone || '',
       address: store.address || '',
-      logoUrl: store.logoUrl || ''
+      logoUrl: store.logoUrl || '',
+      monthlyFee: store.monthlyFee || 0,
+      subscriptionStatus: store.subscriptionStatus || 'TRIAL'
     });
   };
 
@@ -55,6 +57,12 @@ export default function MasterDashboard() {
     e.preventDefault();
     const masterToken = localStorage.getItem('zenix_master_token');
     
+    // Converte a mensalidade para Float antes de enviar
+    const payload = {
+      ...editingStore,
+      monthlyFee: parseFloat(editingStore.monthlyFee) || 0
+    };
+
     try {
       const res = await fetch(`${API_URL}/api/master/stores/${editingStore.id}`, {
         method: 'PUT',
@@ -62,7 +70,7 @@ export default function MasterDashboard() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${masterToken}`
         },
-        body: JSON.stringify(editingStore)
+        body: JSON.stringify(payload)
       });
       
       const data = await res.json();
@@ -79,7 +87,7 @@ export default function MasterDashboard() {
   };
 
   const toggleStoreStatus = async (store) => {
-    if (!confirm(`Deseja ${store.status === 'ACTIVE' ? 'BLOQUEAR' : 'DESBLOQUEAR'} a loja ${store.name}?`)) return;
+    if (!confirm(`Deseja ${store.status === 'ACTIVE' ? 'BLOQUEAR' : 'DESBLOQUEAR'} o acesso ao sistema para a loja ${store.name}?`)) return;
     
     const masterToken = localStorage.getItem('zenix_master_token');
     const newStatus = store.status === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
@@ -97,6 +105,29 @@ export default function MasterDashboard() {
     } catch (error) {
       alert('Erro ao alterar status.');
     }
+  };
+
+  // --- CÁLCULOS DOS CARDS DE DASHBOARD ---
+  const lojasAtivas = stores.filter(s => s.status === 'ACTIVE').length;
+  
+  // Total a Receber = Soma das mensalidades de clientes Ativos e em Trial
+  const totalReceber = stores
+    .filter(s => s.status === 'ACTIVE')
+    .reduce((acc, s) => acc + (parseFloat(s.monthlyFee) || 0), 0);
+    
+  // Total em Atraso = Soma das mensalidades de clientes marcados como OVERDUE (Inadimplente)
+  const totalAtrasado = stores
+    .filter(s => s.subscriptionStatus === 'OVERDUE')
+    .reduce((acc, s) => acc + (parseFloat(s.monthlyFee) || 0), 0);
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      'TRIAL': { text: 'Período de Teste', style: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+      'ACTIVE': { text: 'Pagamento em Dia', style: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+      'OVERDUE': { text: 'Inadimplente', style: 'bg-red-500/10 text-red-400 border-red-500/20' },
+      'BLOCKED': { text: 'Cancelado/Bloqueado', style: 'bg-slate-500/10 text-slate-400 border-slate-500/20' }
+    };
+    return labels[status] || labels['TRIAL'];
   };
 
   if (loading) {
@@ -121,6 +152,22 @@ export default function MasterDashboard() {
         </button>
       </div>
 
+      {/* CARDS DE INDICADORES FINANCEIROS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Lojas Ativas</p>
+          <p className="text-3xl font-black text-white">{lojasAtivas} <span className="text-sm font-medium text-slate-500">/ {stores.length} total</span></p>
+        </div>
+        <div className="bg-emerald-950/20 border border-emerald-900/50 p-6 rounded-2xl shadow-sm">
+          <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Receita Mensal Recorrente</p>
+          <p className="text-3xl font-black text-emerald-400">R$ {totalReceber.toFixed(2)}</p>
+        </div>
+        <div className="bg-red-950/20 border border-red-900/50 p-6 rounded-2xl shadow-sm">
+          <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Total Inadimplente (Atrasados)</p>
+          <p className="text-3xl font-black text-red-400">R$ {totalAtrasado.toFixed(2)}</p>
+        </div>
+      </div>
+
       {/* LISTAGEM DAS LOJAS */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
@@ -128,39 +175,50 @@ export default function MasterDashboard() {
             <thead className="bg-slate-950 border-b border-slate-800 text-slate-400 uppercase tracking-widest text-[10px] font-black">
               <tr>
                 <th className="px-6 py-4">Loja / Slug</th>
-                <th className="px-6 py-4">Plano</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4">Criado em</th>
+                <th className="px-6 py-4">Plano & Valor</th>
+                <th className="px-6 py-4">Status Pgto</th>
+                <th className="px-6 py-4">Acesso Sistema</th>
                 <th className="px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-              {stores.map(store => (
-                <tr key={store.id} className="hover:bg-slate-800/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <p className="font-black text-white text-base">{store.name}</p>
-                    <p className="text-amber-500 font-mono text-xs">/{store.slug}</p>
-                  </td>
-                  <td className="px-6 py-4 font-black text-slate-300">{store.plan}</td>
-                  <td className="px-6 py-4">
-                    <button 
-                      onClick={() => toggleStoreStatus(store)}
-                      className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest cursor-pointer ${store.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}
-                    >
-                      {store.status}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 text-slate-500">{new Date(store.createdAt).toLocaleDateString('pt-BR')}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => handleEditClick(store)} 
-                      className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      Editar Dados
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {stores.map(store => {
+                const subStatus = getStatusLabel(store.subscriptionStatus);
+                return (
+                  <tr key={store.id} className="hover:bg-slate-800/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <p className="font-black text-white text-base">{store.name}</p>
+                      <p className="text-amber-500 font-mono text-xs">/{store.slug}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="font-black text-slate-300">{store.plan}</p>
+                      <p className="text-emerald-400 text-xs font-bold">R$ {parseFloat(store.monthlyFee || 0).toFixed(2)}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest border ${subStatus.style}`}>
+                        {subStatus.text}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <button 
+                        onClick={() => toggleStoreStatus(store)}
+                        className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest border cursor-pointer transition-colors ${store.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/40' : 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-emerald-500/20 hover:text-emerald-400 hover:border-emerald-500/40'}`}
+                        title={store.status === 'ACTIVE' ? 'Clique para Bloquear Acesso' : 'Clique para Desbloquear Acesso'}
+                      >
+                        {store.status === 'ACTIVE' ? 'SISTEMA LIBERADO' : 'SISTEMA BLOQUEADO'}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button 
+                        onClick={() => handleEditClick(store)} 
+                        className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Editar Dados
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
               {stores.length === 0 && (
                 <tr>
                   <td colSpan="5" className="text-center py-10 text-slate-500">Nenhuma loja cadastrada ainda.</td>
@@ -171,7 +229,7 @@ export default function MasterDashboard() {
         </div>
       </div>
 
-      {/* MODAL DE EDIÇÃO DA LOJA (Contém todos os campos do cadastro) */}
+      {/* MODAL DE EDIÇÃO DA LOJA (Contém todos os campos do cadastro e os valores de assinatura) */}
       {editingStore && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[90vh]">
@@ -243,26 +301,44 @@ export default function MasterDashboard() {
                 </div>
               </div>
 
-              <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
-                <h3 className="text-xs font-black text-emerald-500 uppercase tracking-widest mb-3">Endereço & Plano</h3>
-                <div className="grid grid-cols-1 gap-4 mb-4">
+              {/* NOVA SEÇÃO: ASSINATURA E COBRANÇA */}
+              <div className="bg-slate-950/50 p-4 rounded-2xl border border-emerald-900/50 shadow-inner">
+                <h3 className="text-xs font-black text-emerald-500 uppercase tracking-widest mb-3">Assinatura e Cobrança (SaaS)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase">Endereço Completo</label>
-                    <input type="text" value={editingStore.address} onChange={e => setEditingStore({...editingStore, address: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase">URL do Logotipo</label>
-                    <input type="text" value={editingStore.logoUrl} onChange={e => setEditingStore({...editingStore, logoUrl: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase">Plano da Loja</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase">Nível do Plano</label>
                     <select value={editingStore.plan} onChange={e => setEditingStore({...editingStore, plan: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold focus:outline-none focus:border-emerald-500">
                       <option value="STANDARD">Padrão (Standard)</option>
                       <option value="PRO">Profissional (Pro)</option>
                       <option value="ENTERPRISE">Enterprise / Franquia</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase">Valor da Mensalidade (R$)</label>
+                    <input type="number" step="0.01" value={editingStore.monthlyFee} onChange={e => setEditingStore({...editingStore, monthlyFee: e.target.value})} placeholder="149.90" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-mono focus:outline-none focus:border-emerald-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase">Status do Pagamento</label>
+                    <select value={editingStore.subscriptionStatus} onChange={e => setEditingStore({...editingStore, subscriptionStatus: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold focus:outline-none focus:border-emerald-500">
+                      <option value="TRIAL">Período de Teste</option>
+                      <option value="ACTIVE">Em Dia (Ativo)</option>
+                      <option value="OVERDUE">Inadimplente (Atrasado)</option>
+                      <option value="BLOCKED">Bloqueado Financeiro</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
+                <h3 className="text-xs font-black text-purple-500 uppercase tracking-widest mb-3">Endereço e Customização</h3>
+                <div className="grid grid-cols-1 gap-4 mb-4">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase">Endereço Completo</label>
+                    <input type="text" value={editingStore.address} onChange={e => setEditingStore({...editingStore, address: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-purple-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase">URL do Logotipo</label>
+                    <input type="text" value={editingStore.logoUrl} onChange={e => setEditingStore({...editingStore, logoUrl: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-purple-500" />
                   </div>
                 </div>
               </div>
