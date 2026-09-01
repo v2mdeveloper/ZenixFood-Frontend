@@ -87,7 +87,7 @@ function HomeContent() {
   const [isTotemMode, setIsTotemMode] = useState(false);
   const [totemName, setTotemName] = useState('');
 
-  const API_URL = 'https://canone-backend.onrender.com';
+  const API_URL = 'https://zenixfood-backend.onrender.com';
   const searchParams = useSearchParams();
 
   useEffect(() => {
