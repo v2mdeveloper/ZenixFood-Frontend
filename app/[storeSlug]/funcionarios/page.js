@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 
 import ExpeditionTab from '../admin/components/tabs/ExpeditionTab';
 import OrderHistoryTab from '../admin/components/tabs/OrderHistoryTab';
@@ -116,14 +117,14 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
   );
 }
 
-export default function FuncionariosPortal() {
+function FuncionariosPortal() {
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [employeeUser, setEmployeeUser] = useState(null);
-  const [loginForm, setLoginForm] = useState({ storeId: '', email: '', password: '' });
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('');
   const [isKdsMenuOpen, setIsKdsMenuOpen] = useState(false);
@@ -186,8 +187,7 @@ export default function FuncionariosPortal() {
   const [couponForm, setCouponForm] = useState({ code: '', type: 'FIXED', value: '', minOrderValue: '0', maxUses: '0' });
   const [nfcesEmitidas, setNfcesEmitidas] = useState({}); 
 
-
-//Helper local atualizado com interceptador de Inadimplência
+  // Helper Multi-Tenant com interceptador de inadimplência
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = localStorage.getItem('zenix_store_id');
@@ -203,7 +203,7 @@ export default function FuncionariosPortal() {
     // SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
-        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+        window.location.href = '/bloqueado'; 
       }
     }
 
@@ -356,14 +356,16 @@ export default function FuncionariosPortal() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!loginForm.storeId) return alert("Informe o ID ou Slug da Loja!");
+    const currentStoreId = localStorage.getItem('zenix_store_id');
+    if (!currentStoreId) return alert("Erro: Não foi possível identificar a loja atual. Recarregue a página.");
+    
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/auth/employee/login`, {
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'x-store-id': loginForm.storeId // 🚨 Envia a loja do funcionário
+          'x-store-id': currentStoreId // Puxado automaticamente do Wrapper!
         }, 
         body: JSON.stringify({ email: loginForm.email, password: loginForm.password })
       });
@@ -371,7 +373,6 @@ export default function FuncionariosPortal() {
       if (res.ok && data.success) {
         localStorage.setItem('zenix_employeeToken', data.token);
         localStorage.setItem('zenix_employeeUser', JSON.stringify(data.employee));
-        localStorage.setItem('zenix_store_id', loginForm.storeId);
         setIsAuthenticated(true); 
         setEmployeeUser(data.employee);
         logActionLogin(data.employee.id); 
@@ -831,10 +832,6 @@ const handleEditCategory = async (e) => {
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="text-xs font-bold text-slate-400 uppercase block mb-1">ID ou Slug da Loja</label>
-              <input type="text" required value={loginForm.storeId} onChange={e => setLoginForm({...loginForm, storeId: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-sm text-white focus:outline-none focus:border-amber-500" placeholder="ex: canone-burger" />
-            </div>
-            <div>
               <label className="text-xs font-bold text-slate-400 uppercase block mb-1">E-mail ou CPF</label>
               <input type="text" required value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-sm text-white focus:outline-none focus:border-amber-500" placeholder="Seu acesso..." />
             </div>
@@ -1038,4 +1035,55 @@ const handleEditCategory = async (e) => {
       <OrderDetailsModal order={selectedOrderDetails} onClose={() => setSelectedOrderDetails(null)} triggerManualPrint={triggerManualPrint} getMetodoPagamentoLabel={getMetodoPagamentoLabel} getProductSizeLabel={getProductSizeLabel} />
     </div>
   );
+}
+
+// ============================================================================
+// WRAPPER SAAS (Identifica a loja pela URL e libera o sistema)
+// ============================================================================
+export default function FuncionariosWrapper() {
+  const params = useParams();
+  const storeSlug = params.storeSlug;
+  const [storeStatus, setStoreStatus] = useState('LOADING');
+
+  useEffect(() => {
+    if (!storeSlug) return;
+
+    const identifyStore = async () => {
+      try {
+        const res = await fetch(`https://zenixfood-backend.onrender.com/api/stores/slug/${storeSlug}`);
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem('zenix_store_id', data.store.id);
+          setStoreStatus('FOUND');
+        } else {
+          setStoreStatus('NOT_FOUND');
+        }
+      } catch (error) {
+        setStoreStatus('NOT_FOUND');
+      }
+    };
+
+    identifyStore();
+  }, [storeSlug]);
+
+  if (storeStatus === 'LOADING') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500 font-black text-xl animate-pulse">
+        Carregando painel de RH...
+      </div>
+    );
+  }
+
+  if (storeStatus === 'NOT_FOUND') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6">
+        <span className="text-6xl mb-4">🚫</span>
+        <h1 className="text-3xl font-black text-white mb-2">Acesso Negado</h1>
+        <p className="text-slate-400">Nenhuma loja encontrada para este endereço.</p>
+      </div>
+    );
+  }
+
+  return <FuncionariosPortal />;
 }
