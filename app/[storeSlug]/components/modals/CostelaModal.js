@@ -3,7 +3,6 @@ export default function CostelaModal({
   costelaSize, setCostelaSize, costelaTime, setCostelaTime, confirmCostelaOrder
 }) {
   if (!showCostelaModal || !costelaProduct) return null;
-
   const price500 = Number(costelaProduct.price);
   const price700 = Number(costelaProduct.price700g) > 0 ? Number(costelaProduct.price700g) : price500 * 1.4;
   const price1000 = Number(costelaProduct.price1kg) > 0 ? Number(costelaProduct.price1kg) : price500 * 1.9;
