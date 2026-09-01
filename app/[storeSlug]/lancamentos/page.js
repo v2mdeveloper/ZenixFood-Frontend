@@ -1,9 +1,16 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { useParams } from 'next/navigation';
 
 export default function LancamentosPage() {
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
+  const params = useParams();
+  const storeSlug = params.storeSlug;
 
+  const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
+    ? 'http://localhost:3333' 
+    : 'https://zenixfood-backend.onrender.com';
+
+  const [storeStatus, setStoreStatus] = useState('LOADING');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [employeeUser, setEmployeeUser] = useState(null);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -58,10 +65,32 @@ export default function LancamentosPage() {
   const [readyAlerts, setReadyAlerts] = useState([]);
   const [alertedItemsSet, setAlertedItemsSet] = useState(new Set());
 
+  // Identifica e valida a loja pelo slug da URL
+  useEffect(() => {
+    if (!storeSlug) return;
 
-//Helper local atualizado com interceptador de Inadimplência
+    const identifyStore = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/stores/slug/${storeSlug}`);
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem('zenix_store_id', data.store.id);
+          setStoreStatus('FOUND');
+        } else {
+          setStoreStatus('NOT_FOUND');
+        }
+      } catch (error) {
+        setStoreStatus('NOT_FOUND');
+      }
+    };
+
+    identifyStore();
+  }, [storeSlug]);
+
+  // Helper local com interceptador de Inadimplência
   const fetchWithStore = async (url, options = {}) => {
-    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token') || localStorage.getItem('@Canone:employeeToken');
     const storeId = localStorage.getItem('zenix_store_id');
 
     const headers = {
@@ -72,10 +101,9 @@ export default function LancamentosPage() {
 
     const response = await fetch(url, { ...options, headers });
 
-    //SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
-        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+        window.location.href = `/${storeSlug}/bloqueado`;
       }
     }
 
@@ -113,7 +141,7 @@ export default function LancamentosPage() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && storeStatus === 'FOUND') {
       fetchTabs(); 
       fetchMenu();
       fetchUpsells(); 
@@ -122,7 +150,7 @@ export default function LancamentosPage() {
       const clock = setInterval(() => setCurrentTime(Date.now()), 1000);
       return () => { clearInterval(interval); clearInterval(clock); };
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, storeStatus]);
 
   useEffect(() => {
     if (!tabs.length || !employeeUser) return;
@@ -155,8 +183,16 @@ export default function LancamentosPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault(); setLoadingLogin(true);
+    const currentStoreId = localStorage.getItem('zenix_store_id');
     try {
-      const res = await fetch(`${API_URL}/api/auth/employee/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginForm) });
+      const res = await fetch(`${API_URL}/api/auth/employee/login`, { 
+        method: 'POST', 
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-store-id': currentStoreId 
+        }, 
+        body: JSON.stringify(loginForm) 
+      });
       const data = await res.json();
       if (res.ok && data.success) {
         localStorage.setItem('@Canone:employeeToken', data.token); localStorage.setItem('@Canone:employeeUser', JSON.stringify(data.employee));
@@ -502,6 +538,24 @@ export default function LancamentosPage() {
     return currentCat ? currentCat.products || [] : [];
   };
 
+  if (storeStatus === 'LOADING') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500 font-black text-xl animate-pulse">
+        Carregando painel de salão...
+      </div>
+    );
+  }
+
+  if (storeStatus === 'NOT_FOUND') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6">
+        <span className="text-6xl mb-4">🚫</span>
+        <h1 className="text-3xl font-black text-white mb-2">Acesso Negado</h1>
+        <p className="text-slate-400">Nenhuma loja encontrada para este endereço.</p>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <div className={`min-h-screen ${bgBase} flex items-center justify-center p-4 font-sans transition-colors`}>
@@ -581,7 +635,6 @@ export default function LancamentosPage() {
 
       <main className="flex-1 h-[calc(100vh-140px)] md:h-screen overflow-y-auto hide-scrollbar relative">
         
-        {/* TELA: NOVAS ABERTURAS (BLINDADA CONTRA CONFLITOS DE INPUT) */}
         {activeMenu === 'aberturas' && !selectedTab && (
            <div className="p-6 md:p-10 max-w-xl mx-auto animate-fade-in-up mt-10">
               <div className={`${bgCard} border p-8 rounded-[2.5rem] shadow-xl relative overflow-visible`}>
@@ -598,7 +651,6 @@ export default function LancamentosPage() {
                       <input type="number" required min="1" value={openForm.number} onChange={e => setOpenForm({...openForm, number: e.target.value})} className={`w-full border rounded-2xl p-4 text-3xl text-center font-black focus:outline-none focus:border-emerald-500 ${bgInput}`} placeholder="Nº..." />
                     </div>
 
-                    {/* MOSTRA OS CAMPOS DO CLIENTE APENAS SE FOR COMANDA (>= 1000) */}
                     {numeroDigitadoNum >= 1000 && (
                       <div className={`border p-5 rounded-2xl space-y-4 animate-fade-in-up ${isDarkMode ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-200'}`}>
                         <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest text-center mb-1">Dados do Titular (Obrigatório para Comandas)</p>
@@ -637,14 +689,13 @@ export default function LancamentosPage() {
                     )}
 
                     <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg mt-8 cursor-pointer transition-colors text-lg">
-                       Abrir Atendimento Agora
+                        Abrir Atendimento Agora
                     </button>
                  </form>
               </div>
            </div>
         )}
 
-        {/* TELA: TRANSFERÊNCIAS */}
         {activeMenu === 'transferencias' && !selectedTab && (
            <div className="p-6 md:p-10 max-w-4xl mx-auto animate-fade-in-up">
               <div className={`${bgCard} border p-8 rounded-[2.5rem] shadow-xl relative`}>
@@ -693,7 +744,6 @@ export default function LancamentosPage() {
            </div>
         )}
 
-        {/* TELA: GRID DE MESAS E COMANDAS (VISÃO GERAL) */}
         {activeMenu === 'mesas' && !selectedTab && (
           <div className="p-6 max-w-7xl mx-auto space-y-10 animate-fade-in-up">
             
@@ -749,11 +799,9 @@ export default function LancamentosPage() {
           </div>
         )}
 
-        {/* TELA: PDV (LANÇAMENTO DINÂMICO DE PRODUTOS DENTRO DA MESA) */}
         {activeMenu === 'mesas' && selectedTab && (
           <div className="flex flex-col lg:flex-row gap-4 h-full animate-fade-in-up p-4">
             
-            {/* COLUNA ESQUERDA: INFORMAÇÕES DA MESA, HISTÓRICO E CARRINHO */}
             <div className={`w-full lg:w-[400px] flex-shrink-0 flex flex-col gap-4 overflow-y-auto hide-scrollbar pb-10 lg:pb-0`}>
                
                <div className={`${bgCard} border p-5 rounded-3xl flex flex-col gap-3 shadow-sm relative overflow-hidden`}>
@@ -837,12 +885,12 @@ export default function LancamentosPage() {
                                        <span className="font-black text-xs text-slate-800 dark:text-slate-300 mb-1">R$ {(item.price * item.quantity).toFixed(2)}</span>
                                        {canUndo && (
                                           <button onClick={() => handleUndoItem(item.id)} className="text-[9px] bg-red-500 text-white font-black px-2 py-0.5 rounded animate-pulse cursor-pointer shadow-sm">
-                                             Desfazer ({Math.max(0, 30 - Math.floor(ageSeconds))}s)
+                                              Desfazer ({Math.max(0, 30 - Math.floor(ageSeconds))}s)
                                           </button>
                                        )}
                                        {item.status === 'READY' && (
                                           <button onClick={() => updateTabItemStatus(item.id, 'SERVED')} className="text-[10px] bg-emerald-500 hover:bg-emerald-600 text-white font-black px-3 py-1.5 rounded-lg shadow-md transition-colors cursor-pointer animate-bounce">
-                                             Retirar 🏃
+                                              Retirar 🏃
                                           </button>
                                        )}
                                     </div>
@@ -887,7 +935,6 @@ export default function LancamentosPage() {
                )}
             </div>
 
-            {/* COLUNA DIREITA: CATÁLOGO DINÂMICO (PDV STYLE) */}
             <div className={`${bgCard} border rounded-3xl flex-1 flex flex-col shadow-sm overflow-hidden p-2`}>
                <div className="p-4 border-b border-slate-200/20 shrink-0">
                   <div className="flex gap-3 mb-4">
@@ -936,10 +983,6 @@ export default function LancamentosPage() {
           </div>
         )}
       </main>
-
-      {/* =========================================================================
-          MODAIS SOBREPOSTOS
-          ========================================================================= */}
 
       {showLimitOverrideModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">

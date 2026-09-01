@@ -1,18 +1,45 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { useParams } from 'next/navigation';
 
 export default function KdsClientePage() {
+  const params = useParams();
+  const storeSlug = params.storeSlug;
+
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
 
+  const [storeStatus, setStoreStatus] = useState('LOADING');
   const [totemOrders, setTotemOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
   const announcedOrders = useRef(new Set());
 
+  // Identifica e valida a loja pelo slug da URL antes de liberar o painel
+  useEffect(() => {
+    if (!storeSlug) return;
 
-  //Helper local atualizado com interceptador de Inadimplência
+    const identifyStore = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/stores/slug/${storeSlug}`);
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem('zenix_store_id', data.store.id);
+          setStoreStatus('FOUND');
+        } else {
+          setStoreStatus('NOT_FOUND');
+        }
+      } catch (error) {
+        setStoreStatus('NOT_FOUND');
+      }
+    };
+
+    identifyStore();
+  }, [storeSlug]);
+
+  // Helper local com interceptador de Inadimplência
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = localStorage.getItem('zenix_store_id');
@@ -25,38 +52,33 @@ export default function KdsClientePage() {
 
     const response = await fetch(url, { ...options, headers });
 
-    //SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
-        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+        window.location.href = '/bloqueado';
       }
     }
 
     return response;
   };
 
-  // =========================================================
-  // EXTRATOR INTELIGENTE DE NOME (Lê o nome real do Totem)
-  // =========================================================
   const extractFirstName = (order) => {
     if (order.origin === 'TOTEM' && order.address) {
       const match = order.address.match(/Cliente:\s*(.*?)(?:\s*\||$)/);
       if (match && match[1]) {
-         return match[1].trim().split(' ')[0]; // Retorna apenas o Primeiro Nome
+         return match[1].trim().split(' ')[0];
       }
     }
     return order.client?.name ? order.client.name.split(' ')[0] : 'Cliente';
   };
 
-  // =========================================================
-  // 1. BUSCA DE DADOS (ATUALIZA A CADA 4 SEGUNDOS)
-  // =========================================================
   useEffect(() => {
+    if (storeStatus !== 'FOUND') return;
+
     fetchKdsData();
     const interval = setInterval(fetchKdsData, 4000);
-    const clock = setInterval(() => setNow(Date.now()), 10000); // Atualiza o relógio a cada 10s
+    const clock = setInterval(() => setNow(Date.now()), 10000);
     return () => { clearInterval(interval); clearInterval(clock); };
-  }, []);
+  }, [storeStatus]);
 
   const fetchKdsData = async () => {
     try {
@@ -71,10 +93,7 @@ export default function KdsClientePage() {
     setLoading(false);
   };
 
-  // =========================================================
-  // 2. FILTRAGEM E LIMPEZA AUTOMÁTICA (60 MINUTOS)
-  // =========================================================
-  const TEMPO_LIMPEZA_MS = 60 * 60 * 1000; // 60 minutos em milissegundos
+  const TEMPO_LIMPEZA_MS = 60 * 60 * 1000;
 
   const preparingOrders = totemOrders.filter(o => o.status === 'PREPARING');
   
@@ -85,9 +104,6 @@ export default function KdsClientePage() {
     return true;
   });
 
-  // =========================================================
-  // 3. SISTEMA DE CHAMADA POR VOZ (TEXT-TO-SPEECH)
-  // =========================================================
   useEffect(() => {
     readyOrders.forEach(order => {
       if (!announcedOrders.current.has(order.id)) {
@@ -114,11 +130,21 @@ export default function KdsClientePage() {
     }
   };
 
-  if (loading) {
+  if (storeStatus === 'LOADING' || loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-amber-500 font-black text-2xl">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-amber-500 font-black text-2xl">
          <span className="text-6xl mb-4 animate-bounce">📺</span>
-         Carregando Painel de Chamadas...
+         Carregando Painel de Chamadas da Loja...
+      </div>
+    );
+  }
+
+  if (storeStatus === 'NOT_FOUND') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6">
+        <span className="text-6xl mb-4">🚫</span>
+        <h1 className="text-3xl font-black text-white mb-2">Acesso Negado</h1>
+        <p className="text-slate-400">Nenhuma loja encontrada para este endereço.</p>
       </div>
     );
   }
@@ -126,7 +152,6 @@ export default function KdsClientePage() {
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col overflow-hidden cursor-pointer selection:bg-transparent" onClick={handleFullscreen}>
       
-      {/* CABEÇALHO DA TV */}
       <header className="bg-white border-b border-slate-200 p-6 flex justify-between items-center shadow-sm shrink-0">
         <div className="flex items-center gap-4">
           <span className="text-5xl">🍔</span>
@@ -140,10 +165,8 @@ export default function KdsClientePage() {
         </div>
       </header>
 
-      {/* GRID DE DUAS COLUNAS */}
       <main className="flex-1 flex w-full">
         
-        {/* COLUNA 1: EM PREPARO */}
         <section className="w-1/2 border-r border-slate-200 flex flex-col bg-slate-50">
            <div className="bg-amber-100 border-b border-amber-200 p-6 text-center shadow-sm shrink-0">
               <h2 className="text-4xl font-black text-amber-800 uppercase tracking-widest flex items-center justify-center gap-4">
@@ -169,7 +192,6 @@ export default function KdsClientePage() {
            </div>
         </section>
 
-        {/* COLUNA 2: PRONTOS PARA RETIRAR */}
         <section className="w-1/2 flex flex-col bg-slate-100">
            <div className="bg-emerald-100 border-b border-emerald-200 p-6 text-center shadow-sm shrink-0">
               <h2 className="text-4xl font-black text-emerald-800 uppercase tracking-widest flex items-center justify-center gap-4">
@@ -197,7 +219,6 @@ export default function KdsClientePage() {
 
       </main>
 
-      {/* RODAPÉ INFORMATIVO */}
       <footer className="bg-white border-t border-slate-200 p-4 text-center shrink-0">
          <p className="text-slate-500 font-bold tracking-widest uppercase text-sm">
             Fique atento ao seu número na tela. Os pedidos não retirados em 60 minutos saem do painel.
