@@ -1,174 +1,142 @@
-import React from 'react';
+'use client';
+import { useState } from 'react';
 
 export default function OrderDetailsModal({ order, onClose, triggerManualPrint, getMetodoPagamentoLabel, getProductSizeLabel }) {
   if (!order) return null;
 
-  const subtotal = (Number(order.total) - Number(order.deliveryFee || 0) + Number(order.cashbackUsed || 0)).toFixed(2);
+  const [loadingFiscal, setLoadingFiscal] = useState(false);
+  
+  // 🛡️ Helper local para garantir o envio do x-store-id nas ações do modal
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
 
-  // A mesma inteligência de separar a observação do endereço
-  const parseAddressData = (fullAddress) => {
-    let address = fullAddress || 'Retirada no Balcão';
-    let obs = '';
-    
-    if (address.includes('| OBS:')) {
-      const parts = address.split('| OBS:');
-      address = parts[0].trim();
-      let remaining = parts[1];
-      if (remaining.includes('| CUPOM')) remaining = remaining.split('| CUPOM')[0];
-      obs = remaining.trim();
-    } else if (address.includes('OBS:')) {
-      const parts = address.split('OBS:');
-      address = parts[0].trim();
-      let remaining = parts[1];
-      if (remaining.includes('| CUPOM')) remaining = remaining.split('| CUPOM')[0];
-      obs = remaining.trim();
-    }
-    
-    if (address.includes('| CUPOM')) address = address.split('| CUPOM')[0].trim();
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
 
-    return { address, obs };
+    return fetch(url, { ...options, headers });
   };
 
-  const { address, obs } = parseAddressData(order.address);
+  const handleEmitirNfce = async () => {
+    setLoadingFiscal(true);
+    try {
+      const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
+        ? 'http://localhost:3333' 
+        : 'https://zenixfood-backend.onrender.com';
+
+      const res = await fetchWithStore(`${API_URL}/api/admin/orders/${order.id}/fiscal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        alert("NFC-e processada com sucesso!");
+      } else {
+        alert(data.error || "Erro ao emitir NFC-e.");
+      }
+    } catch (e) {
+      alert("Erro de comunicação ao emitir nota fiscal.");
+    } finally {
+      setLoadingFiscal(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-      <div className="bg-white border border-slate-200 rounded-[2rem] w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up overflow-hidden relative">
+      <div className="bg-white border border-slate-200 p-6 md:p-8 rounded-3xl w-full max-w-lg shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
         
-        {/* LUZ DE DESTAQUE NO TOPO */}
-        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-400 to-emerald-500"></div>
-
-        {/* HEADER */}
-        <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        {/* Cabeçalho do Modal */}
+        <div className="flex justify-between items-start pb-4 border-b border-slate-100 mb-4">
           <div>
-            <h3 className="text-3xl font-black text-slate-800 tracking-tight">Pedido #{order.shortId}</h3>
-            <p className="text-sm text-slate-500 font-bold mt-1 uppercase tracking-widest">{new Date(order.createdAt).toLocaleString('pt-BR')}</p>
+            <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full">
+              Pedido #{order.shortId}
+            </span>
+            <h3 className="text-xl font-black text-slate-900 mt-2">Detalhes do Pedido</h3>
+            <p className="text-xs text-slate-500">Criado em: {new Date(order.createdAt).toLocaleString('pt-BR')}</p>
           </div>
-          <button 
-            onClick={onClose} 
-            className="w-12 h-12 bg-white border border-slate-200 rounded-2xl flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all font-black text-lg shadow-sm"
-          >
-            X
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center font-bold text-slate-600 transition-colors">
+            ✕
           </button>
         </div>
 
-        {/* CORPO / INFORMAÇÕES */}
-        <div className="p-6 md:p-8 overflow-y-auto flex-1 space-y-8 bg-white">
-          
-          {/* Cliente */}
-          <div className="flex gap-4 items-start">
-            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xl shrink-0">
-              👤
-            </div>
+        {/* Informações do Cliente & Entrega */}
+        <div className="space-y-4 mb-6 text-sm">
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-1">
+            <p className="text-xs font-bold text-slate-400 uppercase">Cliente</p>
+            <p className="font-bold text-slate-800">{order.client?.name || order.customerName || 'Cliente Balcão/Totem'}</p>
+            <p className="text-xs text-slate-600">📞 {order.client?.phone || 'Não informado'}</p>
+            <p className="text-xs text-slate-600">📍 {order.address || 'Retirada no Local'}</p>
+          </div>
+
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center">
             <div>
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Dados do Cliente</h4>
-              <p className="font-black text-slate-800 text-xl">{order.client?.name || 'Cliente Avulso'}</p>
-              <div className="flex gap-4 mt-2">
-                {order.client?.phone && <p className="text-sm text-slate-600 font-medium">📞 {order.client.phone}</p>}
-                {order.client?.cpf && <p className="text-sm text-slate-600 font-medium">📄 {order.client.cpf}</p>}
-              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase">Pagamento</p>
+              <p className="font-bold text-slate-800">{getMetodoPagamentoLabel(order.paymentMethod)}</p>
             </div>
-          </div>
-
-          <div className="w-full h-px bg-slate-100"></div>
-
-          {/* Endereço */}
-          <div className="flex gap-4 items-start">
-            <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 text-xl shrink-0">
-              🛵
-            </div>
-            <div className="w-full">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Endereço de Entrega</h4>
-              <p className="text-sm text-slate-700 bg-amber-50/50 p-4 rounded-2xl border border-amber-100/50 font-medium leading-relaxed">
-                {address}
-              </p>
-            </div>
-          </div>
-
-          {/* BLOCO DE OBSERVAÇÃO DESTACADO (Só aparece se existir) */}
-          {obs && (
-            <>
-              <div className="w-full h-px bg-slate-100"></div>
-              <div className="flex gap-4 items-start">
-                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-xl shrink-0">
-                  ⚠️
-                </div>
-                <div className="w-full">
-                  <h4 className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">Observação do Cliente</h4>
-                  <p className="text-sm text-red-700 bg-red-50 p-4 rounded-2xl border border-red-100 font-bold leading-relaxed">
-                    {obs}
-                  </p>
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="w-full h-px bg-slate-100"></div>
-
-          {/* Itens */}
-          <div>
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Itens do Pedido</h4>
-            <div className="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-100">
-              {order.items?.map(item => (
-                <div key={item.id} className="flex justify-between items-center border-b border-slate-200/60 pb-3 last:border-0 last:pb-0">
-                  <p className="text-sm font-bold text-slate-700">
-                    <span className="text-amber-500 mr-2 bg-amber-100 px-2 py-0.5 rounded-lg">{item.quantity}x</span> 
-                    {item.name || item.product?.name}{getProductSizeLabel && getProductSizeLabel(item)}
-                  </p>
-                  <span className="text-sm text-slate-500 font-black">R$ {(Number(item.price) * item.quantity).toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Fechamento Financeiro */}
-          <div className="bg-slate-900 text-white p-6 md:p-8 rounded-[2rem] shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 blur-3xl rounded-full"></div>
-
-            <div className="space-y-3 relative z-10">
-              <div className="flex justify-between text-sm text-slate-400 font-medium">
-                <span>Subtotal:</span>
-                <span>R$ {subtotal}</span>
-              </div>
-              
-              <div className="flex justify-between text-sm text-slate-400 font-medium">
-                <span>Taxa de Entrega:</span>
-                <span>R$ {Number(order.deliveryFee || 0).toFixed(2)}</span>
-              </div>
-
-              {Number(order.cashbackUsed) > 0 && (
-                <div className="flex justify-between text-sm text-emerald-400 font-bold bg-emerald-400/10 p-2 rounded-lg -mx-2 px-2">
-                  <span>Desconto (Cashback / Cupom):</span>
-                  <span>- R$ {Number(order.cashbackUsed).toFixed(2)}</span>
-                </div>
-              )}
-              
-              <div className="flex justify-between items-center pt-4 border-t border-white/10 mt-4">
-                <span className="font-bold text-lg uppercase tracking-wider text-slate-300">Total Pago:</span>
-                <span className="text-4xl font-black text-amber-400 tracking-tighter">R$ {Number(order.total).toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="mt-6 text-xs font-black text-slate-300 uppercase tracking-[0.2em] text-center bg-black/40 py-3 rounded-xl border border-white/5 relative z-10">
-              {getMetodoPagamentoLabel ? getMetodoPagamentoLabel(order.paymentMethod) : order.paymentMethod}
+            <div className="text-right">
+              <p className="text-xs font-bold text-slate-400 uppercase">Origem</p>
+              <span className="bg-slate-200 text-slate-700 text-xs font-bold px-2.5 py-0.5 rounded-md">
+                {order.origin || 'APP'}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* FOOTER / AÇÕES */}
-        <div className="p-4 md:p-6 border-t border-slate-100 bg-white flex gap-4">
+        {/* Lista de Itens */}
+        <div className="mb-6">
+          <p className="text-xs font-bold text-slate-400 uppercase mb-2">Itens do Pedido</p>
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {order.items?.map((item, index) => (
+              <div key={index} className="flex justify-between items-center bg-white border border-slate-100 p-3 rounded-xl shadow-2xs">
+                <div>
+                  <p className="font-bold text-sm text-slate-800">
+                    {item.quantity}x {item.product?.name || item.name} <span className="text-amber-600 text-xs">{getProductSizeLabel(item)}</span>
+                  </p>
+                  {item.observation && <p className="text-xs text-red-500 italic">Obs: {item.observation}</p>}
+                </div>
+                <p className="font-bold text-sm text-slate-700">R$ {(Number(item.price) * Number(item.quantity)).toFixed(2)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Totais */}
+        <div className="bg-slate-900 text-white p-4 rounded-2xl mb-6 space-y-1.5">
+          <div className="flex justify-between text-xs text-slate-400">
+            <span>Taxa de Entrega:</span>
+            <span>R$ {Number(order.deliveryFee || 0).toFixed(2)}</span>
+          </div>
+          {order.cashbackUsed > 0 && (
+            <div className="flex justify-between text-xs text-emerald-400">
+              <span>Cashback Utilizado:</span>
+              <span>- R$ {Number(order.cashbackUsed).toFixed(2)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-base font-black pt-2 border-t border-slate-800">
+            <span>Total Geral:</span>
+            <span className="text-amber-400">R$ {Number(order.total).toFixed(2)}</span>
+          </div>
+        </div>
+
+        {/* Ações (Imprimir e Fiscal) */}
+        <div className="flex flex-col md:flex-row gap-3">
           <button 
-            onClick={() => triggerManualPrint && triggerManualPrint(order)}
-            className="flex-1 bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white font-black py-4 rounded-2xl transition-all border border-blue-200 shadow-sm flex items-center justify-center gap-3 text-sm md:text-base group"
+            onClick={() => triggerManualPrint(order)} 
+            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3 px-4 rounded-xl transition-all text-xs flex items-center justify-center gap-2 cursor-pointer"
           >
-            <span className="text-xl group-hover:scale-110 transition-transform">🖨️</span> Reimprimir Pedido
+            🖨️ Reimprimir Ticket
           </button>
-          
+
           <button 
-            onClick={onClose}
-            className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-4 rounded-2xl transition-all shadow-sm text-sm md:text-base"
+            onClick={handleEmitirNfce} 
+            disabled={loadingFiscal}
+            className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 px-4 rounded-xl transition-all text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer"
           >
-            Fechar
+            {loadingFiscal ? 'Processando NF-e...' : '🧾 Emitir / Consultar NFC-e'}
           </button>
         </div>
 

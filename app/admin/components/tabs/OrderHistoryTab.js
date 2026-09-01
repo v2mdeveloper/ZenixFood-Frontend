@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from 'react';
 
 export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, getMetodoPagamentoLabel, getProductSizeLabel }) {
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
   const [activeView, setActiveView] = useState('geral'); // 'geral', 'relatorios', 'funcionarios'
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,10 +19,24 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
 
   const toggleOrigin = (origin) => setActiveOrigins(prev => ({ ...prev, [origin]: !prev[origin] }));
 
-  // Busca dados de RH para cruzamento de comissões
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
+  // Busca dados de RH para cruzamento de comissões com suporte multi-tenant
   useEffect(() => {
-    fetch(`${API_URL}/api/rh/employees`).then(r => r.ok ? r.json() : []).then(setEmployees).catch(() => {});
-    fetch(`${API_URL}/api/settings`).then(r => r.ok ? r.json() : {}).then(data => setTipPercentage(Number(data.tipPercentage) || 10)).catch(() => {});
+    fetchWithStore(`${API_URL}/api/rh/employees`).then(r => r.ok ? r.json() : []).then(setEmployees).catch(() => {});
+    fetchWithStore(`${API_URL}/api/settings`).then(r => r.ok ? r.json() : {}).then(data => setTipPercentage(Number(data.tipPercentage) || 10)).catch(() => {});
   }, []);
 
   // Fallback seguro caso a função de tamanho não seja passada
@@ -82,7 +96,7 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
   }, [orders, activeOrigins, startDate, endDate, searchTerm, productSearch]);
 
   // =========================================================
-  // CÁLCULOS: ESTATÍSTICAS GERAIS E RELATÓRIOS (CORRIGIDO)
+  // CÁLCULOS: ESTATÍSTICAS GERAIS E RELATÓRIOS
   // =========================================================
   const { stats, reportStats, employeeStats } = useMemo(() => {
     let totalRevenue = 0;
@@ -90,7 +104,7 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
     let counts = { APP: 0, TOTEM: 0, PDV: 0, SALAO: 0 };
     let revenue = { APP: 0, TOTEM: 0, PDV: 0, SALAO: 0 };
     let deliveredOrdersCount = 0;
-    let validOrdersCount = 0; // Nova variável para contar apenas os válidos no Ticket Médio
+    let validOrdersCount = 0; 
 
     const prodMap = {};
     const custMap = {};
@@ -102,7 +116,6 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
       const val = Number(o.total) || 0;
       const origin = o.origin || 'APP';
       
-      // 🚨 BLINDAGEM DO RELATÓRIO: Ignorar 'CANCELED' e 'PENDING' nas somas financeiras globais
       const isValidSale = o.status !== 'CANCELED' && o.status !== 'PENDING';
 
       if (isValidSale) {
@@ -114,32 +127,28 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
           revenue[origin] += val;
         }
 
-        // Estatísticas de Funcionários (Só Salão e PDV Válidos)
         if (origin === 'SALAO' || origin === 'PDV') {
-          const empName = o.waiter || (origin === 'SALAO' ? 'Garçom (Não Registrado)' : 'Caixa PDV (Não Registrado)');
-          if (!empMap[empName]) {
-             const empObj = employees.find(e => e.name === empName);
-             empMap[empName] = { name: empName, count: 0, revenue: 0, origin: origin, receivesTips: empObj ? empObj.receivesTips : false };
-          }
-          empMap[empName].count += 1;
-          empMap[empName].revenue += val;
-          totalEmpRevenue += val;
-          if (empMap[empName].receivesTips) {
-             totalCommissionsToPay += val * (tipPercentage / 100);
-          }
+           const empName = o.waiter || (origin === 'SALAO' ? 'Garçom (Não Registrado)' : 'Caixa PDV (Não Registrado)');
+           if (!empMap[empName]) {
+              const empObj = employees.find(e => e.name === empName);
+              empMap[empName] = { name: empName, count: 0, revenue: 0, origin: origin, receivesTips: empObj ? empObj.receivesTips : false };
+           }
+           empMap[empName].count += 1;
+           empMap[empName].revenue += val;
+           totalEmpRevenue += val;
+           if (empMap[empName].receivesTips) {
+              totalCommissionsToPay += val * (tipPercentage / 100);
+           }
         }
       }
 
-      // Estatísticas de Relatórios (Apenas DELIVERED/Concluídos)
       if (o.status === 'DELIVERED') {
          deliveredRevenue += val;
          deliveredOrdersCount++;
 
-         // Top Clientes
          const cName = o.client?.name || 'Cliente Avulso';
          custMap[cName] = (custMap[cName] || 0) + val;
 
-         // Top Produtos
          o.items?.forEach(i => {
              const pName = (i.product?.name || 'Desconhecido') + sizeLabelFn(i);
              prodMap[pName] = (prodMap[pName] || 0) + i.quantity;
@@ -147,11 +156,9 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
       }
     });
 
-    // 🚨 O Ticket Médio agora usa 'validOrdersCount' em vez do tamanho total da lista
     const averageTicket = validOrdersCount > 0 ? totalRevenue / validOrdersCount : 0;
     const reportAverageTicket = deliveredOrdersCount > 0 ? deliveredRevenue / deliveredOrdersCount : 0;
 
-    // Ordenação dos Tops
     const topProducts = Object.entries(prodMap).sort((a,b) => b[1] - a[1]).slice(0, 10);
     const maxProduct = Math.max(...topProducts.map(p => p[1]), 1);
 
@@ -161,7 +168,7 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
     const rankingEmp = Object.values(empMap).sort((a, b) => b.revenue - a.revenue);
 
     return {
-      stats: { totalRevenue, totalOrders: validOrdersCount, averageTicket, counts, revenue }, // Usa validOrdersCount para os dashboards
+      stats: { totalRevenue, totalOrders: validOrdersCount, averageTicket, counts, revenue }, 
       reportStats: { deliveredRevenue, deliveredOrdersCount, reportAverageTicket, topProducts, maxProduct, topCustomers, maxCustomer },
       employeeStats: { ranking: rankingEmp, totalEmpRevenue, totalCommissionsToPay }
     };
@@ -192,7 +199,6 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
       const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `Comissoes_Funcionarios_${new Date().getTime()}.csv`;
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
     } else {
-      // Exportação de Histórico e Relatórios (Lista de Vendas Filtradas)
       if (filteredOrders.length === 0) return alert("Não há dados para exportar.");
       const header = ["Nº Pedido", "Data/Hora", "Vendedor", "Cliente", "CPF", "Canal", "Pagamento", "Status", "Itens", "Total (R$)"];
       const escapeCSV = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
@@ -482,31 +488,31 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
                      
                      return (
                        <div key={emp.name} className="flex flex-col relative group">
-                         <div className="flex justify-between items-end mb-3">
-                           <div>
-                             <p className="font-black text-slate-800 text-base flex items-center gap-3">
-                               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black tracking-tighter ${isPodium ? medalColors[index] : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>{index + 1}º</span>
-                               {emp.name}
-                             </p>
-                             <div className="ml-11 mt-1 flex gap-2">
-                                <span className="text-[9px] bg-slate-100 text-slate-500 font-black uppercase tracking-widest px-2 py-0.5 rounded">{emp.origin === 'SALAO' ? 'Salão' : 'Caixa PDV'}</span>
-                                {emp.receivesTips && <span className="text-[9px] bg-emerald-100 text-emerald-700 font-black uppercase tracking-widest px-2 py-0.5 rounded">Ganha {tipPercentage}%</span>}
-                             </div>
-                           </div>
-                           <div className="text-right">
-                             <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Vendeu: <span className="text-slate-800 text-lg">R$ {emp.revenue.toFixed(2)}</span></p>
-                             {emp.receivesTips ? (
+                          <div className="flex justify-between items-end mb-3">
+                            <div>
+                              <p className="font-black text-slate-800 text-base flex items-center gap-3">
+                                <span className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black tracking-tighter ${isPodium ? medalColors[index] : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>{index + 1}º</span>
+                                {emp.name}
+                              </p>
+                              <div className="ml-11 mt-1 flex gap-2">
+                                 <span className="text-[9px] bg-slate-100 text-slate-500 font-black uppercase tracking-widest px-2 py-0.5 rounded">{emp.origin === 'SALAO' ? 'Salão' : 'Caixa PDV'}</span>
+                                 {emp.receivesTips && <span className="text-[9px] bg-emerald-100 text-emerald-700 font-black uppercase tracking-widest px-2 py-0.5 rounded">Ganha {tipPercentage}%</span>}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Vendeu: <span className="text-slate-800 text-lg">R$ {emp.revenue.toFixed(2)}</span></p>
+                              {emp.receivesTips ? (
                                 <p className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded inline-block border border-emerald-100 uppercase">
                                   + R$ {comissao.toFixed(2)} a Pagar
                                 </p>
-                             ) : (
+                              ) : (
                                 <p className="text-[11px] font-bold text-slate-400">Sem comissão</p>
-                             )}
-                           </div>
-                         </div>
-                         <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden ml-11" style={{ width: 'calc(100% - 2.75rem)' }}>
-                           <div className={`h-full rounded-full transition-all duration-1000 ease-out ${index === 0 ? 'bg-gradient-to-r from-amber-400 to-amber-500' : 'bg-blue-500'}`} style={{ width: `${percent}%` }}></div>
-                         </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden ml-11" style={{ width: 'calc(100% - 2.75rem)' }}>
+                            <div className={`h-full rounded-full transition-all duration-1000 ease-out ${index === 0 ? 'bg-gradient-to-r from-amber-400 to-amber-500' : 'bg-blue-500'}`} style={{ width: `${percent}%` }}></div>
+                          </div>
                        </div>
                      )
                   })}

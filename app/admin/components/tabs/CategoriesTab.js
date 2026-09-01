@@ -4,8 +4,8 @@ export default function CategoriesTab({
   menu,
   newCategoryName,
   setNewCategoryName,
-  newCategoryIsDrink,        // <-- Novo Estado
-  setNewCategoryIsDrink,     // <-- Novo Estado
+  newCategoryIsDrink,       
+  setNewCategoryIsDrink,     
   handleAddCategory,
   moveCategory,
   moveProduct,

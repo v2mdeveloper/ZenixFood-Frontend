@@ -69,11 +69,11 @@ export default function Footer({ view, getTodayScheduleText, storeSettings }) {
       <div className="mt-10 pt-8 border-t border-white/5">
         <p className="mb-5 text-zinc-400 font-bold uppercase tracking-widest">Também estamos no aplicativo:</p>
         <div className="flex flex-wrap justify-center gap-4">
-          <a href="https://www.ifood.com.br/delivery/sao-paulo-sp/canone-burger--co-vila-prel/d49e4472-d67e-4eb5-941d-d4f16cbc8764" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 bg-[#EA1D2C] hover:bg-[#EA1D2C]/80 text-white px-6 py-3.5 rounded-2xl font-black text-sm transition-all hover:-translate-y-1 shadow-[0_10px_20px_rgba(234,29,44,0.2)]">
+          <a href="" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 bg-[#EA1D2C] hover:bg-[#EA1D2C]/80 text-white px-6 py-3.5 rounded-2xl font-black text-sm transition-all hover:-translate-y-1 shadow-[0_10px_20px_rgba(234,29,44,0.2)]">
             <img src="/ifood.png" alt="iFood" className="w-6 h-6 object-contain" onError={(e) => e.target.style.display = 'none'} />
             Pedir no iFood
           </a>
-         {<a href="https://oia.99app.com/dlp9/IzRRYi?area=BR" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 bg-[#FFCC00] hover:bg-[#FFCC00]/80 text-black px-6 py-3.5 rounded-2xl font-black text-sm transition-all hover:-translate-y-1 shadow-[0_10px_20px_rgba(255,204,0,0.2)]">
+         {<a href="" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 bg-[#FFCC00] hover:bg-[#FFCC00]/80 text-black px-6 py-3.5 rounded-2xl font-black text-sm transition-all hover:-translate-y-1 shadow-[0_10px_20px_rgba(255,204,0,0.2)]">
             <img src="/99food.png" alt="99Food" className="w-6 h-6 object-contain" onError={(e) => e.target.style.display = 'none'} />
             Pedir no 99Food
           </a>}

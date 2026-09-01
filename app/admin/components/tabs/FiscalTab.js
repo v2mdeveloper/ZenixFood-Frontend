@@ -1,3 +1,4 @@
+'use client';
 import { useState, useEffect } from 'react';
 
 export default function FiscalTab({
@@ -10,13 +11,27 @@ export default function FiscalTab({
   nfcesEmitidas
 }) {
 
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
   const [certFile, setCertFile] = useState(null);
   const [certPassword, setCertPassword] = useState('');
   const [certStatus, setCertStatus] = useState(null);
   const [isUploadingCert, setIsUploadingCert] = useState(false);
   const [cnpjInput, setCnpjInput] = useState('');
+
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
 
   useEffect(() => {
     if (fiscalData && fiscalData.cnpjLoja) {
@@ -26,7 +41,7 @@ export default function FiscalTab({
 
   useEffect(() => {
     if (fiscalSubTab === 'certificado') {
-       fetch(`${API_URL}/api/fiscal/certificado/status`)
+       fetchWithStore(`${API_URL}/api/fiscal/certificado/status`)
          .then(res => res.json())
          .then(data => setCertStatus(data))
          .catch(err => console.error("Erro ao checar certificado", err));
@@ -43,7 +58,7 @@ export default function FiscalTab({
     formData.append('senha', certPassword);
 
     try {
-        const res = await fetch(`${API_URL}/api/fiscal/certificado`, { method: 'POST', body: formData });
+        const res = await fetchWithStore(`${API_URL}/api/fiscal/certificado`, { method: 'POST', body: formData });
         const data = await res.json();
         if (data.success) {
             alert("Certificado A1 salvo com segurança no banco de dados e pronto para uso!");
@@ -117,7 +132,7 @@ export default function FiscalTab({
                       if (pedido.nfceData) { try { notaSalva = typeof pedido.nfceData === 'string' ? JSON.parse(pedido.nfceData) : pedido.nfceData; } catch(e) {} }
                       
                       let memoryNfces = {};
-                      try { memoryNfces = JSON.parse(localStorage.getItem('@Canone:nfcesEmitidas') || '{}'); } catch(e){}
+                      try { memoryNfces = JSON.parse(localStorage.getItem('zenix_nfcesEmitidas') || '{}'); } catch(e){}
                       const notaData = memoryNfces[pedido.id] || nfcesEmitidas[pedido.id] || notaSalva;
 
                       return (

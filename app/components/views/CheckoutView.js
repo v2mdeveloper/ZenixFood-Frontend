@@ -15,7 +15,22 @@ export default function CheckoutView({
   pixData, setPixData
 }) {
 
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
   const [pixCopied, setPixCopied] = useState(false);
+
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
 
   useEffect(() => {
     if (user) {
@@ -114,15 +129,15 @@ export default function CheckoutView({
            </button>
            
            <button onClick={async () => {
-               if(!confirm('Tem certeza que deseja cancelar este pedido?')) return;
-               try {
-                  const res = await fetch(`https://canone-backend.onrender.com/api/orders/${pixData.orderId}/cancel`, { method: 'PUT' });
-                  if(res.ok) {
-                     alert('Pedido cancelado com sucesso. Se usou cashback, ele foi devolvido!');
-                     setPixData(null);
-                     setView('menu');
-                  }
-               } catch(e) {}
+              if(!confirm('Tem certeza que deseja cancelar este pedido?')) return;
+              try {
+                 const res = await fetchWithStore(`${API_URL}/api/orders/${pixData.orderId}/cancel`, { method: 'PUT' });
+                 if(res.ok) {
+                    alert('Pedido cancelado com sucesso. Se usou cashback, ele foi devolvido!');
+                    setPixData(null);
+                    setView('menu');
+                 }
+              } catch(e) {}
            }} className="w-full bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-600 dark:text-red-500 font-bold py-3.5 rounded-xl transition-all text-xs border border-red-200 dark:border-red-500/30 cursor-pointer">
              ❌ Cancelar Pedido
            </button>
@@ -144,7 +159,7 @@ export default function CheckoutView({
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2 transition-colors"><span className="text-amber-500">🛒</span> Sua Sacola</h2>
           <button type="button" onClick={() => setView('menu')} className="bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs px-4 py-2 rounded-xl border border-amber-200 dark:border-amber-500/20 transition-all cursor-pointer">
-               + Incluir novos itens
+                + Incluir novos itens
           </button>
         </div>
         <div className="space-y-4">
@@ -167,7 +182,6 @@ export default function CheckoutView({
              fullAddress = `[TOTEM BALCÃO] Cliente: ${totemName}${obsTratada ? ` | OBS: ${obsTratada}` : ''}`;
           }
           
-          // 🚨 Envia os dados para finalizar
           handleCheckoutBtnClick(null, fullAddress);
       }} className="space-y-6">
         
@@ -202,11 +216,11 @@ export default function CheckoutView({
                  val = val.replace(/(\d{3})(\d)/, '$1.$2');
                  val = val.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
                  setCpfNaNota(val);
-              }} 
+               }} 
                maxLength="14"
               placeholder="000.000.000-00" 
                className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 rounded-xl p-4 text-slate-900 dark:text-white font-black tracking-widest focus:outline-none focus:border-amber-500 transition-colors" 
-             />
+            />
           </section>
 
           <section className="bg-white dark:bg-[#121212] p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl transition-colors duration-300">

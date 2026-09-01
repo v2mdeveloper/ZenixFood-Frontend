@@ -14,14 +14,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Cânone Burger & Co. | O Melhor Delivery',
-  description: 'Peça agora o seu hambúrguer artesanal direto da nossa grelha para sua casa. Ganhe cashback em todos os pedidos!',
+  title: 'Zenix | Plataforma de Pedidos e Gestão',
+  description: 'Sistema completo de multi-atendimento, cardápio digital, delivery e gestão para o seu estabelecimento.',
   openGraph: {
-    title: 'Cânone Burger & Co. | Delivery Especial',
-    description: 'Peça agora o seu hambúrguer artesanal direto da nossa grelha para sua casa!',
+    title: 'Zenix | Sistema de Delivery e Gestão',
+    description: 'Plataforma multi-tenant completa para gestão de pedidos, cardápio e atendimento.',
     type: 'website',
     locale: 'pt_BR',
-    siteName: 'Cânone Burger & Co.',
+    siteName: 'Zenix',
   }
 };
 

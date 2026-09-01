@@ -17,15 +17,15 @@ import PdvTab from '../admin/components/tabs/PdvTab';
 import SalaoTab from '../admin/components/tabs/SalaoTab';
 import TurnosTab from '../admin/components/tabs/TurnosTab';
 
-function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL }) {
+function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
   const [groupForm, setGroupForm] = useState({ name: '', printerId: '', regraFiscalId: '' });
 
   const fetchPrintersAndGroups = async () => {
     try {
-      const pRes = await fetch(`${API_URL}/api/printers`);
+      const pRes = await fetchWithStore(`${API_URL}/api/printers`);
       if (pRes.ok) setPrinters(await pRes.json());
-      const gRes = await fetch(`${API_URL}/api/product-groups`);
+      const gRes = await fetchWithStore(`${API_URL}/api/product-groups`);
       if (gRes.ok) setProductGroups(await gRes.json());
     } catch (e) { console.error(e); }
   };
@@ -34,28 +34,28 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
     e.preventDefault();
     if (!printerForm.name || !printerForm.address) return alert("Preencha o Nome e o IP/Compartilhamento.");
     try {
-      const res = await fetch(`${API_URL}/api/printers`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(printerForm) });
+      const res = await fetchWithStore(`${API_URL}/api/printers`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(printerForm) });
       if ((await res.json()).success) { setPrinterForm({ name: '', type: 'USB', address: '' }); fetchPrintersAndGroups(); }
     } catch (e) { alert("Erro ao salvar impressora."); }
   };
 
   const handleDeletePrinter = async (id) => {
     if(!confirm("Excluir impressora? Grupos vinculados ficarão sem destino.")) return;
-    try { await fetch(`${API_URL}/api/printers/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) { alert("Erro"); }
+    try { await fetchWithStore(`${API_URL}/api/printers/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) { alert("Erro"); }
   };
 
   const handleAddGroup = async (e) => {
     e.preventDefault();
     if (!groupForm.name) return alert("Dê um nome ao grupo (ex: Bebidas Frias).");
     try {
-      const res = await fetch(`${API_URL}/api/product-groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: groupForm.name, printerId: groupForm.printerId || null, regraFiscalId: groupForm.regraFiscalId || null }) });
+      const res = await fetchWithStore(`${API_URL}/api/product-groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: groupForm.name, printerId: groupForm.printerId || null, regraFiscalId: groupForm.regraFiscalId || null }) });
       if ((await res.json()).success) { setGroupForm({ name: '', printerId: '', regraFiscalId: '' }); fetchPrintersAndGroups(); }
     } catch (e) { alert("Erro ao criar grupo."); }
   };
 
   const handleDeleteGroup = async (id) => {
     if(!confirm("Excluir grupo? Produtos associados a ele ficarão sem grupo.")) return;
-    try { await fetch(`${API_URL}/api/product-groups/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) { alert("Erro"); }
+    try { await fetchWithStore(`${API_URL}/api/product-groups/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) { alert("Erro"); }
   };
 
   return (
@@ -119,11 +119,11 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
 export default function FuncionariosPortal() {
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
-    : 'https://canone-backend.onrender.com';
+    : 'https://zenixfood-backend.onrender.com';
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [employeeUser, setEmployeeUser] = useState(null);
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [loginForm, setLoginForm] = useState({ storeId: '', email: '', password: '' });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('');
   const [isKdsMenuOpen, setIsKdsMenuOpen] = useState(false);
@@ -186,10 +186,24 @@ export default function FuncionariosPortal() {
   const [couponForm, setCouponForm] = useState({ code: '', type: 'FIXED', value: '', minOrderValue: '0', maxUses: '0' });
   const [nfcesEmitidas, setNfcesEmitidas] = useState({}); 
 
+  // 🛡️ Helper para injetar o x-store-id e o Token JWT automaticamente
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
   const logEmployeeAction = async (actionDesc) => {
     if (!employeeUser) return;
     try {
-      await fetch(`${API_URL}/api/rh/logs`, {
+      await fetchWithStore(`${API_URL}/api/rh/logs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ employeeId: employeeUser.id, action: actionDesc })
@@ -198,16 +212,16 @@ export default function FuncionariosPortal() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('@Canone:employeeToken');
-    const savedUser = localStorage.getItem('@Canone:employeeUser');
+    const token = localStorage.getItem('zenix_employeeToken');
+    const savedUser = localStorage.getItem('zenix_employeeUser');
     if (token && savedUser) {
       const parsedUser = JSON.parse(savedUser);
       setIsAuthenticated(true);
       setEmployeeUser(parsedUser);
       
-      const cachedPrints = sessionStorage.getItem('@Canone:printedIds');
+      const cachedPrints = sessionStorage.getItem('zenix_printedIds');
       if (cachedPrints) setPrintedOrderIds(JSON.parse(cachedPrints));
-      const autoPrintSetting = localStorage.getItem('@Canone:autoPrint');
+      const autoPrintSetting = localStorage.getItem('zenix_autoPrint');
       if (autoPrintSetting !== null) setIsAutoPrintEnabled(autoPrintSetting === 'true');
     }
   }, []);
@@ -331,29 +345,41 @@ export default function FuncionariosPortal() {
   }, [printingOrder, settingsForm.printerName, allProducts, printers, productGroups]);
 
   const handleLogin = async (e) => {
-    e.preventDefault(); setLoading(true);
+    e.preventDefault();
+    if (!loginForm.storeId) return alert("Informe o ID ou Slug da Loja!");
+    setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/auth/employee/login`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginForm)
+        method: 'POST', 
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-store-id': loginForm.storeId // 🚨 Envia a loja do funcionário
+        }, 
+        body: JSON.stringify({ email: loginForm.email, password: loginForm.password })
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        localStorage.setItem('@Canone:employeeToken', data.token);
-        localStorage.setItem('@Canone:employeeUser', JSON.stringify(data.employee));
-        setIsAuthenticated(true); setEmployeeUser(data.employee);
+        localStorage.setItem('zenix_employeeToken', data.token);
+        localStorage.setItem('zenix_employeeUser', JSON.stringify(data.employee));
+        localStorage.setItem('zenix_store_id', loginForm.storeId);
+        setIsAuthenticated(true); 
+        setEmployeeUser(data.employee);
         logActionLogin(data.employee.id); 
       } else { alert(data.error || 'Credenciais inválidas.'); setLoading(false); }
     } catch (e) { alert('Erro de conexão.'); setLoading(false); }
   };
 
   const logActionLogin = async (id) => {
-     try { await fetch(`${API_URL}/api/rh/logs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId: id, action: 'Realizou Login no Sistema Operacional' }) }); } catch(e){}
+      try { 
+        await fetchWithStore(`${API_URL}/api/rh/logs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId: id, action: 'Realizou Login no Sistema Operacional' }) }); 
+      } catch(e){}
   };
 
   const handleLogout = () => {
     logEmployeeAction('Realizou Logout');
-    localStorage.removeItem('@Canone:employeeToken');
-    localStorage.removeItem('@Canone:employeeUser');
+    localStorage.removeItem('zenix_employeeToken');
+    localStorage.removeItem('zenix_employeeUser');
+    localStorage.removeItem('zenix_store_id');
     setIsAuthenticated(false); setEmployeeUser(null); setIsDataLoaded(false);
   };
 
@@ -367,24 +393,24 @@ export default function FuncionariosPortal() {
     setLoading(false);
   };
 
-  const fetchDeliveryPersons = async () => { try { const res = await fetch(`${API_URL}/api/rh/delivery-persons`); if (res.ok) setDeliveryPersons(await res.json()); } catch (e) { console.error(e); } };
-  const fetchPrintersAndGroups = async () => { try { const pRes = await fetch(`${API_URL}/api/printers`); if (pRes.ok) setPrinters(await pRes.json()); const gRes = await fetch(`${API_URL}/api/product-groups`); if (gRes.ok) setProductGroups(await gRes.json()); } catch (e) { console.error(e); } };
-  const fetchVisits = async () => { try { const res = await fetch(`${API_URL}/api/admin/analytics?_=${Date.now()}`); if (res.ok) setVisitsData(await res.json()); } catch (e) {} };
-  const fetchCoupons = async () => { try { const res = await fetch(`${API_URL}/api/admin/coupons?_=${Date.now()}`); if (res.ok) setCoupons(await res.json()); } catch (e) {} };
+  const fetchDeliveryPersons = async () => { try { const res = await fetchWithStore(`${API_URL}/api/rh/delivery-persons`); if (res.ok) setDeliveryPersons(await res.json()); } catch (e) { console.error(e); } };
+  const fetchPrintersAndGroups = async () => { try { const pRes = await fetchWithStore(`${API_URL}/api/printers`); if (pRes.ok) setPrinters(await pRes.json()); const gRes = await fetchWithStore(`${API_URL}/api/product-groups`); if (gRes.ok) setProductGroups(await gRes.json()); } catch (e) { console.error(e); } };
+  const fetchVisits = async () => { try { const res = await fetchWithStore(`${API_URL}/api/admin/analytics?_=${Date.now()}`); if (res.ok) setVisitsData(await res.json()); } catch (e) {} };
+  const fetchCoupons = async () => { try { const res = await fetchWithStore(`${API_URL}/api/admin/coupons?_=${Date.now()}`); if (res.ok) setCoupons(await res.json()); } catch (e) {} };
   
-  const fetchMenu = async () => { try { const res = await fetch(`${API_URL}/api/menu?_=${Date.now()}`); if (res.ok) { const data = await res.json(); setMenu(data); if (data.length > 0 && !newProduct.categoryId) setNewProduct(prev => ({ ...prev, categoryId: data[0].id })); } } catch (e) {} };
-  const fetchProducts = async () => { try { const res = await fetch(`${API_URL}/api/products?_=${Date.now()}`); if (res.ok) setAllProducts(await res.json()); } catch (e) {} };
-  const fetchCustomers = async () => { try { const res = await fetch(`${API_URL}/api/customers?_=${Date.now()}`); if (res.ok) setCustomers(await res.json()); } catch (e) {} };
-  const fetchInsumos = async () => { try { const res = await fetch(`${API_URL}/api/insumos?_=${Date.now()}`); if (res.ok) setInsumos(await res.json()); } catch (e) {} };
-  const fetchMovimentacoes = async () => { try { const res = await fetch(`${API_URL}/api/estoque/movimentacoes?_=${Date.now()}`); if (res.ok) setMovimentacoes(await res.json()); } catch (e) {} };
+  const fetchMenu = async () => { try { const res = await fetchWithStore(`${API_URL}/api/menu?_=${Date.now()}`); if (res.ok) { const data = await res.json(); setMenu(data); if (data.length > 0 && !newProduct.categoryId) setNewProduct(prev => ({ ...prev, categoryId: data[0].id })); } } catch (e) {} };
+  const fetchProducts = async () => { try { const res = await fetchWithStore(`${API_URL}/api/products?_=${Date.now()}`); if (res.ok) setAllProducts(await res.json()); } catch (e) {} };
+  const fetchCustomers = async () => { try { const res = await fetchWithStore(`${API_URL}/api/customers?_=${Date.now()}`); if (res.ok) setCustomers(await res.json()); } catch (e) {} };
+  const fetchInsumos = async () => { try { const res = await fetchWithStore(`${API_URL}/api/insumos?_=${Date.now()}`); if (res.ok) setInsumos(await res.json()); } catch (e) {} };
+  const fetchMovimentacoes = async () => { try { const res = await fetchWithStore(`${API_URL}/api/estoque/movimentacoes?_=${Date.now()}`); if (res.ok) setMovimentacoes(await res.json()); } catch (e) {} };
   
   const fetchSystemSettings = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/settings?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/settings?_=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setSettingsForm({
-          isManualFechado: data.isManualFechado, deliveryFee: Number(data.deliveryFee), cashbackPercent: Number(data.cashbackPercent), promoBannerUrl: data.promoBannerUrl || '', promoBannerLink: data.promoBannerLink || '', youtubeLiveId: data.youtubeLiveId || '', printerName: data.printerName || '', aboutUsText: data.aboutUsText || '', schedule: data.schedule || settingsForm.schedule, upsell: data.upsell || { active: false, productId: '', discountPercent: 15 }, storeCnpj: data.storeCnpj || ''
+          isManualFechado: data.isManualFechado, deliveryFee: Number(data.deliveryFee), cashbackPercent: Number(data.cashbackPercent), promoBannerUrl: data.promoBannerUrl || '', promoBannerLink: data.promoBannerLink || '', youtubeLiveId: data.youtubeLiveId || '', printerName: data.printerName || '', aboutUsText: data.aboutUsText || '', schedule: data.schedule || settingsForm.schedule, storeCnpj: data.storeCnpj || ''
         });
       }
     } catch (e) {}
@@ -392,7 +418,7 @@ export default function FuncionariosPortal() {
 
   const fetchFiscalData = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/fiscal?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/fiscal?_=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         if (data) setFiscalData({ icms: data.icms || [], pisCofins: data.pisCofins || [], ibsCbs: data.ibsCbs || [], regras: data.regras || [], cnpjLoja: data.cnpjLoja || '' });
@@ -402,19 +428,19 @@ export default function FuncionariosPortal() {
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/orders?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/orders?_=${Date.now()}`);
       if (res.ok) {
         const data = await res.json(); setOrders(data);
-        const autoPrintSetting = localStorage.getItem('@Canone:autoPrint') !== 'false';
+        const autoPrintSetting = localStorage.getItem('zenix_autoPrint') !== 'false';
         if (autoPrintSetting) {
           const activePreparing = data.filter(o => o.status === 'PREPARING');
           if (activePreparing.length > 0) {
             const latestOrder = activePreparing[0];
-            const currentPrintedIds = JSON.parse(sessionStorage.getItem('@Canone:printedIds') || '[]');
+            const currentPrintedIds = JSON.parse(sessionStorage.getItem('zenix_printedIds') || '[]');
             if (!currentPrintedIds.includes(latestOrder.id)) {
               const updatedIds = [...currentPrintedIds, latestOrder.id];
               setPrintedOrderIds(updatedIds);
-              sessionStorage.setItem('@Canone:printedIds', JSON.stringify(updatedIds));
+              sessionStorage.setItem('zenix_printedIds', JSON.stringify(updatedIds));
               setPrintingOrder(latestOrder);
             }
           }
@@ -434,13 +460,13 @@ export default function FuncionariosPortal() {
       logEmployeeAction(`Reimprimiu pedido #${order.shortId}`);
       alert('🖨️ Pedido enviado para a impressora!');
     } catch (error) {
-      alert("⚠️ Erro de Impressão: Verifique se o Servidor de Impressão Local (tela preta) está aberto no computador!");
+      alert("⚠️ Erro de Impressão!");
     }
   };
 
   const assignDelivery = async (orderIds, deliveryPersonId) => {
     try {
-      const res = await fetch(`${API_URL}/api/orders/dispatch`, {
+      const res = await fetchWithStore(`${API_URL}/api/orders/dispatch`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderIds, deliveryPersonId })
       });
@@ -454,7 +480,7 @@ export default function FuncionariosPortal() {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      const res = await fetch(`${API_URL}/api/orders/${orderId}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) });
+      const res = await fetchWithStore(`${API_URL}/api/orders/${orderId}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) });
       if ((await res.json()).success) {
          fetchOrders();
          logEmployeeAction(`Alterou status do Pedido para ${newStatus}`);
@@ -466,7 +492,7 @@ export default function FuncionariosPortal() {
     e.preventDefault();
     if (!novaMovimentacao.insumoId) return alert('Selecione o insumo');
     try {
-      const res = await fetch(`${API_URL}/api/estoque/manual`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaMovimentacao) });
+      const res = await fetchWithStore(`${API_URL}/api/estoque/manual`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaMovimentacao) });
       if ((await res.json()).success) {
           alert('Movimentação registrada!'); setNovaMovimentacao({ insumoId: '', type: 'IN', quantity: '', reason: '' }); fetchInsumos(); if (estoqueSubTab === 'movimentacoes') fetchMovimentacoes();
           logEmployeeAction(`Fez movimentação de estoque manual`);
@@ -477,7 +503,7 @@ export default function FuncionariosPortal() {
   const handleSaveSystemSettings = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsForm) });
+      const res = await fetchWithStore(`${API_URL}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsForm) });
       if ((await res.json()).success) {
          alert('Configurações salvas!');
          logEmployeeAction(`Modificou configurações gerais da loja`);
@@ -490,7 +516,7 @@ export default function FuncionariosPortal() {
     if (!newProduct.categoryId) return alert("Crie uma categoria primeiro!");
     try {
       const payload = { ...newProduct, costPrice: newProduct.costPrice ? Number(newProduct.costPrice) : 0, groupId: newProduct.groupId || null };
-      const res = await fetch(`${API_URL}/api/products`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetchWithStore(`${API_URL}/api/products`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if ((await res.json()).success) {
         logEmployeeAction(`Criou novo produto no cardápio: ${newProduct.name}`);
         setNewProduct({ name: '', description: '', price: '', price700g: '', price1kg: '', costPrice: '', categoryId: menu[0]?.id || '', imageUrl: '', regraFiscalId: '', ncm: '', ean: '', groupId: '' });
@@ -503,7 +529,7 @@ export default function FuncionariosPortal() {
     e.preventDefault();
     try {
       const payload = { ...editingProduct, costPrice: editingProduct.costPrice ? Number(editingProduct.costPrice) : 0, groupId: editingProduct.groupId || null };
-      const res = await fetch(`${API_URL}/api/products/${editingProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetchWithStore(`${API_URL}/api/products/${editingProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if ((await res.json()).success) {
           logEmployeeAction(`Editou o produto: ${editingProduct.name}`);
          setEditingProduct(null); fetchProducts(); fetchMenu(); 
@@ -513,7 +539,7 @@ export default function FuncionariosPortal() {
 
   const toggleProductStatus = async (product) => {
     try {
-      const res = await fetch(`${API_URL}/api/products/${product.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...product, isActive: !product.isActive }) });
+      const res = await fetchWithStore(`${API_URL}/api/products/${product.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...product, isActive: !product.isActive }) });
       if ((await res.json()).success) {
           logEmployeeAction(`Alterou visibilidade do produto: ${product.name}`);
          fetchProducts(); fetchMenu(); 
@@ -526,7 +552,7 @@ export default function FuncionariosPortal() {
     const currentHighlightsCount = allProducts.filter(p => p.isFeatured).length;
     if (!isCurrentlyFeatured && currentHighlightsCount >= 5) { alert("Você já tem 5 produtos em destaque."); return; }
     try {
-      const res = await fetch(`${API_URL}/api/products/${product.id}/feature`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isFeatured: !isCurrentlyFeatured }) });
+      const res = await fetchWithStore(`${API_URL}/api/products/${product.id}/feature`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isFeatured: !isCurrentlyFeatured }) });
       if ((await res.json()).success) {
           logEmployeeAction(`Alterou destaque do produto: ${product.name}`);
          fetchProducts(); 
@@ -537,7 +563,7 @@ export default function FuncionariosPortal() {
  const handleAddCategory = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/categories`, { 
+      const res = await fetchWithStore(`${API_URL}/api/categories`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ name: newCategoryName, isDrink: newCategoryIsDrink }) 
@@ -554,7 +580,7 @@ export default function FuncionariosPortal() {
 const handleEditCategory = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/categories/${editingCategory.id}`, { 
+      const res = await fetchWithStore(`${API_URL}/api/categories/${editingCategory.id}`, { 
         method: 'PUT', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ name: editingCategory.name, isDrink: editingCategory.isDrink }) 
@@ -570,7 +596,7 @@ const handleEditCategory = async (e) => {
   const handleDeleteCategory = async (categoryId) => {
     if (!confirm('Excluir esta categoria? Produtos poderão ficar órfãos.')) return;
     try {
-      const res = await fetch(`${API_URL}/api/categories/${categoryId}`, { method: 'DELETE' });
+      const res = await fetchWithStore(`${API_URL}/api/categories/${categoryId}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) { logEmployeeAction(`Excluiu uma categoria do cardápio`); fetchMenu(); } else alert(data.error);
     } catch (error) { alert('Erro ao excluir categoria.'); }
@@ -584,7 +610,7 @@ const handleEditCategory = async (e) => {
     setMenu(newMenu);
     try {
       const reordered = newMenu.map((cat, i) => ({ id: cat.id, order: i }));
-      await fetch(`${API_URL}/api/categories/reorder`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categories: reordered }) });
+      await fetchWithStore(`${API_URL}/api/categories/reorder`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categories: reordered }) });
       logEmployeeAction(`Reordenou as categorias do cardápio`);
     } catch (error) { alert('Erro ao reordenar.'); }
   };
@@ -607,7 +633,7 @@ const handleEditCategory = async (e) => {
     setMenu(newMenu);
     try {
       const reordered = catProducts.map((prod, i) => ({ id: prod.id, order: i }));
-      await fetch(`${API_URL}/api/products/reorder`, { 
+      await fetchWithStore(`${API_URL}/api/products/reorder`, { 
          method: 'PUT', headers: { 'Content-Type': 'application/json' }, 
          body: JSON.stringify({ products: reordered }) 
        });
@@ -619,7 +645,7 @@ const handleEditCategory = async (e) => {
   const handleAddCoupon = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...couponForm, active: true }) });
+      const res = await fetchWithStore(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...couponForm, active: true }) });
       const data = await res.json();
       if (data.success) { logEmployeeAction(`Criou novo cupom: ${couponForm.code}`); setCouponForm({ code: '', type: 'FIXED', value: '', minOrderValue: '0', maxUses: '0' }); fetchCoupons(); } 
        else { alert(data.error || "Erro ao criar cupom."); }
@@ -628,7 +654,7 @@ const handleEditCategory = async (e) => {
 
   const toggleCouponStatus = async (coupon) => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...coupon, active: !coupon.active }) });
+      const res = await fetchWithStore(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...coupon, active: !coupon.active }) });
       if ((await res.json()).success) { logEmployeeAction(`Alterou status do cupom: ${coupon.code}`); fetchCoupons(); }
     } catch (e) { alert("Erro ao alterar status."); }
   };
@@ -639,7 +665,7 @@ const handleEditCategory = async (e) => {
     const formData = new FormData(); formData.append('xml', xmlFile);
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/estoque/xml/preview`, { method: 'POST', body: formData });
+      const res = await fetchWithStore(`${API_URL}/api/estoque/xml/preview`, { method: 'POST', body: formData });
       let data; try { data = await res.json(); } catch (err) { throw new Error('Erro na resposta'); }
       if (res.ok && data.success) {
         setXmlPreviewData({ chaveNfe: data.chaveNfe, items: data.items });
@@ -668,7 +694,7 @@ const handleEditCategory = async (e) => {
     });
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/estoque/xml/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chaveNfe: xmlPreviewData.chaveNfe, items: payloadItems }) });
+      const res = await fetchWithStore(`${API_URL}/api/estoque/xml/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chaveNfe: xmlPreviewData.chaveNfe, items: payloadItems }) });
       const data = await res.json();
       if (data.success) { logEmployeeAction(`Importou NFe XML (Chave: ${xmlPreviewData.chaveNfe})`); alert(data.message); setShowXmlModal(false); fetchInsumos(); fetchMovimentacoes(); fetchProducts(); } 
       else alert(data.error);
@@ -679,7 +705,7 @@ const handleEditCategory = async (e) => {
   const handleSalvarInsumo = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/insumos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novoInsumo) });
+      const res = await fetchWithStore(`${API_URL}/api/insumos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novoInsumo) });
       if ((await res.json()).success) { logEmployeeAction(`Cadastrou insumo: ${novoInsumo.name}`); setNovoInsumo({ name: '', unit: 'UN', cost: '', stock: '' }); fetchInsumos(); }
     } catch (e) { alert('Erro ao salvar insumo.'); }
   };
@@ -687,7 +713,7 @@ const handleEditCategory = async (e) => {
   const handleEditInsumoSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/insumos/${editingInsumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingInsumo) });
+      const res = await fetchWithStore(`${API_URL}/api/insumos/${editingInsumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingInsumo) });
       if ((await res.json()).success) { logEmployeeAction(`Editou o insumo: ${editingInsumo.name}`); setEditingInsumo(null); fetchInsumos(); fetchProducts(); }
     } catch (e) { alert('Erro ao salvar edição do insumo.'); }
   };
@@ -695,14 +721,14 @@ const handleEditCategory = async (e) => {
   const toggleInsumoStatus = async (insumo) => {
     try {
       const novoStatus = insumo.isActive === false ? true : false;
-      const res = await fetch(`${API_URL}/api/insumos/${insumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...insumo, isActive: novoStatus }) });
+      const res = await fetchWithStore(`${API_URL}/api/insumos/${insumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...insumo, isActive: novoStatus }) });
       if ((await res.json()).success) { logEmployeeAction(`Alterou status do insumo: ${insumo.name}`); fetchInsumos(); }
     } catch (e) { alert('Erro ao alterar status'); }
   };
 
   const carregarFicha = async (productId) => {
     try {
-      const res = await fetch(`${API_URL}/api/products/${productId}/fichas`);
+      const res = await fetchWithStore(`${API_URL}/api/products/${productId}/fichas`);
       if (res.ok) { const data = await res.json(); setFichasVisiveis(prev => ({ ...prev, [productId]: data })); }
     } catch (e) { console.error('Erro Ficha'); }
   };
@@ -713,7 +739,7 @@ const handleEditCategory = async (e) => {
     const insumoId = formData.get('insumoId');
     const quantity = formData.get('quantity');
     try {
-      const res = await fetch(`${API_URL}/api/products/${productId}/fichas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ insumoId, quantity }) });
+      const res = await fetchWithStore(`${API_URL}/api/products/${productId}/fichas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ insumoId, quantity }) });
       const data = await res.json();
       if (data.success) { logEmployeeAction(`Adicionou item à Ficha Técnica de um produto`); carregarFicha(productId); fetchProducts(); } else alert(data.error);
     } catch (e) { alert('Erro ao salvar ficha'); }
@@ -721,24 +747,24 @@ const handleEditCategory = async (e) => {
 
   const handleRemoveFicha = async (fichaId, productId) => {
     if(!confirm('Remover este item da ficha?')) return;
-    try { await fetch(`${API_URL}/api/fichas/${fichaId}`, { method: 'DELETE' }); logEmployeeAction(`Removeu item da Ficha Técnica de um produto`); carregarFicha(productId); fetchProducts(); } catch(e) { alert('Erro'); }
+    try { await fetchWithStore(`${API_URL}/api/fichas/${fichaId}`, { method: 'DELETE' }); logEmployeeAction(`Removeu item da Ficha Técnica de um produto`); carregarFicha(productId); fetchProducts(); } catch(e) { alert('Erro'); }
   };
 
   const emitirEImprimirNfceLocal = async (orderId) => {
     const pedidoAtual = orders.find(o => o.id === orderId);
     setLoadingNfceId(orderId);
     try {
-      const resBackend = await fetch(`${API_URL}/api/admin/orders/${orderId}/fiscal`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const resBackend = await fetchWithStore(`${API_URL}/api/admin/orders/${orderId}/fiscal`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
       const dataBackend = await resBackend.json();
       if (dataBackend.success) {
-        setNfcesEmitidas(prev => { const newState = { ...prev, [orderId]: dataBackend.fiscalData }; localStorage.setItem('@Canone:nfcesEmitidas', JSON.stringify(newState)); return newState; });
+        setNfcesEmitidas(prev => { const newState = { ...prev, [orderId]: dataBackend.fiscalData }; localStorage.setItem('zenix_nfcesEmitidas', JSON.stringify(newState)); return newState; });
         fetchOrders(); logEmployeeAction(`Emitiu NFC-e do pedido #${pedidoAtual?.shortId}`);
         
         const resImpressora = await fetch('http://localhost:8080/imprimir-nfce', { 
              method: 'POST', 
              headers: { 'Content-Type': 'application/json' }, 
              body: JSON.stringify({ pedido: pedidoAtual, dadosNota: dataBackend.fiscalData, printerName: settingsForm.printerName }) 
-         });
+          });
          
         if (resImpressora.ok) alert("NFC-e emitida na SEFAZ e impressa NATIVAMENTE!"); else alert("NFC-e Emitida, mas falha ao imprimir local.");
       } else { alert(`🚫 NF-e Recusada:\n${dataBackend.error}`); }
@@ -749,7 +775,7 @@ const handleEditCategory = async (e) => {
     if(!cnpj) return alert("Digite o CNPJ!");
     try {
       const newData = { ...fiscalData, cnpjLoja: cnpj };
-      const res = await fetch(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) });
+      const res = await fetchWithStore(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) });
       const data = await res.json();
       if (data.success) { setFiscalData(newData); logEmployeeAction(`Alterou o CNPJ Emitente Fiscal`); alert('CNPJ Salvo!'); } else { alert('Erro ao salvar CNPJ.'); }
     } catch (error) { alert('Erro de conexão ao salvar CNPJ.'); }
@@ -763,18 +789,18 @@ const handleEditCategory = async (e) => {
   const handleDeleteIbsCbs = (id) => { if(!confirm("Excluir Categoria IBS/CBS?")) return; saveFiscalData({ ...fiscalData, ibsCbs: (fiscalData.ibsCbs || []).filter(x => x.id !== id) }); logEmployeeAction('Excluiu regra IBS/CBS'); };
   const handleAddRegra = (e) => { e.preventDefault(); const updatedRegras = [...(fiscalData.regras || []), { ...formRegra, id: formRegra.id || Date.now().toString() }]; saveFiscalData({ ...fiscalData, regras: updatedRegras }); setFormRegra({ id: '', ordenar: '', descricao: '', icmsId: '', pisCofinsId: '', ibsCbsId: '', ipi: '' }); logEmployeeAction('Adicionou Regra Fiscal'); };
   const handleDeleteRegra = (id) => { if(!confirm("Excluir Regra Fiscal?")) return; saveFiscalData({ ...fiscalData, regras: (fiscalData.regras || []).filter(x => x.id !== id) }); logEmployeeAction('Excluiu Regra Fiscal'); };
-  const saveFiscalData = async (newData) => { try { await fetch(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) }); setFiscalData(newData); } catch (error) { alert('Erro ao salvar dados fiscais.'); } };
+  const saveFiscalData = async (newData) => { try { await fetchWithStore(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) }); setFiscalData(newData); } catch (error) { alert('Erro ao salvar dados fiscais.'); } };
   
   const handleEditCustomer = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/admin/customers/${editingCustomer.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingCustomer) });
+      const res = await fetchWithStore(`${API_URL}/api/admin/customers/${editingCustomer.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingCustomer) });
       const data = await res.json();
       if (data.success) { logEmployeeAction(`Editou cadastro de cliente: ${editingCustomer.name}`); alert('Cliente atualizado!'); setEditingCustomer(null); fetchCustomers(); } else alert('Erro.');
     } catch (error) { alert('Erro de conexão.'); }
   };
 
-  const toggleAutoPrintState = (checked) => { setIsAutoPrintEnabled(checked); localStorage.setItem('@Canone:autoPrint', checked ? 'true' : 'false'); };
+  const toggleAutoPrintState = (checked) => { setIsAutoPrintEnabled(checked); localStorage.setItem('zenix_autoPrint', checked ? 'true' : 'false'); };
   const calculateCmv = (cost, price) => { if (!price || price <= 0) return 0; return ((Number(cost) / Number(price)) * 100).toFixed(1); };
   const getCmvColor = (cmv) => { if (cmv <= 0) return 'text-slate-500'; if (cmv <= 30) return 'text-emerald-700 bg-emerald-100'; if (cmv <= 40) return 'text-amber-700 bg-amber-100'; return 'text-red-700 bg-red-100'; };
   const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(searchCustomer.toLowerCase()) || c.email.toLowerCase().includes(searchCustomer.toLowerCase()) || (c.phone && c.phone.includes(searchCustomer)) || (c.cpf && c.cpf.includes(searchCustomer)));
@@ -791,9 +817,13 @@ const handleEditCategory = async (e) => {
           <div className="text-center mb-8">
             <span className="text-4xl mb-3 inline-block">🍔</span>
             <h1 className="text-2xl font-black text-white">Portal de Funcionários</h1>
-            <p className="text-slate-400 text-xs mt-1">Cânone Burger & Co. - Acesso Operacional</p>
+            <p className="text-slate-400 text-xs mt-1">ZenixFood - Acesso Operacional</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase block mb-1">ID ou Slug da Loja</label>
+              <input type="text" required value={loginForm.storeId} onChange={e => setLoginForm({...loginForm, storeId: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-sm text-white focus:outline-none focus:border-amber-500" placeholder="ex: canone-burger" />
+            </div>
             <div>
               <label className="text-xs font-bold text-slate-400 uppercase block mb-1">E-mail ou CPF</label>
               <input type="text" required value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-sm text-white focus:outline-none focus:border-amber-500" placeholder="Seu acesso..." />
@@ -832,7 +862,6 @@ const handleEditCategory = async (e) => {
         <div className="h-20 flex items-center justify-between px-4 border-b border-white/5">
           {isSidebarOpen && (
             <div className="flex items-center gap-3 px-2">
-              <span className="text-2xl">🍔</span>
               <span className="font-black text-white text-lg tracking-tight">Portal <span className="text-amber-500">Operação</span></span>
             </div>
           )}
@@ -928,7 +957,7 @@ const handleEditCategory = async (e) => {
            {activeTab === 'fornecedores' && isPermitted('fornecedores') && <SuppliersTab />}
            {activeTab === 'estoque' && isPermitted('estoque') && <StockTab estoqueSubTab={estoqueSubTab} setEstoqueSubTab={setEstoqueSubTab} fetchMovimentacoes={fetchMovimentacoes} handleUploadXMLPreview={handleUploadXMLPreview} setXmlFile={setXmlFile} novaMovimentacao={novaMovimentacao} setNovaMovimentacao={setNovaMovimentacao} insumos={insumos} handleMovimentacaoManual={handleMovimentacaoManual} novoInsumo={novoInsumo} setNovoInsumo={setNovoInsumo} handleSalvarInsumo={handleSalvarInsumo} toggleInsumoStatus={toggleInsumoStatus} setEditingInsumo={setEditingInsumo} editingInsumo={editingInsumo} handleEditInsumoSubmit={handleEditInsumoSubmit} allProducts={allProducts} fichasVisiveis={fichasVisiveis} carregarFicha={carregarFicha} setFichasVisiveis={setFichasVisiveis} calculateCmv={calculateCmv} getCmvColor={getCmvColor} handleRemoveFicha={handleRemoveFicha} handleAddFicha={handleAddFicha} movimentacoes={movimentacoes} showXmlModal={showXmlModal} setShowXmlModal={setShowXmlModal} xmlPreviewData={xmlPreviewData} xmlMappings={xmlMappings} updateMapping={updateMapping} handleConfirmXmlImport={handleConfirmXmlImport} />}
            
-           {activeTab === 'impressoes' && isPermitted('impressoes') && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} />}
+           {activeTab === 'impressoes' && isPermitted('impressoes') && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
            {activeTab === 'fiscal' && isPermitted('fiscal') && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
            {activeTab === 'config' && isPermitted('config') && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={()=>{}} />}
         </div>
@@ -944,7 +973,6 @@ const handleEditCategory = async (e) => {
                 <input id="editCatNameFunc" name="editCatNameFunc" type="text" required value={editingCategory.name} onChange={(e) => setEditingCategory({...editingCategory, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500 mb-4" />
               </div>
               
-              {/*OPÇÃO NO MODAL DE EDIÇÃO */}
               <label className="flex items-center gap-3 cursor-pointer bg-slate-50 p-3 rounded-xl border border-slate-200 hover:border-blue-300 transition-colors">
                 <input 
                   type="checkbox" 

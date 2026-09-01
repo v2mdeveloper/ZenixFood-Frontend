@@ -4,13 +4,27 @@ import { useState, useEffect } from 'react';
 export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 'BEBIDAS'
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
-    : 'https://canone-backend.onrender.com';
+    : 'https://zenixfood-backend.onrender.com';
 
   const [kdsData, setKdsData] = useState({ appOrders: [], totemOrders: [], salaoItems: [] });
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
   
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
 
   // =========================================================
   // EXTRATOR INTELIGENTE DE NOME (Lê o nome real)
@@ -32,10 +46,9 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
     return () => { clearInterval(interval); clearInterval(clock); };
   }, []);
 
-  // 🚨 CORREÇÃO: ADICIONADO CACHE-BUSTER PARA O NAVEGADOR NÃO TRAVAR A TELA
   const fetchKdsData = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/kds?_=${Date.now()}`, { cache: 'no-store' });
+      const res = await fetchWithStore(`${API_URL}/api/kds?_=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setKdsData(data);
@@ -44,9 +57,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
     setLoading(false);
   };
 
-  // 🚨 CORREÇÃO: ATUALIZAÇÃO OTIMISTA (A TELA MUDA IMEDIATAMENTE AO CLICAR)
   const updateOrderStatus = async (orderId, newStatus) => {
-    // Muda visualmente na hora
     setKdsData(prev => ({
       ...prev,
       appOrders: prev.appOrders.map(o => o.id === orderId ? { ...o, status: newStatus } : o),
@@ -54,7 +65,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
     }));
     
     try {
-      const res = await fetch(`${API_URL}/api/orders/${orderId}/status`, {
+      const res = await fetchWithStore(`${API_URL}/api/orders/${orderId}/status`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
       });
@@ -66,16 +77,14 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
     } catch (e) { alert('Erro ao atualizar pedido. O Backend foi atualizado?'); fetchKdsData(); }
   };
 
-  // 🚨 CORREÇÃO: ATUALIZAÇÃO OTIMISTA PARA ITENS DO SALÃO/MESAS
   const updateTabItemStatus = async (itemId, newStatus) => {
-    // Muda visualmente na hora
     setKdsData(prev => ({
       ...prev,
       salaoItems: prev.salaoItems.map(i => i.id === itemId ? { ...i, status: newStatus } : i)
     }));
 
     try {
-      const res = await fetch(`${API_URL}/api/salao/items/${itemId}/status`, {
+      const res = await fetchWithStore(`${API_URL}/api/salao/items/${itemId}/status`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
       });
@@ -87,7 +96,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
   const handleWhatsApp = (phone, clientName, shortId) => {
     if (!phone) return alert('Cliente sem número de telefone registado.');
     const num = phone.replace(/\D/g, '');
-    const msg = encodeURIComponent(`Olá ${clientName}, o seu pedido #${shortId} da Cânone Burger acabou de sair para entrega! 🛵💨`);
+    const msg = encodeURIComponent(`Olá ${clientName}, o seu pedido #${shortId} acabou de sair para entrega! 🛵💨`);
     window.open(`https://wa.me/55${num}?text=${msg}`, '_blank');
   };
 
@@ -312,7 +321,6 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                 <p className="text-sm font-black text-slate-800 my-1"><span className="text-amber-600 mr-1">{item.quantity}x</span> {item.name}</p>
                 {item.observation && <p className="text-xs font-bold text-red-600 bg-red-50 p-1.5 rounded-lg mb-2">⚠️ {item.observation}</p>}
                 
-                {/* 🚨 BOTAO DE BAIXA DO SALÃO BLINDADO CONTRA CACHE */}
                 <button onClick={(e) => { e.stopPropagation(); updateTabItemStatus(item.id, 'READY'); }} className="mt-2 w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-xs font-black cursor-pointer shadow-sm">
                   Item Pronto ✅
                 </button>
@@ -405,12 +413,12 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   
                   <div className="flex gap-2 mt-2">
                      <button onClick={(e) => { e.stopPropagation(); updateOrderStatus(order.id, 'DELIVERED'); }} className="flex-1 bg-slate-800 hover:bg-black text-white py-2 rounded-lg text-[10px] font-black uppercase shadow-sm cursor-pointer transition-colors">
-                       Finalizar
+                        Finalizar
                      </button>
                      {order.client?.phone && (
-                       <button onClick={(e) => { e.stopPropagation(); handleWhatsApp(order.client?.phone, extractName(order), order.shortId); }} className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-2 rounded-lg text-[10px] border border-emerald-200 font-black uppercase shadow-sm cursor-pointer transition-colors flex items-center justify-center gap-1">
-                         <span>💬</span> Whats
-                       </button>
+                        <button onClick={(e) => { e.stopPropagation(); handleWhatsApp(order.client?.phone, extractName(order), order.shortId); }} className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-2 rounded-lg text-[10px] border border-emerald-200 font-black uppercase shadow-sm cursor-pointer transition-colors flex items-center justify-center gap-1">
+                           <span>💬</span> Whats
+                        </button>
                      )}
                   </div>
                 </div>

@@ -2,9 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 
 export default function LancamentosPage() {
-  const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
-    ? 'http://localhost:3333' 
-    : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [employeeUser, setEmployeeUser] = useState(null);
@@ -60,6 +58,20 @@ export default function LancamentosPage() {
   const [readyAlerts, setReadyAlerts] = useState([]);
   const [alertedItemsSet, setAlertedItemsSet] = useState(new Set());
 
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('@Canone:employeeToken') || localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
   const bgBase = isDarkMode ? 'bg-slate-950' : 'bg-slate-50';
   const bgCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
   const bgInput = isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900';
@@ -80,9 +92,9 @@ export default function LancamentosPage() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('@Canone:employeeToken');
-    const savedUser = localStorage.getItem('@Canone:employeeUser');
-    const savedTheme = localStorage.getItem('@Canone:theme');
+    const token = localStorage.getItem('@Canone:employeeToken') || localStorage.getItem('zenix_employeeToken');
+    const savedUser = localStorage.getItem('@Canone:employeeUser') || localStorage.getItem('zenix_employeeUser');
+    const savedTheme = localStorage.getItem('@Canone:theme') || localStorage.getItem('zenix_theme');
     if (savedTheme === 'light') setIsDarkMode(false);
     if (token && savedUser) {
       setIsAuthenticated(true);
@@ -147,7 +159,7 @@ export default function LancamentosPage() {
   const logEmployeeAction = async (actionDesc) => {
     if (!employeeUser) return;
     try {
-      await fetch(`${API_URL}/api/rh/logs`, {
+      await fetchWithStore(`${API_URL}/api/rh/logs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ employeeId: employeeUser.id, action: actionDesc })
@@ -166,9 +178,9 @@ export default function LancamentosPage() {
   const fetchPeople = async () => {
     try {
       const [resC, resE, resAcc] = await Promise.all([
-        fetch(`${API_URL}/api/customers`),
-        fetch(`${API_URL}/api/rh/employees`),
-        fetch(`${API_URL}/api/rh/employee-accounts`)
+        fetchWithStore(`${API_URL}/api/customers`),
+        fetchWithStore(`${API_URL}/api/rh/employees`),
+        fetchWithStore(`${API_URL}/api/rh/employee-accounts`)
       ]);
       let clients = []; let emps = [];
       if (resC.ok) clients = await resC.json();
@@ -182,7 +194,7 @@ export default function LancamentosPage() {
 
   const fetchTabs = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/salao/tabs`);
+      const res = await fetchWithStore(`${API_URL}/api/salao/tabs`);
       if (res.ok) {
         const data = await res.json(); setTabs(data || []);
         if (selectedTab) { const updated = (data || []).find(t => t.id === selectedTab.id); if (updated) setSelectedTab(updated); else setSelectedTab(null); }
@@ -192,7 +204,7 @@ export default function LancamentosPage() {
 
   const fetchMenu = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/menu`);
+      const res = await fetchWithStore(`${API_URL}/api/menu`);
       if (res.ok) { 
           const data = await res.json(); 
           const menuLimpo = data
@@ -217,7 +229,7 @@ export default function LancamentosPage() {
   };
 
   const fetchUpsells = async () => {
-    try { const res = await fetch(`${API_URL}/api/upsells`); if (res.ok) setUpsells(await res.json()); } catch (e) {}
+    try { const res = await fetchWithStore(`${API_URL}/api/upsells`); if (res.ok) setUpsells(await res.json()); } catch (e) {}
   };
 
   const handleCpfChange = (e) => {
@@ -290,17 +302,17 @@ export default function LancamentosPage() {
 
     try {
       const payload = { 
-         number: numVal, 
-         customerName: numVal >= 1000 ? openForm.customerName : null, 
-         customerCpf: numVal >= 1000 ? openForm.customerCpf : null, 
-         customerBirthDate: numVal >= 1000 ? openForm.customerBirthDate : null,
-         openedBy: employeeUser?.name || 'Garçom', 
-         customerId: numVal >= 1000 ? openForm.customerId : null, 
-         customerType: numVal >= 1000 ? openForm.customerType : null, 
-         managerAuth: overrideAuth 
+          number: numVal, 
+          customerName: numVal >= 1000 ? openForm.customerName : null, 
+          customerCpf: numVal >= 1000 ? openForm.customerCpf : null, 
+          customerBirthDate: numVal >= 1000 ? openForm.customerBirthDate : null,
+          openedBy: employeeUser?.name || 'Garçom', 
+          customerId: numVal >= 1000 ? openForm.customerId : null, 
+          customerType: numVal >= 1000 ? openForm.customerType : null, 
+          managerAuth: overrideAuth 
       };
       
-      const res = await fetch(`${API_URL}/api/salao/tabs/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetchWithStore(`${API_URL}/api/salao/tabs/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
       
       if (data.success) { 
@@ -321,7 +333,7 @@ export default function LancamentosPage() {
   const handleCancelTab = async (tabId) => {
     if (!confirm('Deseja cancelar esta mesa vazia?')) return;
     try {
-      const res = await fetch(`${API_URL}/api/salao/tabs/${tabId}/cancel`, { method: 'POST' });
+      const res = await fetchWithStore(`${API_URL}/api/salao/tabs/${tabId}/cancel`, { method: 'POST' });
       const data = await res.json();
       if (data.success) { alert('Cancelado com sucesso!'); setSelectedTab(null); fetchTabs(); } else { alert(data.error); }
     } catch (e) { alert('Erro.'); }
@@ -329,7 +341,7 @@ export default function LancamentosPage() {
 
   const handleUndoItem = async (itemId) => {
     try {
-      const res = await fetch(`${API_URL}/api/salao/items/${itemId}`, { method: 'DELETE' });
+      const res = await fetchWithStore(`${API_URL}/api/salao/items/${itemId}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) { fetchTabs(); } else { alert(data.error); }
     } catch (e) { alert('Erro ao estornar.'); }
@@ -337,7 +349,7 @@ export default function LancamentosPage() {
 
   const updateTabItemStatus = async (itemId, newStatus) => {
     try {
-      const res = await fetch(`${API_URL}/api/salao/items/${itemId}/status`, {
+      const res = await fetchWithStore(`${API_URL}/api/salao/items/${itemId}/status`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
       });
@@ -352,7 +364,7 @@ export default function LancamentosPage() {
 
   const handleLinkTab = async (tabId, mesaNum) => {
     try {
-      const res = await fetch(`${API_URL}/api/salao/tabs/${tabId}/link`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ linkedTable: mesaNum }) });
+      const res = await fetchWithStore(`${API_URL}/api/salao/tabs/${tabId}/link`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ linkedTable: mesaNum }) });
       const data = await res.json();
       if (data.success) { fetchTabs(); } else alert(data.error);
     } catch (e) { alert('Erro ao vincular.'); }
@@ -362,10 +374,10 @@ export default function LancamentosPage() {
     e.preventDefault();
     if (!mergeSourceTabNumber.trim()) return;
     try {
-      const resSource = await fetch(`${API_URL}/api/salao/tabs/number/${mergeSourceTabNumber.trim()}`);
+      const resSource = await fetchWithStore(`${API_URL}/api/salao/tabs/number/${mergeSourceTabNumber.trim()}`);
       if (!resSource.ok) return alert('A Mesa/Comanda de origem não foi encontrada.');
       const sourceTabData = await resSource.json();
-      const resMerge = await fetch(`${API_URL}/api/salao/tabs/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceTabId: sourceTabData.id, targetTabId: selectedTab.id }) });
+      const resMerge = await fetchWithStore(`${API_URL}/api/salao/tabs/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceTabId: sourceTabData.id, targetTabId: selectedTab.id }) });
       const mergeResult = await resMerge.json();
       if (mergeResult.success) { alert('Contas unificadas com sucesso!'); setShowMergeModal(false); setMergeSourceTabNumber(''); fetchTabs(); } else alert(mergeResult.error || 'Erro.');
     } catch (e) { alert('Erro ao juntar contas.'); }
@@ -375,7 +387,7 @@ export default function LancamentosPage() {
     e.preventDefault();
     if (!transferSourceId || !transferItemId || !transferTargetId) return alert('Preencha todos os campos da transferência.');
     try {
-      const res = await fetch(`${API_URL}/api/salao/items/transfer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId: transferItemId, targetTabId: transferTargetId }) });
+      const res = await fetchWithStore(`${API_URL}/api/salao/items/transfer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId: transferItemId, targetTabId: transferTargetId }) });
       const data = await res.json();
       if (data.success) { alert('Item transferido com sucesso!'); setTransferSourceId(''); setTransferItemId(''); setTransferTargetId(''); fetchTabs(); } else alert(data.error);
     } catch (e) { alert('Erro na transferência.'); }
@@ -438,7 +450,7 @@ export default function LancamentosPage() {
       }, {});
       
       for (const [tId, itemsOfTab] of Object.entries(grouped)) {
-         const res = await fetch(`${API_URL}/api/salao/tabs/${tId}/items`, { 
+         const res = await fetchWithStore(`${API_URL}/api/salao/tabs/${tId}/items`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ items: itemsOfTab, managerAuth: overrideAuth }) 
@@ -502,8 +514,8 @@ export default function LancamentosPage() {
 
   let seatOptions = ['Lugar 1', 'Lugar 2', 'Lugar 3', 'Lugar 4', 'Lugar 5', 'Lugar 6'];
   if (selectedTab?.type === 'TABLE') {
-      const extraSeats = comandas.filter(c => c.linkedTable === selectedTab.number).map(c => `Comanda ${c.number}`);
-      seatOptions = [...seatOptions, ...extraSeats];
+     const extraSeats = comandas.filter(c => c.linkedTable === selectedTab.number).map(c => `Comanda ${c.number}`);
+     seatOptions = [...seatOptions, ...extraSeats];
   }
 
   const linkedComandasInActiveTable = selectedTab?.type === 'TABLE' ? comandas.filter(c => c.linkedTable === selectedTab.number) : [];
@@ -528,8 +540,8 @@ export default function LancamentosPage() {
             <div className={`p-6 border-b ${borderSidebar} flex items-center gap-3`}>
                <span className="text-3xl">🍽️</span>
                <div>
-                 <h1 className={`font-black ${textMain} text-lg leading-none tracking-tight`}>Cânone</h1>
-                 <p className="text-amber-500 text-[10px] font-bold uppercase tracking-widest mt-1">{employeeUser?.name}</p>
+                  <h1 className={`font-black ${textMain} text-lg leading-none tracking-tight`}>Cânone</h1>
+                  <p className="text-amber-500 text-[10px] font-bold uppercase tracking-widest mt-1">{employeeUser?.name}</p>
                </div>
             </div>
             <nav className="p-4 flex md:flex-col gap-2 overflow-x-auto md:overflow-visible hide-scrollbar">
@@ -842,7 +854,7 @@ export default function LancamentosPage() {
                {(cart || []).length > 0 && (
                   <div className="bg-emerald-500/10 border border-emerald-500/30 p-5 rounded-3xl flex flex-col gap-3 shadow-md shrink-0">
                      <h3 className="font-black text-emerald-600 text-xs uppercase tracking-widest flex items-center justify-between">
-                        Fila de Disparo <span className="bg-emerald-500 text-white px-2 py-0.5 rounded-full">{cart.length}</span>
+                         Fila de Disparo <span className="bg-emerald-500 text-white px-2 py-0.5 rounded-full">{cart.length}</span>
                      </h3>
                      <div className="max-h-48 overflow-y-auto space-y-2 hide-scrollbar pr-1">
                         {cart.map((item, idx) => (
@@ -859,7 +871,7 @@ export default function LancamentosPage() {
                         ))}
                      </div>
                      <button onClick={() => handleSendToKitchen(null)} disabled={loadingData} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-xl cursor-pointer transition-all mt-2 active:scale-95 flex justify-center items-center gap-2 text-sm">
-                        🚀 Confirmar Lançamentos
+                         🚀 Confirmar Lançamentos
                      </button>
                   </div>
                )}
@@ -960,15 +972,15 @@ export default function LancamentosPage() {
 
       {showUpsellModal && pendingUpsellItem && activeUpsellRule && (
          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-           <div className={`${bgCard} border p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up text-center`}>
-             <span className="text-6xl mb-4 inline-block">✨🎁</span>
-             <h3 className="text-xl font-black mb-2">Completar o Pedido?</h3>
-             <p className={`text-sm ${textMuted} font-medium mb-6`}>Deseja adicionar <strong className="text-amber-500">{activeUpsellRule.offerProductName}</strong> por apenas <strong>R$ {Number(activeUpsellRule.offerPrice).toFixed(2)}</strong>?</p>
-             <div className="flex gap-3">
-                <button onClick={declineUpsell} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-black cursor-pointer`}>Não, Obrigado</button>
-                <button onClick={acceptUpsell} className="flex-1 bg-amber-500 text-slate-950 py-3 rounded-xl font-black cursor-pointer shadow-lg">Sim, Adicionar!</button>
-             </div>
-           </div>
+            <div className={`${bgCard} border p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up text-center`}>
+               <span className="text-6xl mb-4 inline-block">✨🎁</span>
+               <h3 className="text-xl font-black mb-2">Completar o Pedido?</h3>
+               <p className={`text-sm ${textMuted} font-medium mb-6`}>Deseja adicionar <strong className="text-amber-500">{activeUpsellRule.offerProductName}</strong> por apenas <strong>R$ {Number(activeUpsellRule.offerPrice).toFixed(2)}</strong>?</p>
+               <div className="flex gap-3">
+                  <button onClick={declineUpsell} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-black cursor-pointer`}>Não, Obrigado</button>
+                  <button onClick={acceptUpsell} className="flex-1 bg-amber-500 text-slate-950 py-3 rounded-xl font-black cursor-pointer shadow-lg">Sim, Adicionar!</button>
+               </div>
+            </div>
          </div>
       )}
 
@@ -1001,12 +1013,12 @@ export default function LancamentosPage() {
 
             <div className="flex gap-4">
                <div className="w-1/3">
-                 <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Qtd</label>
-                 <div className={`flex items-center justify-between ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'} p-1.5 rounded-2xl border transition-colors`}>
-                   <button onClick={() => setItemQuantity(Math.max(1, itemQuantity - 1))} className={`w-10 h-10 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-800 shadow-sm'} rounded-xl font-black text-lg cursor-pointer`}>-</button>
-                   <span className="text-lg font-black w-8 text-center">{itemQuantity}</span>
-                   <button onClick={() => setItemQuantity(itemQuantity + 1)} className={`w-10 h-10 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-800 shadow-sm'} rounded-xl font-black text-lg cursor-pointer`}>+</button>
-                 </div>
+                  <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Qtd</label>
+                  <div className={`flex items-center justify-between ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'} p-1.5 rounded-2xl border transition-colors`}>
+                     <button onClick={() => setItemQuantity(Math.max(1, itemQuantity - 1))} className={`w-10 h-10 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-800 shadow-sm'} rounded-xl font-black text-lg cursor-pointer`}>-</button>
+                     <span className="text-lg font-black w-8 text-center">{itemQuantity}</span>
+                     <button onClick={() => setItemQuantity(itemQuantity + 1)} className={`w-10 h-10 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-800 shadow-sm'} rounded-xl font-black text-lg cursor-pointer`}>+</button>
+                  </div>
                </div>
                <div className="flex-1">
                   <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Observações</label>
@@ -1014,7 +1026,7 @@ export default function LancamentosPage() {
                </div>
             </div>
 
-            <button onClick={confirmAddToCart} className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-lg py-4 rounded-2xl shadow-xl mt-2 cursor-pointer transition-all active:scale-95 flex justify-center items-center gap-2">
+            <button onClick={confirmAddToCart} className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-lg py-4 rounded-2xl shadow-xl mt-2 cursor-pointer transition-all active:scale-95 flex justify-center items-center gap-2">
                Adicionar Item <span className="bg-slate-950/10 px-2 py-0.5 rounded-lg text-sm">R$ {(Number(selectedProduct.price) * itemQuantity).toFixed(2)}</span>
             </button>
           </div>

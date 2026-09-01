@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 
 export default function TurnosTab() {
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
   const [shifts, setShifts] = useState([]);
   const [employees, setEmployees] = useState([]); 
@@ -21,6 +21,20 @@ export default function TurnosTab() {
 
   const [selectedRegister, setSelectedRegister] = useState(null);
 
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
   useEffect(() => {
     fetchShifts();
     fetchSettings();
@@ -29,14 +43,14 @@ export default function TurnosTab() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/settings`);
+      const res = await fetchWithStore(`${API_URL}/api/settings`);
       if (res.ok) setPrinterName((await res.json()).printerName || '');
     } catch(e) {}
   };
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/rh/employees`);
+      const res = await fetchWithStore(`${API_URL}/api/rh/employees`);
       if (res.ok) setEmployees(await res.json());
     } catch (e) {}
   };
@@ -58,7 +72,7 @@ export default function TurnosTab() {
       if (filterEndDate) params.append('dataFim', new Date(filterEndDate).toISOString());
       if (params.toString()) url += `?${params.toString()}`;
 
-      const res = await fetch(url);
+      const res = await fetchWithStore(url);
       if (res.ok) setShifts(await res.json());
     } catch (e) { console.error("Erro ao buscar turnos", e); }
     setLoading(false);
@@ -68,14 +82,14 @@ export default function TurnosTab() {
     setFilterStartDate('');
     setFilterEndDate('');
     setTimeout(() => {
-      fetch(`${API_URL}/api/pdv/shifts`).then(r => r.json()).then(data => setShifts(data));
+      fetchWithStore(`${API_URL}/api/pdv/shifts`).then(r => r.json()).then(data => setShifts(data));
     }, 100);
   };
 
   const handleOpenShift = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/pdv/shifts/open`, {
+      const res = await fetchWithStore(`${API_URL}/api/pdv/shifts/open`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ managerAuth: openShiftAuth })
       });
@@ -92,7 +106,7 @@ export default function TurnosTab() {
   const handleCloseShift = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/pdv/shifts/close`, {
+      const res = await fetchWithStore(`${API_URL}/api/pdv/shifts/close`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shiftId: selectedShiftId, managerAuth })
       });
@@ -106,7 +120,6 @@ export default function TurnosTab() {
     } catch (e) { alert('Erro ao encerrar turno.'); }
   };
 
-  // 🚨 CORREÇÃO: VOLTOU PARA LOCALHOST PARA O CHROME NÃO BLOQUEAR 🚨
   const imprimirFechamento = (register) => {
     const toastId = 'toast-' + Date.now();
     const toast = document.createElement('div');
@@ -373,7 +386,7 @@ export default function TurnosTab() {
                         setSelectedShiftId(shift.id); 
                         setShowCloseShiftModal(true); 
                         window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
+                      }} 
                       className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-colors cursor-pointer"
                     >
                       Encerrar Turno (Gerente)
@@ -521,13 +534,13 @@ export default function TurnosTab() {
                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
                
                <div className="flex justify-between items-center mb-6 shrink-0">
-                 <h3 className="text-xl font-black text-slate-800 flex items-center gap-2"><span>🧾</span> Auditoria de Caixa</h3>
-                 <button onClick={() => setSelectedRegister(null)} className="text-slate-400 hover:text-red-500 font-bold cursor-pointer">✕</button>
+                  <h3 className="text-xl font-black text-slate-800 flex items-center gap-2"><span>🧾</span> Auditoria de Caixa</h3>
+                  <button onClick={() => setSelectedRegister(null)} className="text-slate-400 hover:text-red-500 font-bold cursor-pointer">✕</button>
                </div>
 
                <div className="overflow-y-auto pr-2 pb-4 space-y-6 flex-1 hide-scrollbar">
-                   
-                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 grid grid-cols-2 gap-4">
+                  
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 grid grid-cols-2 gap-4">
                        <div>
                          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Operador</p>
                          <p className="font-black text-slate-800 uppercase text-sm">{getManagerName(selectedRegister.openedBy)}</p>
@@ -536,47 +549,47 @@ export default function TurnosTab() {
                          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Horário de Operação</p>
                          <p className="text-xs text-slate-600 font-bold">{new Date(selectedRegister.openedAt).toLocaleTimeString('pt-BR')} até {new Date(selectedRegister.closedAt).toLocaleTimeString('pt-BR')}</p>
                        </div>
-                   </div>
+                  </div>
 
-                   {(() => {
-                      let details = { cash: 0, credit: 0, debit: 0, pix: 0 };
-                      try { details = JSON.parse(selectedRegister.closingDetails || '{}'); } catch(e){}
+                  {(() => {
+                    let details = { cash: 0, credit: 0, debit: 0, pix: 0 };
+                    try { details = JSON.parse(selectedRegister.closingDetails || '{}'); } catch(e){}
 
-                      const repCash = Number(details.cash || 0);
-                      const repCredit = Number(details.credit || 0);
-                      const repDebit = Number(details.debit || 0);
-                      const repPix = Number(details.pix || 0);
+                    const repCash = Number(details.cash || 0);
+                    const repCredit = Number(details.credit || 0);
+                    const repDebit = Number(details.debit || 0);
+                    const repPix = Number(details.pix || 0);
 
-                      let sysCash = 0, sysCredit = 0, sysDebit = 0, sysPix = 0;
-                      selectedRegister.orders?.forEach(o => {
-                          const val = Number(o.total);
-                          if (o.paymentMethod === 'CASH') sysCash += val;
-                          else if (o.paymentMethod.includes('CREDIT')) sysCredit += val;
-                          else if (o.paymentMethod.includes('DEBIT')) sysDebit += val;
-                          else if (o.paymentMethod.includes('PIX')) sysPix += val;
-                      });
+                    let sysCash = 0, sysCredit = 0, sysDebit = 0, sysPix = 0;
+                    selectedRegister.orders?.forEach(o => {
+                        const val = Number(o.total);
+                        if (o.paymentMethod === 'CASH') sysCash += val;
+                        else if (o.paymentMethod.includes('CREDIT')) sysCredit += val;
+                        else if (o.paymentMethod.includes('DEBIT')) sysDebit += val;
+                        else if (o.paymentMethod.includes('PIX')) sysPix += val;
+                    });
 
-                      let totalIn = 0, totalOut = 0;
-                      selectedRegister.movements?.forEach(m => {
-                          if (m.type === 'IN') totalIn += Number(m.amount);
-                          if (m.type === 'OUT') totalOut += Number(m.amount);
-                      });
+                    let totalIn = 0, totalOut = 0;
+                    selectedRegister.movements?.forEach(m => {
+                        if (m.type === 'IN') totalIn += Number(m.amount);
+                        if (m.type === 'OUT') totalOut += Number(m.amount);
+                    });
 
-                      const expectedCash = Number(selectedRegister.openingBalance || 0) + sysCash + totalIn - totalOut;
+                    const expectedCash = Number(selectedRegister.openingBalance || 0) + sysCash + totalIn - totalOut;
 
-                      const quebraCash = repCash - expectedCash;
-                      const quebraCredit = repCredit - sysCredit;
-                      const quebraDebit = repDebit - sysDebit;
-                      const quebraPix = repPix - sysPix;
+                    const quebraCash = repCash - expectedCash;
+                    const quebraCredit = repCredit - sysCredit;
+                    const quebraDebit = repDebit - sysDebit;
+                    const quebraPix = repPix - sysPix;
 
-                      const renderQuebra = (val) => {
-                          if (val > 0.05) return <span className="text-emerald-500 font-black px-2 py-1 bg-emerald-50 rounded-lg text-xs">+ R$ {val.toFixed(2)} (Sobra)</span>;
-                          if (val < -0.05) return <span className="text-red-500 font-black px-2 py-1 bg-red-50 rounded-lg text-xs">- R$ {Math.abs(val).toFixed(2)} (Falta)</span>;
-                          return <span className="text-slate-400 font-bold px-2 py-1 bg-slate-100 rounded-lg text-xs">Batido (OK)</span>;
-                      }
+                    const renderQuebra = (val) => {
+                        if (val > 0.05) return <span className="text-emerald-500 font-black px-2 py-1 bg-emerald-50 rounded-lg text-xs">+ R$ {val.toFixed(2)} (Sobra)</span>;
+                        if (val < -0.05) return <span className="text-red-500 font-black px-2 py-1 bg-red-50 rounded-lg text-xs">- R$ {Math.abs(val).toFixed(2)} (Falta)</span>;
+                        return <span className="text-slate-400 font-bold px-2 py-1 bg-slate-100 rounded-lg text-xs">Batido (OK)</span>;
+                    }
 
-                      return (
-                         <div className="space-y-6">
+                    return (
+                        <div className="space-y-6">
                             <div>
                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Movimentação da Gaveta (Dinheiro)</h4>
                                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden text-sm shadow-sm">
@@ -629,35 +642,35 @@ export default function TurnosTab() {
                                </div>
                             </div>
                          </div>
-                      )
-                   })()}
+                    )
+                  })()}
 
-                   {selectedRegister.movements?.length > 0 && (
-                       <div>
-                           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 mt-4">Detalhamento de Entradas e Saídas</h4>
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {selectedRegister.movements.map(m => (
-                                  <div key={m.id} className="flex flex-col bg-white border border-slate-200 p-4 rounded-2xl text-xs shadow-sm hover:border-amber-300 transition-colors">
-                                     <div className="flex justify-between font-black mb-1 items-center">
-                                        <span className={`px-2 py-1 rounded-lg text-[10px] uppercase tracking-widest ${m.type === 'IN' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>{m.type === 'IN' ? 'Suprimento' : 'Sangria'}</span>
-                                        <span className="text-slate-800 text-sm">R$ {Number(m.amount).toFixed(2)}</span>
-                                     </div>
-                                     <span className="text-xs text-slate-600 font-bold mt-2">{m.reason}</span>
-                                     <span className="text-[9px] text-slate-400 uppercase mt-1">Autorizado por: {getManagerName(m.authorizedBy)}</span>
-                                  </div>
-                              ))}
-                           </div>
-                       </div>
-                   )}
+                  {selectedRegister.movements?.length > 0 && (
+                        <div>
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 mt-4">Detalhamento de Entradas e Saídas</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {selectedRegister.movements.map(m => (
+                                    <div key={m.id} className="flex flex-col bg-white border border-slate-200 p-4 rounded-2xl text-xs shadow-sm hover:border-amber-300 transition-colors">
+                                       <div className="flex justify-between font-black mb-1 items-center">
+                                          <span className={`px-2 py-1 rounded-lg text-[10px] uppercase tracking-widest ${m.type === 'IN' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>{m.type === 'IN' ? 'Suprimento' : 'Sangria'}</span>
+                                          <span className="text-slate-800 text-sm">R$ {Number(m.amount).toFixed(2)}</span>
+                                       </div>
+                                       <span className="text-xs text-slate-600 font-bold mt-2">{m.reason}</span>
+                                       <span className="text-[9px] text-slate-400 uppercase mt-1">Autorizado por: {getManagerName(m.authorizedBy)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                  )}
                </div>
                
                <div className="pt-4 border-t border-slate-100 mt-2 shrink-0 flex gap-3">
-                   <button onClick={() => setSelectedRegister(null)} className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black text-sm py-4 rounded-xl transition-colors cursor-pointer">
-                      Voltar
-                   </button>
-                   <button onClick={() => imprimirFechamento(selectedRegister)} className="flex-1 bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white font-black py-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-3 text-sm group cursor-pointer">
-                      <span className="text-xl group-hover:scale-110 transition-transform">🖨️</span> Imprimir Relatório
-                   </button>
+                    <button onClick={() => setSelectedRegister(null)} className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black text-sm py-4 rounded-xl transition-colors cursor-pointer">
+                       Voltar
+                    </button>
+                    <button onClick={() => imprimirFechamento(selectedRegister)} className="flex-1 bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white font-black py-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-3 text-sm group cursor-pointer">
+                       <span className="text-xl group-hover:scale-110 transition-transform">🖨️</span> Imprimir Relatório
+                    </button>
                </div>
             </div>
          </div>

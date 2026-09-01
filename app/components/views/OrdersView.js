@@ -5,11 +5,25 @@ export default function OrdersView({
   clientOrders, setWatchingOrder, setView, translateStatus, 
   setReviewOrder, availableCashback, storeSettings, user, fetchClientOrders
 }) {
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
   const [retryPixData, setRetryPixData] = useState(null);
   const [pixCopied, setPixCopied] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
 
   const getDeliveryCode = (phone) => {
     if (!phone) return '0000';
@@ -20,7 +34,7 @@ export default function OrdersView({
   const handleCancelMyOrder = async (orderId) => {
     if (!confirm("Deseja realmente cancelar este pedido pendente?")) return;
     try {
-      const res = await fetch(`${API_URL}/api/orders/${orderId}/cancel`, { method: 'PUT' });
+      const res = await fetchWithStore(`${API_URL}/api/orders/${orderId}/cancel`, { method: 'PUT' });
       const data = await res.json();
       if (data.success) {
         alert("Pedido cancelado com sucesso.");
@@ -40,7 +54,7 @@ export default function OrdersView({
   const handleRetryPayment = async (orderId) => {
     setIsRetrying(true);
     try {
-      const res = await fetch(`${API_URL}/api/orders/${orderId}/retry-pix`, { method: 'POST' });
+      const res = await fetchWithStore(`${API_URL}/api/orders/${orderId}/retry-pix`, { method: 'POST' });
       const data = await res.json();
       if (data.success && data.pix) {
         setRetryPixData(data.pix);
@@ -214,10 +228,10 @@ export default function OrdersView({
                 {order.status === 'PENDING' && (
                   <div className="flex gap-2 mt-2 md:mt-0 w-full md:w-auto">
                     <button onClick={() => handleRetryPayment(order.id)} disabled={isRetrying} className="flex-1 md:flex-none bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-[10px] font-black transition-all cursor-pointer text-center">
-                       🔄 Tentar Pagar
+                        🔄 Tentar Pagar
                     </button>
                     <button onClick={() => handleCancelMyOrder(order.id)} className="flex-1 md:flex-none bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-[10px] font-black transition-all cursor-pointer text-center">
-                       Cancelar
+                        Cancelar
                     </button>
                   </div>
                 )}

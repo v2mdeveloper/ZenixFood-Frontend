@@ -1,11 +1,26 @@
+'use client';
 import { useState, useEffect } from 'react';
 
 export default function SuppliersTab() {
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
   
   const [suppliers, setSuppliers] = useState([]);
   const [form, setForm] = useState({ name: '', description: '', logoUrl: '', contact: '' });
   const [editingId, setEditingId] = useState(null);
+
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
 
   useEffect(() => {
     fetchSuppliers();
@@ -13,7 +28,7 @@ export default function SuppliersTab() {
 
   const fetchSuppliers = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/suppliers`);
+      const res = await fetchWithStore(`${API_URL}/api/suppliers`);
       if (res.ok) setSuppliers(await res.json());
     } catch (e) { console.error('Erro ao buscar fornecedores'); }
   };
@@ -24,7 +39,7 @@ export default function SuppliersTab() {
     const method = editingId ? 'PUT' : 'POST';
 
     try {
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      const res = await fetchWithStore(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
       if (res.ok) {
         setForm({ name: '', description: '', logoUrl: '', contact: '' });
         setEditingId(null);
@@ -41,14 +56,14 @@ export default function SuppliersTab() {
   const handleDelete = async (id) => {
     if (!confirm('Deseja excluir este parceiro/fornecedor?')) return;
     try {
-      await fetch(`${API_URL}/api/admin/suppliers/${id}`, { method: 'DELETE' });
+      await fetchWithStore(`${API_URL}/api/admin/suppliers/${id}`, { method: 'DELETE' });
       fetchSuppliers();
     } catch (e) { alert("Erro ao excluir."); }
   };
 
   const toggleStatus = async (s) => {
     try {
-      await fetch(`${API_URL}/api/admin/suppliers/${s.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active: !s.active }) });
+      await fetchWithStore(`${API_URL}/api/admin/suppliers/${s.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active: !s.active }) });
       fetchSuppliers();
     } catch (e) { alert("Erro ao alterar status."); }
   };
@@ -57,14 +72,14 @@ export default function SuppliersTab() {
     <div className="space-y-6 animate-fade-in-up">
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
         <h2 className="text-xl font-black text-slate-800 mb-2">🤝 Nossos Parceiros & Fornecedores</h2>
-        <p className="text-slate-500 text-sm mb-6">Cadastre as marcas que fornecem os ingredientes oficiais da Cânone Burger. Eles aparecerão em formato de carrossel no cardápio dos clientes.</p>
+        <p className="text-slate-500 text-sm mb-6">Cadastre as marcas que fornecem os ingredientes oficiais da sua loja. Eles aparecerão em formato de carrossel no cardápio dos clientes.</p>
 
         <form onSubmit={handleSubmit} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-8 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nome do Fornecedor</label><input required type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" placeholder="Ex: Wessel, Heinz, Catupiry..." /></div>
             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">URL do Logotipo (PNG/JPG)</label><input required type="url" value={form.logoUrl} onChange={e => setForm({...form, logoUrl: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" placeholder="https://imgur.com/logo.png" /></div>
           </div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Breve Descrição / O que eles fornecem?</label><input type="text" value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" placeholder="Ex: Fornecedor oficial dos nossos pães artesanais." /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Breve Descrição / O que eles fornecem?</label><input type="text" value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" placeholder="Ex: Fornecedor oficial dos nossos produtos." /></div>
           <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Contato (Opcional)</label><input type="text" value={form.contact} onChange={e => setForm({...form, contact: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" placeholder="Telefone ou Instagram" /></div>
           <div className="flex gap-3 pt-2">
              {editingId && <button type="button" onClick={() => {setEditingId(null); setForm({ name: '', description: '', logoUrl: '', contact: '' })}} className="px-6 py-3 rounded-xl font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 transition-colors">Cancelar</button>}

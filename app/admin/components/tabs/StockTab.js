@@ -8,7 +8,7 @@ export default function StockTab({
   movimentacoes, showXmlModal, setShowXmlModal, xmlPreviewData, xmlMappings, updateMapping, handleConfirmXmlImport
 }) {
   
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
   // ESTADOS DO CHEF DE RECEITAS IA
   const [aiPrompt, setAiPrompt] = useState('');
@@ -21,11 +21,25 @@ export default function StockTab({
   const [isAnalyzingFinance, setIsAnalyzingFinance] = useState(false);
   const [financeAnalysis, setFinanceAnalysis] = useState(null);
 
-  // NOVO: Função robusta para puxar receitas
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
+  // Função robusta para puxar receitas
   const fetchRecipes = useCallback(async () => {
     setLoadingRecipes(true);
     try {
-      const res = await fetch(`${API_URL}/api/ai/receitas`);
+      const res = await fetchWithStore(`${API_URL}/api/ai/receitas`);
       if (res.ok) {
         const data = await res.json();
         setSavedRecipes(data || []);
@@ -49,7 +63,7 @@ export default function StockTab({
     setAiGenerating(true);
     setAiResult(null);
     try {
-      const res = await fetch(`${API_URL}/api/ai/receitas/gerar`, {
+      const res = await fetchWithStore(`${API_URL}/api/ai/receitas/gerar`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: aiPrompt })
       });
       const data = await res.json();
@@ -61,7 +75,7 @@ export default function StockTab({
 
   const handleApproveRecipe = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/ai/receitas/aprovar`, {
+      const res = await fetchWithStore(`${API_URL}/api/ai/receitas/aprovar`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(aiResult)
       });
       const data = await res.json();
@@ -80,7 +94,6 @@ export default function StockTab({
       setIsAnalyzingFinance(true);
       setFinanceAnalysis(null);
 
-      // Prepara os dados de forma limpa para a IA não se confundir
       const produtosLimposParaIA = allProducts.map(product => {
           const ficha = product.fichasTecnicas || [];
           const custoTotal = ficha.reduce((acc, f) => acc + (f.quantity * Number(f.insumo.cost)), 0);
@@ -91,7 +104,7 @@ export default function StockTab({
       });
 
       try {
-          const res = await fetch(`${API_URL}/api/ai/analise-lucros`, {
+          const res = await fetchWithStore(`${API_URL}/api/ai/analise-lucros`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ produtos: produtosLimposParaIA })
           });
@@ -380,7 +393,7 @@ export default function StockTab({
                   type="submit" disabled={aiGenerating || !aiPrompt}
                   className={`w-full font-black text-md py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(245,158,11,0.2)] ${aiGenerating ? 'bg-amber-500/50 text-black/50 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-400 text-black'}`}
                >
-                 {aiGenerating ? 'Chef IA Pensando... 🍳' : '🪄 Gerar Receita Mágica'}
+                  {aiGenerating ? 'Chef IA Pensando... 🍳' : '🪄 Gerar Receita Mágica'}
                </button>
              </form>
           </div>
@@ -409,18 +422,18 @@ export default function StockTab({
                       const listIngredientes = JSON.parse(receita.ingredientes || '[]');
                       return (
                        <div key={receita.id} className="bg-slate-50 border border-slate-100 p-4 rounded-2xl hover:border-amber-200 transition-colors shadow-sm">
-                         <h4 className="font-black text-amber-800 mb-1">{receita.nome}</h4>
-                         <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-3">Criada em: {new Date(receita.criadoEm).toLocaleDateString('pt-BR')}</p>
-                         
-                         <div className="bg-white p-3 rounded-xl border border-slate-100 mb-3">
-                           <p className="text-xs font-black text-slate-700 mb-1">🛒 Ingredientes:</p>
-                           <p className="text-xs text-slate-500">{listIngredientes.join(', ')}</p>
-                         </div>
-                         
-                         <div className="bg-white p-3 rounded-xl border border-slate-100">
-                           <p className="text-xs font-black text-slate-700 mb-1">👨‍🍳 Preparo:</p>
-                           <p className="text-[11px] text-slate-500 whitespace-pre-line leading-relaxed">{receita.preparo}</p>
-                         </div>
+                          <h4 className="font-black text-amber-800 mb-1">{receita.nome}</h4>
+                          <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-3">Criada em: {new Date(receita.criadoEm).toLocaleDateString('pt-BR')}</p>
+                          
+                          <div className="bg-white p-3 rounded-xl border border-slate-100 mb-3">
+                            <p className="text-xs font-black text-slate-700 mb-1">🛒 Ingredientes:</p>
+                            <p className="text-xs text-slate-500">{listIngredientes.join(', ')}</p>
+                          </div>
+                          
+                          <div className="bg-white p-3 rounded-xl border border-slate-100">
+                            <p className="text-xs font-black text-slate-700 mb-1">👨‍🍳 Preparo:</p>
+                            <p className="text-[11px] text-slate-500 whitespace-pre-line leading-relaxed">{receita.preparo}</p>
+                          </div>
                        </div>
                       )
                    })}

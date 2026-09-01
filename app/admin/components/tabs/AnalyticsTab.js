@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 
 export default function AnalyticsTab({ visitsData }) {
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
   const [localVisits, setLocalVisits] = useState(visitsData || { visits: [], totalVisits: 0 });
   const [countdown, setCountdown] = useState(10);
@@ -12,6 +12,20 @@ export default function AnalyticsTab({ visitsData }) {
   const [deleteStartDate, setDeleteStartDate] = useState('');
   const [deleteEndDate, setDeleteEndDate] = useState('');
   const [deleteType, setDeleteType] = useState('all');
+
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
 
   // Mantém os dados sincronizados quando carrega a primeira vez
   useEffect(() => {
@@ -32,11 +46,11 @@ export default function AnalyticsTab({ visitsData }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Busca invisível em segundo plano
+  // Busca invisível em segundo plano com suporte a multi-tenant
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      const res = await fetch(`${API_URL}/api/admin/analytics?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/admin/analytics?_=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setLocalVisits(data);
@@ -52,13 +66,13 @@ export default function AnalyticsTab({ visitsData }) {
     }
 
     const mensagem = deleteType === 'all' 
-      ? 'Tem certeza que deseja apagar TODOS os registros de acesso?' 
+      ? 'Tem certeza que deseja apagar TODOS os registros de acesso desta loja?' 
       : `Tem certeza que deseja apagar os registros entre ${deleteStartDate} e ${deleteEndDate}?`;
 
     if (!confirm(mensagem)) return;
 
     try {
-      const res = await fetch(`${API_URL}/api/admin/analytics`, {
+      const res = await fetchWithStore(`${API_URL}/api/admin/analytics`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: deleteType, startDate: deleteStartDate, endDate: deleteEndDate })

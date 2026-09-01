@@ -10,6 +10,71 @@ export default function ConfigTab({
         <h2 className="text-xl font-black text-amber-600 mb-6 uppercase tracking-wider">⚙️ Configurações Operacionais</h2>
         
         <form onSubmit={handleSaveSystemSettings} className="space-y-5">
+          
+          {/* 💳 INTEGRAÇÕES DE PAGAMENTO (MERCADO PAGO) */}
+          <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-6">
+            <h3 className="text-sm font-bold text-blue-700 mb-3 flex items-center gap-2">💳 Integração Mercado Pago</h3>
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="mercadoPagoPublicKey" className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Public Key (Frontend - Checkout)</label>
+                <input 
+                  id="mercadoPagoPublicKey" 
+                  name="mercadoPagoPublicKey" 
+                  type="text" 
+                  placeholder="Ex: APP_USR-1edaaff0-..." 
+                  value={settingsForm.mercadoPagoPublicKey || ''} 
+                  onChange={(e) => setSettingsForm({...settingsForm, mercadoPagoPublicKey: e.target.value})} 
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500 font-mono" 
+                />
+              </div>
+              <div>
+                <label htmlFor="mercadoPagoAccessToken" className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Access Token (Backend - PIX/Cartão)</label>
+                <input 
+                  id="mercadoPagoAccessToken" 
+                  name="mercadoPagoAccessToken" 
+                  type="password" 
+                  placeholder="Ex: APP_USR-987654321..." 
+                  value={settingsForm.mercadoPagoAccessToken || ''} 
+                  onChange={(e) => setSettingsForm({...settingsForm, mercadoPagoAccessToken: e.target.value})} 
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500 font-mono" 
+                />
+                <p className="text-[9px] text-slate-500 mt-1 font-medium">Estas chaves definem para qual conta bancária o dinheiro das vendas desta loja será direcionado.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 🧾 INTEGRAÇÃO FISCAL (FOCUS NFE) */}
+          <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200 mb-6">
+            <h3 className="text-sm font-bold text-emerald-700 mb-3 flex items-center gap-2">🧾 Emissão de NFC-e (Focus NFe)</h3>
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="focusEnv" className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Ambiente de Emissão</label>
+                <select 
+                  id="focusEnv" 
+                  name="focusEnv" 
+                  value={settingsForm.focusEnv || 'homologacao'} 
+                  onChange={(e) => setSettingsForm({...settingsForm, focusEnv: e.target.value})} 
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 cursor-pointer font-bold"
+                >
+                  <option value="homologacao">Homologação (Ambiente de Testes)</option>
+                  <option value="producao">Produção (Validade Fiscal Real)</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="focusToken" className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Token de Integração Focus</label>
+                <input 
+                  id="focusToken" 
+                  name="focusToken" 
+                  type="password" 
+                  placeholder="Cole o token da Focus NFe aqui..." 
+                  value={settingsForm.focusToken || ''} 
+                  onChange={(e) => setSettingsForm({...settingsForm, focusToken: e.target.value})} 
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 font-mono" 
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="bg-red-50 p-4 rounded-xl border border-red-200 mb-6">
             <h3 className="text-sm font-bold text-red-600 mb-3 flex items-center gap-2">🔴 Transmissão ao Vivo (YouTube)</h3>
             <div>
@@ -27,7 +92,7 @@ export default function ConfigTab({
           </div>
 
           <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 mb-6">
-            <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">📖 A História da Cânone (Sobre Nós)</h3>
+            <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">📖 Sobre a Loja</h3>
             <div>
               <label htmlFor="aboutUsText" className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Texto que aparece no cardápio do cliente</label>
               <textarea 
@@ -37,7 +102,7 @@ export default function ConfigTab({
                 value={settingsForm.aboutUsText || ''} 
                 onChange={(e) => setSettingsForm({...settingsForm, aboutUsText: e.target.value})} 
                 className="w-full bg-white border border-slate-300 rounded-lg p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500 resize-none leading-relaxed" 
-                placeholder="Escreva a história ou a essência da sua hamburgueria..." 
+                placeholder="Escreva a história ou a essência do estabelecimento..." 
               />
             </div>
           </div>

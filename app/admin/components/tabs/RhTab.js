@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 
 export default function RhTab() {
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
   const [rhSubTab, setRhSubTab] = useState('equipe'); // 'equipe' ou 'contas'
 
@@ -35,6 +35,20 @@ export default function RhTab() {
   const [extratoEndDate, setExtratoEndDate] = useState('');
   const [managerAuth, setManagerAuth] = useState({ email: '', password: '' });
 
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
   useEffect(() => {
     fetchData();
     fetchSettings();
@@ -42,7 +56,7 @@ export default function RhTab() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/settings`);
+      const res = await fetchWithStore(`${API_URL}/api/settings`);
       if (res.ok) {
         const data = await res.json();
         if (data.tipPercentage !== undefined) setTipPercentage(Number(data.tipPercentage));
@@ -54,7 +68,7 @@ export default function RhTab() {
     e.preventDefault();
     setIsSavingTip(true);
     try {
-      const res = await fetch(`${API_URL}/api/settings`, {
+      const res = await fetchWithStore(`${API_URL}/api/settings`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tipPercentage })
       });
@@ -66,9 +80,9 @@ export default function RhTab() {
   const fetchData = async () => {
     try {
       const [resP, resE, resA] = await Promise.all([ 
-        fetch(`${API_URL}/api/rh/profiles`), 
-        fetch(`${API_URL}/api/rh/employees`),
-        fetch(`${API_URL}/api/rh/employee-accounts`)
+        fetchWithStore(`${API_URL}/api/rh/profiles`), 
+        fetchWithStore(`${API_URL}/api/rh/employees`),
+        fetchWithStore(`${API_URL}/api/rh/employee-accounts`)
       ]);
       if (resP.ok) setProfiles(await resP.json());
       if (resE.ok) setEmployees(await resE.json());
@@ -79,7 +93,7 @@ export default function RhTab() {
 
   const fetchLogs = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/rh/logs`);
+      const res = await fetchWithStore(`${API_URL}/api/rh/logs`);
       if (res.ok) setLogs(await res.json());
       setShowLogsModal(true);
     } catch (e) { alert('Erro ao buscar logs'); }
@@ -91,7 +105,7 @@ export default function RhTab() {
     const url = editingProfileId ? `${API_URL}/api/rh/profiles/${editingProfileId}` : `${API_URL}/api/rh/profiles`;
     
     try {
-      const res = await fetch(url, {
+      const res = await fetchWithStore(url, {
         method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profileForm)
       });
       const data = await res.json();
@@ -114,7 +128,7 @@ export default function RhTab() {
   const handleDeleteProfile = async (id) => {
     if (!confirm('Deseja excluir este perfil?')) return;
     try {
-      const res = await fetch(`${API_URL}/api/rh/profiles/${id}`, { method: 'DELETE' });
+      const res = await fetchWithStore(`${API_URL}/api/rh/profiles/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) fetchData(); else alert(data.error);
     } catch (e) { alert('Erro de conexão.'); }
@@ -131,7 +145,7 @@ export default function RhTab() {
     const method = editingEmployeeId ? 'PUT' : 'POST';
     const url = editingEmployeeId ? `${API_URL}/api/rh/employees/${editingEmployeeId}` : `${API_URL}/api/rh/employees`;
     try {
-      const res = await fetch(url, {
+      const res = await fetchWithStore(url, {
         method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -158,7 +172,7 @@ export default function RhTab() {
   const handlePayAccount = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/rh/employee-accounts/pay`, { 
+      const res = await fetchWithStore(`${API_URL}/api/rh/employee-accounts/pay`, { 
         method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ employeeId: selectedAccount.id, authData: managerAuth }) 
       });
@@ -216,9 +230,6 @@ export default function RhTab() {
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-  // =====================================================================
-  // 🚨 LISTA DE ACESSOS DO SISTEMA ATUALIZADA (KDS E IMPRESSORAS)
-  // =====================================================================
   const AVAILABLE_PERMISSIONS = [
     { id: 'pdv', label: '💻 PDV / Frente de Caixa', desc: 'Abertura, fechamento e vendas no caixa.' },
     { id: 'salao', label: '🪑 Salão & Mesas', desc: 'Gerenciar mapa de mesas e comandas.' },

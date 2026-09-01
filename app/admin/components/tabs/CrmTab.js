@@ -8,7 +8,7 @@ export default function CrmTab({
   filteredCustomers,
   setEditingCustomer
 }) {
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
   const [crmSubTab, setCrmSubTab] = useState('clientes'); // 'clientes' | 'pendentes'
   const [customerAccounts, setCustomerAccounts] = useState([]);
@@ -19,6 +19,20 @@ export default function CrmTab({
   const [extratoStartDate, setExtratoStartDate] = useState('');
   const [extratoEndDate, setExtratoEndDate] = useState('');
 
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
   useEffect(() => {
     fetchCustomerAccounts();
   }, [crmSubTab]);
@@ -26,7 +40,7 @@ export default function CrmTab({
   const fetchCustomerAccounts = async () => {
     if (crmSubTab === 'pendentes') {
       try {
-        const res = await fetch(`${API_URL}/api/crm/customer-accounts`);
+        const res = await fetchWithStore(`${API_URL}/api/crm/customer-accounts`);
         if (res.ok) setCustomerAccounts(await res.json());
       } catch (e) { console.error(e); }
     }
@@ -35,7 +49,7 @@ export default function CrmTab({
   const handlePayAccount = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/crm/customer-accounts/pay`, { 
+      const res = await fetchWithStore(`${API_URL}/api/crm/customer-accounts/pay`, { 
         method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ customerId: selectedAccount.id }) 
       });
@@ -54,7 +68,7 @@ export default function CrmTab({
     if (!confirm(`Deseja realmente ${isBlocking ? 'BLOQUEAR' : 'DESBLOQUEAR'} este cliente?`)) return;
     
     try {
-      const res = await fetch(`${API_URL}/api/admin/customers/${cliente.id}/block`, {
+      const res = await fetchWithStore(`${API_URL}/api/admin/customers/${cliente.id}/block`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isBlocked: isBlocking })
       });
@@ -86,7 +100,7 @@ export default function CrmTab({
       <div className="flex flex-wrap gap-4 border-b border-slate-200 pb-4 mb-6">
         <button onClick={() => setCrmSubTab('clientes')} className={`font-bold pb-2 transition-all cursor-pointer ${crmSubTab === 'clientes' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-slate-500 hover:text-blue-500'}`}>👥 Lista de Clientes</button>
         <button onClick={() => setCrmSubTab('pendentes')} className={`font-bold pb-2 transition-all cursor-pointer flex items-center gap-2 ${crmSubTab === 'pendentes' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-slate-500 hover:text-blue-500'}`}>
-           ⚠️ Inadimplentes (Fiado) 
+            ⚠️ Inadimplentes (Fiado) 
            {customerAccounts.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{customerAccounts.length}</span>}
         </button>
       </div>

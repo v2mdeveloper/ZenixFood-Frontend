@@ -1,4 +1,13 @@
+import { useEffect, useState } from 'react';
+
 export default function AdminHeader({ isAutoPrintEnabled, toggleAutoPrintState, handleAdminLogout, activeTab, setActiveTab }) {
+  const [storeId, setStoreId] = useState('');
+
+  useEffect(() => {
+    const currentStore = localStorage.getItem('zenix_store_id') || '';
+    setStoreId(currentStore);
+  }, []);
+
   const tabs = [
     { id: 'kanban', label: '📋 Pedidos Ativos' },
     { id: 'expedicao', label: '🛵 Expedição & Rotas' },
@@ -19,8 +28,15 @@ export default function AdminHeader({ isAutoPrintEnabled, toggleAutoPrintState, 
       <header className="mb-8 border-b border-slate-200 pb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-amber-600 uppercase">Cânone Admin</h1>
-            <p className="text-slate-500 text-sm mt-1">Centro de Comando</p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-amber-600 uppercase">ZenixFood Admin</h1>
+              {storeId && (
+                <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-full border border-amber-200">
+                  Loja: {storeId}
+                </span>
+              )}
+            </div>
+            <p className="text-slate-500 text-sm mt-1">Centro de Comando Multi-Tenant</p>
           </div>
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer text-slate-600 hover:text-slate-900 shadow-sm">

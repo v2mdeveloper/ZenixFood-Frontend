@@ -4,25 +4,37 @@ import { useState, useEffect, useRef } from 'react';
 export default function KdsClientePage() {
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
-    : 'https://canone-backend.onrender.com';
+    : 'https://zenixfood-backend.onrender.com';
 
   const [totemOrders, setTotemOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
   const announcedOrders = useRef(new Set());
 
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
   // =========================================================
   // EXTRATOR INTELIGENTE DE NOME (Lê o nome real do Totem)
   // =========================================================
   const extractFirstName = (order) => {
     if (order.origin === 'TOTEM' && order.address) {
-      // Procura o nome que foi salvo no formato: "[TOTEM BALCÃO] Cliente: Nome | OBS: ..."
       const match = order.address.match(/Cliente:\s*(.*?)(?:\s*\||$)/);
       if (match && match[1]) {
          return match[1].trim().split(' ')[0]; // Retorna apenas o Primeiro Nome
       }
     }
-    // Fallback padrão
     return order.client?.name ? order.client.name.split(' ')[0] : 'Cliente';
   };
 
@@ -38,7 +50,7 @@ export default function KdsClientePage() {
 
   const fetchKdsData = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/kds`);
+      const res = await fetchWithStore(`${API_URL}/api/kds`);
       if (res.ok) {
         const data = await res.json();
         setTotemOrders(data.totemOrders || []);
@@ -109,7 +121,7 @@ export default function KdsClientePage() {
         <div className="flex items-center gap-4">
           <span className="text-5xl">🍔</span>
           <div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-none">Cânone Burger</h1>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-none">Painel de Chamadas</h1>
             <p className="text-amber-600 font-bold tracking-widest uppercase text-sm mt-1">Acompanhe o seu Pedido</p>
           </div>
         </div>

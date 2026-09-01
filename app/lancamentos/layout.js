@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Cânone Salão & Garçom',
+  title: 'ZenixFood Salão & Garçom',
   description: 'PDV Móvel e Lançamento de Mesas',
   manifest: '/manifest-garcom.json',
 };

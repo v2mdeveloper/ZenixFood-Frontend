@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 
 import AdminLogin from './components/AdminLogin';
 import ExpeditionTab from './components/tabs/ExpeditionTab';
@@ -19,15 +19,15 @@ import TurnosTab from './components/tabs/TurnosTab';
 import SalaoTab from './components/tabs/SalaoTab';
 import OrderDetailsModal from './components/modals/OrderDetailsModal';
 
-function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL }) {
+function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
   const [groupForm, setGroupForm] = useState({ name: '', printerId: '', regraFiscalId: '' });
 
   const fetchPrintersAndGroups = async () => {
     try {
-      const pRes = await fetch(`${API_URL}/api/printers`);
+      const pRes = await fetchWithStore(`${API_URL}/api/printers`);
       if (pRes.ok) setPrinters(await pRes.json());
-      const gRes = await fetch(`${API_URL}/api/product-groups`);
+      const gRes = await fetchWithStore(`${API_URL}/api/product-groups`);
       if (gRes.ok) setProductGroups(await gRes.json());
     } catch (e) { console.error(e); }
   };
@@ -36,28 +36,28 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
     e.preventDefault();
     if (!printerForm.name || !printerForm.address) return alert("Preencha o Nome e o IP/Compartilhamento.");
     try {
-      const res = await fetch(`${API_URL}/api/printers`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(printerForm) });
+      const res = await fetchWithStore(`${API_URL}/api/printers`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(printerForm) });
       if ((await res.json()).success) { setPrinterForm({ name: '', type: 'USB', address: '' }); fetchPrintersAndGroups(); }
     } catch (e) { alert("Erro ao salvar impressora."); }
   };
 
   const handleDeletePrinter = async (id) => {
     if(!confirm("Excluir impressora? Grupos vinculados ficarão sem destino.")) return;
-    try { await fetch(`${API_URL}/api/printers/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) { alert("Erro"); }
+    try { await fetchWithStore(`${API_URL}/api/printers/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) { alert("Erro"); }
   };
 
   const handleAddGroup = async (e) => {
     e.preventDefault();
     if (!groupForm.name) return alert("Dê um nome ao grupo (ex: Bebidas Frias).");
     try {
-      const res = await fetch(`${API_URL}/api/product-groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: groupForm.name, printerId: groupForm.printerId || null, regraFiscalId: groupForm.regraFiscalId || null }) });
+      const res = await fetchWithStore(`${API_URL}/api/product-groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: groupForm.name, printerId: groupForm.printerId || null, regraFiscalId: groupForm.regraFiscalId || null }) });
       if ((await res.json()).success) { setGroupForm({ name: '', printerId: '', regraFiscalId: '' }); fetchPrintersAndGroups(); }
     } catch (e) { alert("Erro ao criar grupo."); }
   };
 
   const handleDeleteGroup = async (id) => {
     if(!confirm("Excluir grupo? Produtos associados a ele ficarão sem grupo.")) return;
-    try { await fetch(`${API_URL}/api/product-groups/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) { alert("Erro"); }
+    try { await fetchWithStore(`${API_URL}/api/product-groups/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) { alert("Erro"); }
   };
 
   return (
@@ -87,7 +87,7 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
 
       <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
         <h3 className="text-xl font-black text-slate-800 mb-2 flex items-center gap-2">⚙️ Grupos de Produção (Praças)</h3>
-        <p className="text-sm text-slate-500 mb-6">Crie grupos (Ex: Bebidas Frias) e direcione-os para a impressora correta. O sistema vai quebrar o pedido e enviar cada item para a sua praça.</p>
+        <p className="text-sm text-slate-500 mb-6">Crie grupos (Ex: Bebidas Frias) e direcione-os para a impressora correta.</p>
         <form onSubmit={handleAddGroup} className="flex flex-col md:flex-row gap-4 mb-8 bg-slate-50 p-4 rounded-2xl border border-slate-100">
           <input type="text" name="groupName" placeholder="Nome do Grupo (Ex: Bebidas)" value={groupForm.name} onChange={e => setGroupForm({...groupForm, name: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 font-bold text-slate-700" />
           <select name="groupPrinterId" value={groupForm.printerId} onChange={e => setGroupForm({...groupForm, printerId: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 text-slate-700 font-bold">
@@ -121,7 +121,7 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
 export default function AdminDashboard() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [loggedEmployee, setLoggedEmployee] = useState(null);
-  const [adminLoginForm, setAdminLoginForm] = useState({ email: '', password: '' });
+  const [adminLoginForm, setAdminLoginForm] = useState({ storeId: '', email: '', password: '' });
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('pdv'); 
@@ -179,10 +179,6 @@ export default function AdminDashboard() {
   const [productGroups, setProductGroups] = useState([]);
   const [deliveryPersons, setDeliveryPersons] = useState([]);
 
-  const [reportStartDate, setReportStartDate] = useState('');
-  const [reportEndDate, setReportEndDate] = useState('');
-  const [reportCustomerSearch, setReportCustomerSearch] = useState('');
-  const [reportProductSearch, setReportProductSearch] = useState('');
   const [insumos, setInsumos] = useState([]);
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [fichasVisiveis, setFichasVisiveis] = useState({});
@@ -201,11 +197,25 @@ export default function AdminDashboard() {
 
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
-    : 'https://canone-backend.onrender.com';
+    : 'https://zenixfood-backend.onrender.com';
+
+  // 🛡️ Helper para injetar o x-store-id e o Token JWT automaticamente em todas as requisições
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('@Canone:adminToken');
-    const savedEmployee = localStorage.getItem('@Canone:loggedEmployee');
+    const savedToken = localStorage.getItem('zenix_token');
+    const savedEmployee = localStorage.getItem('zenix_loggedEmployee');
     
     if (savedToken) {
       setIsAdminAuthenticated(true);
@@ -214,17 +224,17 @@ export default function AdminDashboard() {
       } else {
         const fallbackAdmin = { id: 'ADMIN_MASTER', name: 'Administrador', role: 'ADMIN' };
         setLoggedEmployee(fallbackAdmin);
-        localStorage.setItem('@Canone:loggedEmployee', JSON.stringify(fallbackAdmin));
+        localStorage.setItem('zenix_loggedEmployee', JSON.stringify(fallbackAdmin));
       }
     }
     
-    const cachedPrints = sessionStorage.getItem('@Canone:printedIds');
+    const cachedPrints = sessionStorage.getItem('zenix_printedIds');
     if (cachedPrints) setPrintedOrderIds(JSON.parse(cachedPrints));
 
-    const autoPrintSetting = localStorage.getItem('@Canone:autoPrint');
+    const autoPrintSetting = localStorage.getItem('zenix_autoPrint');
     if (autoPrintSetting !== null) setIsAutoPrintEnabled(autoPrintSetting === 'true');
 
-    const savedNfces = localStorage.getItem('@Canone:nfcesEmitidas');
+    const savedNfces = localStorage.getItem('zenix_nfcesEmitidas');
     if (savedNfces) setNfcesEmitidas(JSON.parse(savedNfces));
   }, []);
 
@@ -274,24 +284,16 @@ export default function AdminDashboard() {
              const printerObj = printers.find(p => p.id === pId);
              const printerConfig = printerObj ? { type: printerObj.type, address: printerObj.address } : null;
              const isPartial = pId !== 'DEFAULT'; 
-
              const partialOrder = { ...printingOrder, items };
 
-             // 🚨 BLINDAGEM DO SPOOLER: Imprime sempre no Localhost
              await fetch('http://localhost:8080/imprimir', {
                method: 'POST',
                headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ 
-                  pedido: partialOrder, 
-                  printerName: settingsForm.printerName, 
-                  printerConfig,
-                  isPartial
-               })
+               body: JSON.stringify({ pedido: partialOrder, printerName: settingsForm.printerName, printerConfig, isPartial })
              });
           }
         } catch (error) {
           console.error("Erro no spooler", error);
-          alert("Erro de Impressão: Verifique se o Servidor de Impressão Local (tela preta) está aberto no computador!");
         } finally {
           setPrintingOrder(null);
         }
@@ -302,46 +304,43 @@ export default function AdminDashboard() {
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
+    if (!adminLoginForm.storeId) return alert("Informe o ID ou Slug da Loja!");
     try {
-      let res = await fetch(`${API_URL}/api/auth/admin/login`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminLoginForm)
+      const response = await fetch(`${API_URL}/api/auth/admin/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-store-id": adminLoginForm.storeId
+        },
+        body: JSON.stringify({ email: adminLoginForm.email, password: adminLoginForm.password })
       });
-      let data = await res.json();
-      
-      if (!res.ok) {
-        res = await fetch(`${API_URL}/api/auth/employee/login`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminLoginForm)
-        });
-        data = await res.json();
-      }
 
-      if (res.ok && data.success) {
-        const empData = data.employee || { id: 'ADMIN_MASTER', name: 'Administrador Master', role: 'ADMIN' };
-        
-        if (empData.role?.toLowerCase().includes('entregador')) {
-           alert('Área de Administração bloqueada para entregadores.\nRedirecionando para a sua Rota de Entregas...');
-           window.location.href = '/entregador';
-           return;
-        }
-
-        localStorage.setItem('@Canone:adminToken', data.token);
-        localStorage.setItem('@Canone:loggedEmployee', JSON.stringify(empData));
-        setLoggedEmployee(empData);
+      const data = await response.json();
+      if (response.ok && data.success) {
+        localStorage.setItem("zenix_token", data.token);
+        localStorage.setItem("zenix_store_id", adminLoginForm.storeId);
         setIsAdminAuthenticated(true);
-      } else { alert(data.error || 'Credenciais inválidas.'); }
-    } catch (error) { alert('Erro de conexão ao tentar fazer login.'); }
+      } else {
+        alert(data.error || "Erro ao logar");
+      }
+    } catch (err) {
+      console.error("Erro:", err);
+      alert("Erro de conexão ao efetuar login.");
+    }
   };
 
   const handleAdminLogout = () => {
-    localStorage.removeItem('@Canone:adminToken');
-    localStorage.removeItem('@Canone:loggedEmployee');
+    localStorage.removeItem('zenix_token');
+    localStorage.removeItem('zenix_store_id');
+    localStorage.removeItem('zenix_loggedEmployee');
     setIsAdminAuthenticated(false);
     setLoggedEmployee(null);
+    window.location.href = "/admin"; 
   };
 
   const fetchVisits = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/analytics?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/admin/analytics?_=${Date.now()}`);
       if (res.ok) setVisitsData(await res.json());
     } catch (e) { console.error('Erro ao buscar visitas', e); }
   };
@@ -357,14 +356,14 @@ export default function AdminDashboard() {
 
   const fetchDeliveryPersons = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/rh/delivery-persons`);
+      const res = await fetchWithStore(`${API_URL}/api/rh/delivery-persons`);
       if (res.ok) setDeliveryPersons(await res.json());
     } catch (e) { console.error(e); }
   };
 
   const assignDelivery = async (orderIds, deliveryPersonId) => {
     try {
-      const res = await fetch(`${API_URL}/api/orders/dispatch`, {
+      const res = await fetchWithStore(`${API_URL}/api/orders/dispatch`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderIds, deliveryPersonId })
       });
@@ -377,16 +376,16 @@ export default function AdminDashboard() {
 
   const fetchPrintersAndGroups = async () => {
     try {
-      const pRes = await fetch(`${API_URL}/api/printers?_=${Date.now()}`);
+      const pRes = await fetchWithStore(`${API_URL}/api/printers?_=${Date.now()}`);
       if (pRes.ok) setPrinters(await pRes.json());
-      const gRes = await fetch(`${API_URL}/api/product-groups?_=${Date.now()}`);
+      const gRes = await fetchWithStore(`${API_URL}/api/product-groups?_=${Date.now()}`);
       if (gRes.ok) setProductGroups(await gRes.json());
     } catch (e) { console.error('Erro ao buscar impressoras'); }
   };
 
   const fetchCoupons = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/coupons?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/admin/coupons?_=${Date.now()}`);
       if (res.ok) setCoupons(await res.json());
     } catch (e) { console.error('Erro ao buscar cupons', e); }
   };
@@ -394,7 +393,7 @@ export default function AdminDashboard() {
   const handleAddCoupon = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...couponForm, active: true }) });
+      const res = await fetchWithStore(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...couponForm, active: true }) });
       const data = await res.json();
       if (data.success) { setCouponForm({ code: '', type: 'FIXED', value: '', minOrderValue: '0', maxUses: '0' }); fetchCoupons(); } else { alert(data.error || "Erro ao criar cupom."); }
     } catch (e) { alert("Erro de conexão ao criar cupom."); }
@@ -402,27 +401,27 @@ export default function AdminDashboard() {
 
   const toggleCouponStatus = async (coupon) => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...coupon, active: !coupon.active }) });
+      const res = await fetchWithStore(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...coupon, active: !coupon.active }) });
       if ((await res.json()).success) fetchCoupons();
     } catch (e) { alert("Erro ao alterar status do cupom."); }
   };
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/orders?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/orders?_=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setOrders(data);
-        const autoPrintSetting = localStorage.getItem('@Canone:autoPrint') !== 'false';
+        const autoPrintSetting = localStorage.getItem('zenix_autoPrint') !== 'false';
         if (autoPrintSetting) {
           const activePreparing = data.filter(o => o.status === 'PREPARING');
           if (activePreparing.length > 0) {
             const latestOrder = activePreparing[0];
-            const currentPrintedIds = JSON.parse(sessionStorage.getItem('@Canone:printedIds') || '[]');
+            const currentPrintedIds = JSON.parse(sessionStorage.getItem('zenix_printedIds') || '[]');
             if (!currentPrintedIds.includes(latestOrder.id)) {
               const updatedIds = [...currentPrintedIds, latestOrder.id];
               setPrintedOrderIds(updatedIds);
-              sessionStorage.setItem('@Canone:printedIds', JSON.stringify(updatedIds));
+              sessionStorage.setItem('zenix_printedIds', JSON.stringify(updatedIds));
               setPrintingOrder(latestOrder);
             }
           }
@@ -431,7 +430,6 @@ export default function AdminDashboard() {
     } catch (error) { console.error('Erro ao buscar pedidos:', error); }
   };
 
-  // 🚨 CORREÇÃO: Uso de localhost direto na reimpressão manual
   const triggerManualPrint = async (order) => { 
     try {
       const res = await fetch('http://localhost:8080/imprimir', {
@@ -442,13 +440,13 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error('Falha na impressora');
       alert('🖨️ Pedido enviado para a impressora!');
     } catch (error) {
-      alert("⚠️ Erro de Impressão: Verifique se o Servidor de Impressão Local (tela preta) está aberto no computador!");
+      alert("⚠️ Erro de Impressão: Verifique se o Servidor de Impressão Local está aberto!");
     }
   };
 
   const fetchMenu = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/menu?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/menu?_=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setMenu(data);
@@ -459,21 +457,21 @@ export default function AdminDashboard() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/products?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/products?_=${Date.now()}`);
       if (res.ok) setAllProducts(await res.json());
     } catch (error) { console.error('Erro ao buscar produtos'); }
   };
 
   const fetchCustomers = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/customers?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/customers?_=${Date.now()}`);
       if (res.ok) setCustomers(await res.json());
     } catch (error) { console.error('Erro ao buscar clientes'); }
   };
 
   const fetchSystemSettings = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/settings?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/settings?_=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setSettingsForm({
@@ -490,7 +488,7 @@ export default function AdminDashboard() {
 
   const fetchFiscalData = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/fiscal?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/fiscal?_=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         if (data) setFiscalData({ icms: data.icms || [], pisCofins: data.pisCofins || [], ibsCbs: data.ibsCbs || [], regras: data.regras || [], cnpjLoja: data.cnpjLoja || '' });
@@ -500,21 +498,21 @@ export default function AdminDashboard() {
 
   const fetchInsumos = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/insumos?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/insumos?_=${Date.now()}`);
       if (res.ok) setInsumos(await res.json());
     } catch (e) { console.error('Erro Insumos'); }
   };
 
   const fetchMovimentacoes = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/estoque/movimentacoes?_=${Date.now()}`);
+      const res = await fetchWithStore(`${API_URL}/api/estoque/movimentacoes?_=${Date.now()}`);
       if (res.ok) setMovimentacoes(await res.json());
     } catch (e) { console.error('Erro Movs'); }
   };
 
   const saveFiscalData = async (newData) => {
     try {
-      const res = await fetch(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) });
+      const res = await fetchWithStore(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) });
       if ((await res.json()).success) { setFiscalData(newData); }
     } catch (error) { alert('Erro ao salvar dados fiscais.'); }
   };
@@ -523,7 +521,7 @@ export default function AdminDashboard() {
     if(!cnpj) return alert("Digite o CNPJ!");
     try {
       const newData = { ...fiscalData, cnpjLoja: cnpj };
-      const res = await fetch(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) });
+      const res = await fetchWithStore(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) });
       const data = await res.json();
       if (data.success) { setFiscalData(newData); alert('CNPJ Salvo com sucesso!'); } else { alert('Erro ao salvar CNPJ.'); }
     } catch (error) { alert('Erro de conexão ao salvar CNPJ.'); }
@@ -533,13 +531,13 @@ export default function AdminDashboard() {
     const pedidoAtual = orders.find(o => o.id === orderId);
     setLoadingNfceId(orderId);
     try {
-      const resBackend = await fetch(`${API_URL}/api/admin/orders/${orderId}/fiscal`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const resBackend = await fetchWithStore(`${API_URL}/api/admin/orders/${orderId}/fiscal`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
       const dataBackend = await resBackend.json();
       
       if (dataBackend.success) {
         setNfcesEmitidas(prev => {
             const newState = { ...prev, [orderId]: dataBackend.fiscalData };
-            localStorage.setItem('@Canone:nfcesEmitidas', JSON.stringify(newState));
+            localStorage.setItem('zenix_nfcesEmitidas', JSON.stringify(newState));
             return newState;
         });
         fetchOrders(); 
@@ -556,7 +554,7 @@ export default function AdminDashboard() {
         alert(`🚫 NF-e Recusada:\n${dataBackend.error}\n\nDetalhes Técnicos:\n${erroBruto}`);
       }
     } catch (error) {
-      alert('Erro de comunicação. Verifique sua internet ou se o Servidor Local está rodando.');
+      alert('Erro de comunicação.');
     } finally {
       setLoadingNfceId(null);
     }
@@ -564,7 +562,7 @@ export default function AdminDashboard() {
 
   const carregarFicha = async (productId) => {
     try {
-      const res = await fetch(`${API_URL}/api/products/${productId}/fichas`);
+      const res = await fetchWithStore(`${API_URL}/api/products/${productId}/fichas`);
       if (res.ok) { const data = await res.json(); setFichasVisiveis(prev => ({ ...prev, [productId]: data })); }
     } catch (e) { console.error('Erro Ficha'); }
   };
@@ -576,9 +574,8 @@ export default function AdminDashboard() {
     formData.append('xml', xmlFile);
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/estoque/xml/preview`, { method: 'POST', body: formData });
-      let data;
-      try { data = await res.json(); } catch (err) { throw new Error('O servidor retornou uma resposta inválida.'); }
+      const res = await fetchWithStore(`${API_URL}/api/estoque/xml/preview`, { method: 'POST', body: formData });
+      let data = await res.json();
       if (res.ok && data.success) {
         setXmlPreviewData({ chaveNfe: data.chaveNfe, items: data.items });
         const initialMappings = {};
@@ -591,7 +588,7 @@ export default function AdminDashboard() {
         setShowXmlModal(true);
         setXmlFile(null);
       } else { alert(data.error || 'Erro desconhecido ao processar o XML.'); }
-    } catch (e) { alert(e.message || 'Erro de conexão ao enviar o XML.'); }
+    } catch (e) { alert('Erro de conexão ao enviar o XML.'); }
     setLoading(false);
   };
 
@@ -608,7 +605,7 @@ export default function AdminDashboard() {
     });
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/estoque/xml/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chaveNfe: xmlPreviewData.chaveNfe, items: payloadItems }) });
+      const res = await fetchWithStore(`${API_URL}/api/estoque/xml/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chaveNfe: xmlPreviewData.chaveNfe, items: payloadItems }) });
       const data = await res.json();
       if (data.success) { alert(data.message); setShowXmlModal(false); fetchInsumos(); fetchMovimentacoes(); fetchProducts(); } 
       else alert(data.error);
@@ -619,7 +616,7 @@ export default function AdminDashboard() {
   const handleSalvarInsumo = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/insumos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novoInsumo) });
+      const res = await fetchWithStore(`${API_URL}/api/insumos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novoInsumo) });
       if ((await res.json()).success) { setNovoInsumo({ name: '', unit: 'UN', cost: '', stock: '' }); fetchInsumos(); }
     } catch (e) { alert('Erro ao salvar insumo.'); }
   };
@@ -627,7 +624,7 @@ export default function AdminDashboard() {
   const handleEditInsumoSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/insumos/${editingInsumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingInsumo) });
+      const res = await fetchWithStore(`${API_URL}/api/insumos/${editingInsumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingInsumo) });
       if ((await res.json()).success) { setEditingInsumo(null); fetchInsumos(); fetchProducts(); }
     } catch (e) { alert('Erro ao salvar edição do insumo.'); }
   };
@@ -635,7 +632,7 @@ export default function AdminDashboard() {
   const toggleInsumoStatus = async (insumo) => {
     try {
       const novoStatus = insumo.isActive === false ? true : false;
-      const res = await fetch(`${API_URL}/api/insumos/${insumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...insumo, isActive: novoStatus }) });
+      const res = await fetchWithStore(`${API_URL}/api/insumos/${insumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...insumo, isActive: novoStatus }) });
       if ((await res.json()).success) fetchInsumos();
     } catch (e) { alert('Erro ao alterar status do insumo'); }
   };
@@ -646,7 +643,7 @@ export default function AdminDashboard() {
     const insumoId = formData.get('insumoId');
     const quantity = formData.get('quantity');
     try {
-      const res = await fetch(`${API_URL}/api/products/${productId}/fichas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ insumoId, quantity }) });
+      const res = await fetchWithStore(`${API_URL}/api/products/${productId}/fichas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ insumoId, quantity }) });
       const data = await res.json();
       if (data.success) { carregarFicha(productId); fetchProducts(); } else alert(data.error);
     } catch (e) { alert('Erro ao salvar ficha'); }
@@ -654,14 +651,14 @@ export default function AdminDashboard() {
 
   const handleRemoveFicha = async (fichaId, productId) => {
     if(!confirm('Remover este item da ficha?')) return;
-    try { await fetch(`${API_URL}/api/fichas/${fichaId}`, { method: 'DELETE' }); carregarFicha(productId); fetchProducts(); } catch(e) { alert('Erro'); }
+    try { await fetchWithStore(`${API_URL}/api/fichas/${fichaId}`, { method: 'DELETE' }); carregarFicha(productId); fetchProducts(); } catch(e) { alert('Erro'); }
   };
 
   const handleMovimentacaoManual = async (e) => {
     e.preventDefault();
     if (!novaMovimentacao.insumoId) return alert('Selecione o insumo');
     try {
-      const res = await fetch(`${API_URL}/api/estoque/manual`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaMovimentacao) });
+      const res = await fetchWithStore(`${API_URL}/api/estoque/manual`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaMovimentacao) });
       if ((await res.json()).success) { alert('Movimentação registrada com sucesso!'); setNovaMovimentacao({ insumoId: '', type: 'IN', quantity: '', reason: '' }); fetchInsumos(); if (estoqueSubTab === 'movimentacoes') fetchMovimentacoes(); } 
       else alert('Erro ao registrar movimentação manual.');
     } catch (error) { alert('Erro de comunicação.'); }
@@ -678,7 +675,7 @@ export default function AdminDashboard() {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      const res = await fetch(`${API_URL}/api/orders/${orderId}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) });
+      const res = await fetchWithStore(`${API_URL}/api/orders/${orderId}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) });
       if ((await res.json()).success) fetchOrders();
     } catch (error) { alert('Erro ao atualizar status do pedido.'); }
   };
@@ -686,13 +683,12 @@ export default function AdminDashboard() {
   const handleAddCategory = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/categories`, { 
+      const res = await fetchWithStore(`${API_URL}/api/categories`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ name: newCategoryName, isDrink: newCategoryIsDrink }) 
       });
       if ((await res.json()).success) { 
-        if (typeof logEmployeeAction === 'function') logEmployeeAction(`Criou nova categoria: ${newCategoryName}`);
         setNewCategoryName(''); 
         setNewCategoryIsDrink(false);
         fetchMenu(); 
@@ -700,16 +696,15 @@ export default function AdminDashboard() {
     } catch (error) { alert('Erro ao criar categoria.'); }
   };
 
-const handleEditCategory = async (e) => {
+  const handleEditCategory = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/categories/${editingCategory.id}`, { 
+      const res = await fetchWithStore(`${API_URL}/api/categories/${editingCategory.id}`, { 
         method: 'PUT', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ name: editingCategory.name, isDrink: editingCategory.isDrink }) 
       });
       if ((await res.json()).success) { 
-        if (typeof logEmployeeAction === 'function') logEmployeeAction(`Editou a categoria para: ${editingCategory.name}`);
         setEditingCategory(null); 
         fetchMenu(); 
       }
@@ -717,9 +712,9 @@ const handleEditCategory = async (e) => {
   };
 
   const handleDeleteCategory = async (categoryId) => {
-    if (!confirm('Tem certeza que deseja excluir esta categoria? Todos os produtos nela poderão ficar órfãos.')) return;
+    if (!confirm('Tem certeza que deseja excluir esta categoria?')) return;
     try {
-      const res = await fetch(`${API_URL}/api/categories/${categoryId}`, { method: 'DELETE' });
+      const res = await fetchWithStore(`${API_URL}/api/categories/${categoryId}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) fetchMenu(); else alert(data.error);
     } catch (error) { alert('Erro ao excluir categoria.'); }
@@ -733,7 +728,7 @@ const handleEditCategory = async (e) => {
     setMenu(newMenu);
     try {
       const reordered = newMenu.map((cat, i) => ({ id: cat.id, order: i }));
-      await fetch(`${API_URL}/api/categories/reorder`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categories: reordered }) });
+      await fetchWithStore(`${API_URL}/api/categories/reorder`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categories: reordered }) });
     } catch (error) { alert('Erro de comunicação ao reordenar.'); }
   };
 
@@ -758,7 +753,7 @@ const handleEditCategory = async (e) => {
 
     try {
       const reordered = catProducts.map((prod, i) => ({ id: prod.id, order: i }));
-      await fetch(`${API_URL}/api/products/reorder`, { 
+      await fetchWithStore(`${API_URL}/api/products/reorder`, { 
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ products: reordered }) 
       });
@@ -772,7 +767,7 @@ const handleEditCategory = async (e) => {
     if (!newProduct.categoryId) return alert("Crie uma categoria primeiro!");
     try {
       const payload = { ...newProduct, costPrice: newProduct.costPrice ? Number(newProduct.costPrice) : 0, groupId: newProduct.groupId || null };
-      const res = await fetch(`${API_URL}/api/products`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetchWithStore(`${API_URL}/api/products`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if ((await res.json()).success) {
         setNewProduct({ name: '', description: '', price: '', price700g: '', price1kg: '', costPrice: '', categoryId: menu[0]?.id || '', imageUrl: '', regraFiscalId: '', ncm: '', ean: '', groupId: '' });
         setIsCreatingProduct(false); fetchProducts(); fetchMenu(); 
@@ -784,14 +779,14 @@ const handleEditCategory = async (e) => {
     e.preventDefault();
     try {
       const payload = { ...editingProduct, costPrice: editingProduct.costPrice ? Number(editingProduct.costPrice) : 0, groupId: editingProduct.groupId || null };
-      const res = await fetch(`${API_URL}/api/products/${editingProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetchWithStore(`${API_URL}/api/products/${editingProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if ((await res.json()).success) { setEditingProduct(null); fetchProducts(); fetchMenu(); }
     } catch (error) { alert('Erro ao editar produto.'); }
   };
 
   const toggleProductStatus = async (product) => {
     try {
-      const res = await fetch(`${API_URL}/api/products/${product.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...product, isActive: !product.isActive }) });
+      const res = await fetchWithStore(`${API_URL}/api/products/${product.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...product, isActive: !product.isActive }) });
       if ((await res.json()).success) { fetchProducts(); fetchMenu(); }
     } catch (error) {}
   };
@@ -801,7 +796,7 @@ const handleEditCategory = async (e) => {
     const currentHighlightsCount = allProducts.filter(p => p.isFeatured).length;
     if (!isCurrentlyFeatured && currentHighlightsCount >= 5) { alert("Você já tem 5 produtos em destaque."); return; }
     try {
-      const res = await fetch(`${API_URL}/api/products/${product.id}/feature`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isFeatured: !isCurrentlyFeatured }) });
+      const res = await fetchWithStore(`${API_URL}/api/products/${product.id}/feature`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isFeatured: !isCurrentlyFeatured }) });
       if ((await res.json()).success) { fetchProducts(); }
     } catch (error) { alert('Erro ao alterar destaque.'); }
   };
@@ -809,7 +804,7 @@ const handleEditCategory = async (e) => {
   const handleEditCustomer = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/admin/customers/${editingCustomer.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingCustomer) });
+      const res = await fetchWithStore(`${API_URL}/api/admin/customers/${editingCustomer.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingCustomer) });
       const data = await res.json();
       if (data.success) { alert('Dados do cliente atualizados com sucesso!'); setEditingCustomer(null); fetchCustomers(); } else { alert('Erro ao editar cliente.'); }
     } catch (error) { alert('Erro de conexão com o servidor.'); }
@@ -818,7 +813,7 @@ const handleEditCategory = async (e) => {
   const handleUpdateAdminConfig = async (e) => { 
     e.preventDefault(); 
     try {
-      const res = await fetch(`${API_URL}/api/auth/admin/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminConfig) });
+      const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminConfig) });
       if ((await res.json()).success) alert("Perfil atualizado e salvo!"); else alert("Erro ao atualizar.");
     } catch(e) { alert("Erro de comunicação."); }
   };
@@ -826,12 +821,12 @@ const handleEditCategory = async (e) => {
   const handleSaveSystemSettings = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsForm) });
+      const res = await fetchWithStore(`${API_URL}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsForm) });
       if ((await res.json()).success) alert('Configurações salvas!'); else alert('Erro ao salvar as configurações.');
     } catch (error) { alert('Erro de conexão.'); }
   };
 
-  const toggleAutoPrintState = (checked) => { setIsAutoPrintEnabled(checked); localStorage.setItem('@Canone:autoPrint', checked ? 'true' : 'false'); };
+  const toggleAutoPrintState = (checked) => { setIsAutoPrintEnabled(checked); localStorage.setItem('zenix_autoPrint', checked ? 'true' : 'false'); };
 
   const calculateCmv = (cost, price) => { if (!price || price <= 0) return 0; return ((Number(cost) / Number(price)) * 100).toFixed(1); };
   const getCmvColor = (cmv) => { if (cmv <= 0) return 'text-slate-500'; if (cmv <= 30) return 'text-emerald-700 bg-emerald-100'; if (cmv <= 40) return 'text-amber-700 bg-amber-100'; return 'text-red-700 bg-red-100'; };
@@ -873,12 +868,11 @@ const handleEditCategory = async (e) => {
     return <AdminLogin adminLoginForm={adminLoginForm} setAdminLoginForm={setAdminLoginForm} handleAdminLogin={handleAdminLogin} />;
   }
 
-  // Trava de segurança para impedir que Entregador renderize os componentes do Administrador
   if (loggedEmployee?.role?.toLowerCase().includes('entregador')) {
     if (typeof window !== 'undefined') window.location.href = '/entregador';
     return (
       <div className="flex h-screen items-center justify-center bg-slate-900 text-amber-500 font-bold">
-         Redirecionando para a Rota de Entregas...
+          Redirecionando para a Rota de Entregas...
       </div>
     );
   }
@@ -894,8 +888,7 @@ const handleEditCategory = async (e) => {
         <div className="h-20 flex items-center justify-between px-4 border-b border-slate-100">
           {isSidebarOpen && (
             <div className="flex items-center gap-3 overflow-hidden whitespace-nowrap animate-fade-in-up px-2">
-              <img src="/logo.png" alt="Canone" className="h-10 w-10 object-contain drop-shadow-sm" onError={(e) => e.target.style.display = 'none'} />
-              <span className="font-black text-slate-900 text-xl tracking-tight">CânoneAdm<span className="text-amber-500">Pro</span></span>
+              <span className="font-black text-slate-900 text-xl tracking-tight">Zenix<span className="text-amber-500">Food</span></span>
             </div>
           )}
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors mx-auto" title={isSidebarOpen ? "Recolher Menu" : "Expandir Menu"}>
@@ -905,8 +898,6 @@ const handleEditCategory = async (e) => {
 
         <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto hide-scrollbar">
           {menuItems.map((item) => {
-            
-            // Renderização especial se for o menu KDS em cascata
             if (item.isDropdown) {
               return (
                 <div key={item.id} className="flex flex-col">
@@ -916,7 +907,6 @@ const handleEditCategory = async (e) => {
                       setIsKdsMenuOpen(!isKdsMenuOpen);
                     }} 
                     className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isKdsMenuOpen ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-                    title={!isSidebarOpen ? item.label : ""}
                   >
                     <span className="text-xl shrink-0 flex items-center justify-center w-8">{item.icon}</span>
                     {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm flex-1 text-left">{item.label}</span>}
@@ -953,7 +943,6 @@ const handleEditCategory = async (e) => {
                     ? 'bg-amber-500 text-black shadow-md'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                 }`}
-                title={!isSidebarOpen ? item.label : ""}
               >
                 <span className="text-xl shrink-0 flex items-center justify-center w-8">{item.icon}</span>
                 {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm">{item.label}</span>}
@@ -963,7 +952,7 @@ const handleEditCategory = async (e) => {
         </nav>
 
         <div className="p-4 border-t border-slate-100">
-          <button onClick={handleAdminLogout} className={`w-full flex items-center gap-4 px-3 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all cursor-pointer ${!isSidebarOpen && 'justify-center'}`} title={!isSidebarOpen ? "Desconectar" : ""}>
+          <button onClick={handleAdminLogout} className={`w-full flex items-center gap-4 px-3 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all cursor-pointer ${!isSidebarOpen && 'justify-center'}`}>
             <span className="text-xl shrink-0 flex items-center justify-center w-8">🚪</span>
             {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm">Sair do Sistema</span>}
           </button>
@@ -997,7 +986,7 @@ const handleEditCategory = async (e) => {
            {activeTab === 'fornecedores' && <SuppliersTab />}
            {activeTab === 'rh' && <RhTab />} 
            {activeTab === 'estoque' && <StockTab estoqueSubTab={estoqueSubTab} setEstoqueSubTab={setEstoqueSubTab} fetchMovimentacoes={fetchMovimentacoes} handleUploadXMLPreview={handleUploadXMLPreview} setXmlFile={setXmlFile} novaMovimentacao={novaMovimentacao} setNovaMovimentacao={setNovaMovimentacao} insumos={insumos} handleMovimentacaoManual={handleMovimentacaoManual} novoInsumo={novoInsumo} setNovoInsumo={setNovoInsumo} handleSalvarInsumo={handleSalvarInsumo} toggleInsumoStatus={toggleInsumoStatus} setEditingInsumo={setEditingInsumo} editingInsumo={editingInsumo} handleEditInsumoSubmit={handleEditInsumoSubmit} allProducts={allProducts} fichasVisiveis={fichasVisiveis} carregarFicha={carregarFicha} setFichasVisiveis={setFichasVisiveis} calculateCmv={calculateCmv} getCmvColor={getCmvColor} handleRemoveFicha={handleRemoveFicha} handleAddFicha={handleAddFicha} movimentacoes={movimentacoes} showXmlModal={showXmlModal} setShowXmlModal={setShowXmlModal} xmlPreviewData={xmlPreviewData} xmlMappings={xmlMappings} updateMapping={updateMapping} handleConfirmXmlImport={handleConfirmXmlImport} />}
-           {activeTab === 'impressoes' && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} />}
+           {activeTab === 'impressoes' && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
            {activeTab === 'fiscal' && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
            {activeTab === 'config' && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={handleUpdateAdminConfig} />}
         </div>
@@ -1013,7 +1002,6 @@ const handleEditCategory = async (e) => {
                 <input id="editCatNameFunc" name="editCatNameFunc" type="text" required value={editingCategory.name} onChange={(e) => setEditingCategory({...editingCategory, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500 mb-4" />
               </div>
               
-              {/*OPÇÃO NO MODAL DE EDIÇÃO */}
               <label className="flex items-center gap-3 cursor-pointer bg-slate-50 p-3 rounded-xl border border-slate-200 hover:border-blue-300 transition-colors">
                 <input 
                   type="checkbox" 

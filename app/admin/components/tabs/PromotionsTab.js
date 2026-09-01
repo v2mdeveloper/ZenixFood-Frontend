@@ -15,13 +15,27 @@ export default function PromotionsTab({
   // =====================================
   // LÓGICA DO UPSELL EMBUTIDA AQUI
   // =====================================
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
   const [upsells, setUpsells] = useState([]);
   const [showUpsellModal, setShowUpsellModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [upsellForm, setUpsellForm] = useState({
     name: '', triggerProductIds: [], offerProductId: '', offerPrice: '', channels: []
   });
+
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
 
   useEffect(() => {
     if (promoSubTab === 'upsell') {
@@ -31,7 +45,7 @@ export default function PromotionsTab({
 
   const fetchUpsells = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/upsells`);
+      const res = await fetchWithStore(`${API_URL}/api/admin/upsells`);
       if (res.ok) setUpsells(await res.json());
     } catch (e) { console.error(e); }
   };
@@ -60,7 +74,7 @@ export default function PromotionsTab({
     try {
       const method = editingId ? 'PUT' : 'POST';
       const url = editingId ? `${API_URL}/api/admin/upsells/${editingId}` : `${API_URL}/api/admin/upsells`;
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetchWithStore(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (data.success) {
         alert('Regra salva!'); setShowUpsellModal(false); fetchUpsells();
@@ -71,14 +85,14 @@ export default function PromotionsTab({
   const handleDeleteUpsell = async (id) => {
     if(!confirm("Excluir esta regra?")) return;
     try {
-      const res = await fetch(`${API_URL}/api/admin/upsells/${id}`, { method: 'DELETE' });
+      const res = await fetchWithStore(`${API_URL}/api/admin/upsells/${id}`, { method: 'DELETE' });
       if (res.ok) fetchUpsells();
     } catch (e) { alert("Erro."); }
   };
 
   const toggleUpsellActive = async (upsell) => {
     try {
-      await fetch(`${API_URL}/api/admin/upsells/${upsell.id}`, {
+      await fetchWithStore(`${API_URL}/api/admin/upsells/${upsell.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active: !upsell.active })
       });
       fetchUpsells();
@@ -130,7 +144,7 @@ export default function PromotionsTab({
             <form onSubmit={handleAddCoupon} className="space-y-4">
               <div>
                 <label className="text-[10px] text-slate-500 font-bold uppercase">Código do Cupom</label>
-                <input type="text" required placeholder="Ex: CANONE10" value={couponForm.code} onChange={e=>setCouponForm({...couponForm, code: e.target.value.toUpperCase()})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm uppercase focus:outline-none focus:border-amber-500" />
+                <input type="text" required placeholder="Ex: ZENIX10" value={couponForm.code} onChange={e=>setCouponForm({...couponForm, code: e.target.value.toUpperCase()})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm uppercase focus:outline-none focus:border-amber-500" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>

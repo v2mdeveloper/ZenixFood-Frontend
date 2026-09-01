@@ -2,19 +2,34 @@ export default function AdminLogin({ adminLoginForm, setAdminLoginForm, handleAd
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-3xl border border-slate-200 w-full max-w-sm shadow-xl">
-        <h2 className="text-2xl font-black text-slate-900 text-center mb-2 uppercase tracking-tighter">Cânone Admin</h2>
-        <p className="text-slate-500 text-xs text-center mb-6">Acesso restrito à gerência</p>
+        <h2 className="text-2xl font-black text-slate-900 text-center mb-2 uppercase tracking-tighter">ZenixFood Admin</h2>
+        <p className="text-slate-500 text-xs text-center mb-6">Acesso restrito à gerência da loja</p>
+        
         <form onSubmit={handleAdminLogin} className="space-y-4">
+          {/* Identificador da Loja (Store ID ou Slug) */}
+          <div>
+            <label className="text-xs text-slate-600 block mb-1">ID ou Slug da Loja</label>
+            <input 
+              type="text" 
+              required 
+              value={adminLoginForm.storeId || ""} 
+              onChange={e => setAdminLoginForm({...adminLoginForm, storeId: e.target.value})} 
+              placeholder="ex: canone-burger" 
+              className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 focus:outline-none focus:border-amber-500" 
+            />
+          </div>
+
           <div>
             <label className="text-xs text-slate-600 block mb-1">E-mail Administrativo</label>
             <input 
               type="email" 
               required 
               onChange={e => setAdminLoginForm({...adminLoginForm, email: e.target.value})} 
-              placeholder="admin@canone.com" 
+              placeholder="admin@zenixfood.com" 
               className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 focus:outline-none focus:border-amber-500" 
             />
           </div>
+
           <div>
             <label className="text-xs text-slate-600 block mb-1">Senha de Acesso</label>
             <input 
@@ -25,6 +40,7 @@ export default function AdminLogin({ adminLoginForm, setAdminLoginForm, handleAd
               className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 focus:outline-none focus:border-amber-500" 
             />
           </div>
+
           <button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-black font-black py-3.5 rounded-xl text-sm transition-all mt-2 shadow-md">
             Entrar no Painel
           </button>

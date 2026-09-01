@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Cânone Admin Pro',
+  title: 'ZenixFood Admin Pro',
   description: 'Painel Administrativo da Cânone Burger',
   manifest: '/manifest-admin.json',
 };

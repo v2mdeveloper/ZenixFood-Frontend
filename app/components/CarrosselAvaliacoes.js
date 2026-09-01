@@ -3,10 +3,24 @@ import { useState, useEffect } from 'react';
 
 export default function CarrosselAvaliacoes() {
   const [avaliacoes, setAvaliacoes] = useState([]);
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
+
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
 
   useEffect(() => {
-    fetch(`${API_URL}/api/avaliacoes`)
+    fetchWithStore(`${API_URL}/api/avaliacoes`)
       .then(res => res.json())
       .then(data => {
         if(Array.isArray(data)) setAvaliacoes(data);

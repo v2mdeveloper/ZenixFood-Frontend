@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 
 export default function SalaoTab({ employeeUser }) {
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
   const [tabs, setTabs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +30,20 @@ export default function SalaoTab({ employeeUser }) {
   const [targetTabNumber, setTargetTabNumber] = useState('');
   const [managerAuth, setManagerAuth] = useState({ email: '', password: '' });
 
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
   useEffect(() => {
     fetchTabs();
     fetchSettings();
@@ -40,7 +54,7 @@ export default function SalaoTab({ employeeUser }) {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/settings`);
+      const res = await fetchWithStore(`${API_URL}/api/settings`);
       if (res.ok) {
         const data = await res.json();
         setPrinterName(data.printerName || '');
@@ -51,9 +65,9 @@ export default function SalaoTab({ employeeUser }) {
   const fetchPeople = async () => {
     try {
       const [resC, resE, resAcc] = await Promise.all([
-        fetch(`${API_URL}/api/customers`),
-        fetch(`${API_URL}/api/rh/employees`),
-        fetch(`${API_URL}/api/rh/employee-accounts`)
+        fetchWithStore(`${API_URL}/api/customers`),
+        fetchWithStore(`${API_URL}/api/rh/employees`),
+        fetchWithStore(`${API_URL}/api/rh/employee-accounts`)
       ]);
       let clients = []; let emps = [];
       if (resC.ok) clients = await resC.json();
@@ -67,7 +81,7 @@ export default function SalaoTab({ employeeUser }) {
 
   const fetchTabs = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/salao/tabs`);
+      const res = await fetchWithStore(`${API_URL}/api/salao/tabs`);
       if (res.ok) {
         const data = await res.json();
         setTabs(data || []);
@@ -111,7 +125,7 @@ export default function SalaoTab({ employeeUser }) {
         managerAuth: overrideAuth
       };
 
-      const res = await fetch(`${API_URL}/api/salao/tabs/open`, {
+      const res = await fetchWithStore(`${API_URL}/api/salao/tabs/open`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
@@ -123,7 +137,6 @@ export default function SalaoTab({ employeeUser }) {
         fetchTabs(); setSelectedTab(data.tab);
         if (overrideAuth) alert('Comanda aberta e dívida vinculada com sucesso!');
       } else { 
-        // 🚨 Aciona o Modal do Gerente se o cliente tiver dívida
         if (data.code === 'CLIENT_HAS_DEBT') {
            setDebtAmountMsg(data.error);
            setShowManagerDebtModal(true);
@@ -151,7 +164,7 @@ export default function SalaoTab({ employeeUser }) {
     const target = (tabs || []).find(t => t.number.toString() === targetTabNumber.trim());
     if (!target) return alert('Destino não encontrado!');
     try {
-      const res = await fetch(`${API_URL}/api/salao/items/transfer`, {
+      const res = await fetchWithStore(`${API_URL}/api/salao/items/transfer`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemId: itemToTransfer.id, targetTabId: target.id, managerAuth })
       });
@@ -166,7 +179,7 @@ export default function SalaoTab({ employeeUser }) {
   const handleCancelTab = async (tabId) => {
     if (!confirm('Tem a certeza que deseja cancelar e fechar esta mesa vazia?')) return;
     try {
-      const res = await fetch(`${API_URL}/api/salao/tabs/${tabId}/cancel`, { method: 'POST' });
+      const res = await fetchWithStore(`${API_URL}/api/salao/tabs/${tabId}/cancel`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         alert('Atendimento zerado e fechado com sucesso!');
@@ -178,7 +191,7 @@ export default function SalaoTab({ employeeUser }) {
 
   const handleLinkTab = async (tabId, mesaNum) => {
     try {
-      const res = await fetch(`${API_URL}/api/salao/tabs/${tabId}/link`, {
+      const res = await fetchWithStore(`${API_URL}/api/salao/tabs/${tabId}/link`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ linkedTable: mesaNum })
       });
@@ -192,7 +205,6 @@ export default function SalaoTab({ employeeUser }) {
   const comandas = (tabs || []).filter(t => t.type === 'TAB');
   const calculateTotal = (items) => (items || []).reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
 
-  // Verifica se a aba selecionada pertence a um funcionário com limites
   const activeEmployeeData = selectedTab && selectedTab.customerName ? employeeAccounts.find(e => e.name === selectedTab.customerName || e.cpf === selectedTab.customerCpf) : null;
 
   if (loading) return <div className="p-8 text-center text-slate-500 font-bold">Carregando mapa do salão...</div>;
@@ -281,7 +293,6 @@ export default function SalaoTab({ employeeUser }) {
               <button onClick={() => setSelectedTab(null)} className="text-slate-400 hover:text-red-500 font-bold cursor-pointer">✕</button>
             </div>
 
-            {/* 🚨 MOSTRADOR VISUAL DE FIADO NA COMANDA (SE FOR FUNCIONÁRIO) */}
             {activeEmployeeData && (
                <div className="bg-amber-100 border border-amber-300 p-3 rounded-xl mb-4">
                   <p className="text-[10px] text-amber-800 font-black uppercase tracking-widest flex items-center gap-1"><span>👷</span> Fiado Funcionário</p>
@@ -292,7 +303,6 @@ export default function SalaoTab({ employeeUser }) {
                </div>
             )}
 
-            {/* ÁREA DE VÍNCULO NO CAIXA */}
             {selectedTab.type === 'TAB' && (
               <div className="flex justify-between items-center mb-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
                  {selectedTab.linkedTable ? (
@@ -316,12 +326,12 @@ export default function SalaoTab({ employeeUser }) {
                const linkedComandas = comandas.filter(c => c.linkedTable === selectedTab.number);
                if(linkedComandas.length === 0) return null;
                return (
-                 <div className="bg-purple-50 border border-purple-200 p-3 rounded-xl flex gap-2 flex-wrap mb-4">
-                   <span className="text-[10px] font-black uppercase text-purple-800 shrink-0 w-full mb-1">🔗 Comandas Sentadas:</span>
-                   {linkedComandas.map(c => (
-                     <span key={c.id} className="bg-purple-600 text-white text-[10px] font-black px-2 py-0.5 rounded shrink-0">#{c.number} ({c.customerName})</span>
-                   ))}
-                 </div>
+                  <div className="bg-purple-50 border border-purple-200 p-3 rounded-xl flex gap-2 flex-wrap mb-4">
+                     <span className="text-[10px] font-black uppercase text-purple-800 shrink-0 w-full mb-1">🔗 Comandas Sentadas:</span>
+                     {linkedComandas.map(c => (
+                       <span key={c.id} className="bg-purple-600 text-white text-[10px] font-black px-2 py-0.5 rounded shrink-0">#{c.number} ({c.customerName})</span>
+                     ))}
+                  </div>
                );
             })()}
             

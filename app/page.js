@@ -20,9 +20,6 @@ import CostelaModal from './components/modals/CostelaModal';
 import UpsellModal from './components/modals/UpsellModal';
 import ProductDetailsModal from './components/modals/ProductDetailsModal';
 
-const PUBLIC_KEY_MERCADO_PAGO = 'APP_USR-1edaaff0-4dca-4305-b463-20a63f147a06';
-initMercadoPago(PUBLIC_KEY_MERCADO_PAGO);
-
 function HomeContent() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [selectedProductModal, setSelectedProductModal] = useState(null);
@@ -65,7 +62,7 @@ function HomeContent() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
   const [pixInfo, setPixInfo] = useState(null);
-  const [pixCopied, setPixCopied] = useState(false); // 🚨 NOVO ESTADO DO COPIA E COLA
+  const [pixCopied, setPixCopied] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
   
@@ -90,8 +87,29 @@ function HomeContent() {
   const API_URL = 'https://zenixfood-backend.onrender.com';
   const searchParams = useSearchParams();
 
+  // 🛡️ Helper local para multi-tenant (envio do x-store-id e Token JWT)
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
+  // 💳 Inicializa o Mercado Pago dinamicamente com a chave da loja
   useEffect(() => {
-    const savedTheme = localStorage.getItem('@Canone:clientTheme');
+    if (storeSettings?.mercadoPagoPublicKey) {
+      initMercadoPago(storeSettings.mercadoPagoPublicKey);
+    }
+  }, [storeSettings]);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('@Zenix:clientTheme');
     if (savedTheme === 'light') {
       setIsDarkMode(false);
       document.documentElement.classList.remove('dark');
@@ -100,8 +118,8 @@ function HomeContent() {
       document.documentElement.classList.add('dark');
     }
 
-    const savedToken = localStorage.getItem('@Canone:token');
-    const savedUser = localStorage.getItem('@Canone:user');
+    const savedToken = localStorage.getItem('@Zenix:token') || localStorage.getItem('zenix_token');
+    const savedUser = localStorage.getItem('@Zenix:user') || localStorage.getItem('zenix_user');
     if (savedToken && savedUser) {
       const parsedUser = JSON.parse(savedUser);
       setUser(parsedUser);
@@ -127,7 +145,7 @@ function HomeContent() {
   const toggleTheme = () => {
     const newTheme = !isDarkMode;
     setIsDarkMode(newTheme);
-    localStorage.setItem('@Canone:clientTheme', newTheme ? 'dark' : 'light');
+    localStorage.setItem('@Zenix:clientTheme', newTheme ? 'dark' : 'light');
     if (newTheme) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
   };
@@ -153,26 +171,26 @@ function HomeContent() {
     if (!isTotemMode) return;
     let timeout;
     const handleInteraction = () => {
-       handleFullscreen();
-       clearTimeout(timeout);
-       timeout = setTimeout(() => {
-         setCart([]); setTotemName(''); setView('menu'); setShowUpsellModal(false); setPixInfo(null); setSelectedProductModal(null);
-       }, 120000); 
+        handleFullscreen();
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          setCart([]); setTotemName(''); setView('menu'); setShowUpsellModal(false); setPixInfo(null); setSelectedProductModal(null);
+        }, 120000); 
     };
     window.addEventListener('mousemove', handleInteraction);
     window.addEventListener('touchstart', handleInteraction);
     window.addEventListener('click', handleInteraction);
     handleInteraction();
     return () => {
-       clearTimeout(timeout);
-       window.removeEventListener('mousemove', handleInteraction);
-       window.removeEventListener('touchstart', handleInteraction);
-       window.removeEventListener('click', handleInteraction);
+        clearTimeout(timeout);
+        window.removeEventListener('mousemove', handleInteraction);
+        window.removeEventListener('touchstart', handleInteraction);
+        window.removeEventListener('click', handleInteraction);
     }
   }, [isTotemMode]);
 
   const fetchSystemSettings = () => {
-    fetch(`${API_URL}/api/settings`)
+    fetchWithStore(`${API_URL}/api/settings`)
       .then((res) => res.json())
       .then((data) => {
         setDeliveryFee(Number(data.deliveryFee));
@@ -191,11 +209,11 @@ function HomeContent() {
 
   useEffect(() => {
     const registerVisit = async () => {
-      if (sessionStorage.getItem('@Canone:visitLogged') || isTotemMode) return;
+      if (sessionStorage.getItem('@Zenix:visitLogged') || isTotemMode) return;
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       try {
-        await fetch(`${API_URL}/api/analytics/visit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user?.id || null, device: isMobile ? 'Celular' : 'Computador' }) });
-        sessionStorage.setItem('@Canone:visitLogged', 'true');
+        await fetchWithStore(`${API_URL}/api/analytics/visit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user?.id || null, device: isMobile ? 'Celular' : 'Computador' }) });
+        sessionStorage.setItem('@Zenix:visitLogged', 'true');
       } catch (e) {}
     };
     const timer = setTimeout(registerVisit, 2000);
@@ -214,16 +232,16 @@ function HomeContent() {
     if (view === 'payment_pix' && pixInfo && pixInfo.orderId) {
       intervalId = setInterval(async () => {
         try {
-          const res = await fetch(`${API_URL}/api/orders/${pixInfo.orderId}/status`);
+          const res = await fetchWithStore(`${API_URL}/api/orders/${pixInfo.orderId}/status`);
           if (res.ok) {
             const data = await res.json();
             if (data.status === 'PREPARING' || data.status === 'PAID') {
               clearInterval(intervalId);
               if (isTotemMode) {
-                  alert('✅ Pagamento Aprovado! Seu pedido já está na cozinha. Fique atento no balcão que vamos chamar o seu nome!');
+                  alert('✅ Pagamento Aprovado! Seu pedido já está em preparação. Fique atento no balcão que vamos chamar o seu nome!');
                   setCart([]); setTotemName(''); setPixInfo(null); setView('menu');
               } else {
-                  alert('✅ Pagamento PIX Aprovado! O seu pedido já está na grelha da nossa cozinha.');
+                  alert('✅ Pagamento PIX Aprovado! O seu pedido já foi encaminhado para a operação.');
                   setCart([]); setUseCashback(false); setObservations(''); setCouponCode(''); setAppliedCoupon(null); setView('orders');
               }
             }
@@ -236,10 +254,10 @@ function HomeContent() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API_URL}/api/menu`).then((res) => res.json()),
-      fetch(`${API_URL}/api/products/highlights`).then((res) => res.json()),
-      fetch(`${API_URL}/api/suppliers`).then((res) => res.ok ? res.json() : []).catch(() => []),
-      fetch(`${API_URL}/api/upsells`).then((res) => res.ok ? res.json() : []).catch(() => []) 
+      fetchWithStore(`${API_URL}/api/menu`).then((res) => res.json()),
+      fetchWithStore(`${API_URL}/api/products/highlights`).then((res) => res.json()),
+      fetchWithStore(`${API_URL}/api/suppliers`).then((res) => res.ok ? res.json() : []).catch(() => []),
+      fetchWithStore(`${API_URL}/api/upsells`).then((res) => res.ok ? res.json() : []).catch(() => []) 
     ]).then(([menuData, highlightsData, suppliersData, upsellsData]) => {
       setMenu(menuData); 
       setHighlights(highlightsData); 
@@ -275,7 +293,7 @@ function HomeContent() {
 
   const fetchClientOrders = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/orders/client/${user.id}`);
+      const res = await fetchWithStore(`${API_URL}/api/orders/client/${user.id}`);
       if (res.ok) setClientOrders(await res.json());
     } catch (error) {}
   };
@@ -402,7 +420,7 @@ function HomeContent() {
     if (!couponCode.trim()) return;
     setIsValidatingCoupon(true); setCouponError('');
     try {
-        const res = await fetch(`${API_URL}/api/coupons/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: couponCode, cartTotal, clientId: user.id }) });
+        const res = await fetchWithStore(`${API_URL}/api/coupons/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: couponCode, cartTotal, clientId: user.id }) });
         const data = await res.json();
         if (data.success) setAppliedCoupon(data.coupon);
         else { setCouponError(data.error); setAppliedCoupon(null); }
@@ -421,7 +439,7 @@ function HomeContent() {
          payload.address = `CEP: ${authForm.cep || ''} - ${authForm.address || ''}`;
       }
 
-      const res = await fetch(`${API_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetchWithStore(`${API_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
       
       if (data.success) {
@@ -443,8 +461,8 @@ function HomeContent() {
           password: '' 
         });
         
-        localStorage.setItem('@Canone:token', data.token);
-        localStorage.setItem('@Canone:user', JSON.stringify(data.user));
+        localStorage.setItem('@Zenix:token', data.token);
+        localStorage.setItem('@Zenix:user', JSON.stringify(data.user));
 
         if (data.user.lastAddress) {
           let enderecoLimpo = data.user.lastAddress.split('| OBS:')[0].split('| CUPOM')[0].trim();
@@ -459,7 +477,7 @@ function HomeContent() {
   const handleForgotPassword = async (e) => {
     e.preventDefault(); setIsSendingCode(true);
     try {
-      const res = await fetch(`${API_URL}/api/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: recoveryEmail }) });
+      const res = await fetchWithStore(`${API_URL}/api/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: recoveryEmail }) });
       const data = JSON.parse(await res.text());
       if (data.success) { alert('✅ E-mail enviado!'); setAuthMode('reset'); } else { alert(`⚠️ Erro: ${data.error}`); }
     } catch (error) {} finally { setIsSendingCode(false); }
@@ -468,7 +486,7 @@ function HomeContent() {
   const handleResetPassword = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: recoveryEmail, code: recoveryCode, newPassword }) });
+      const res = await fetchWithStore(`${API_URL}/api/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: recoveryEmail, code: recoveryCode, newPassword }) });
       const data = await res.json();
       if (data.success) { alert('Senha alterada!'); setAuthMode('login'); setAuthForm({ ...authForm, email: recoveryEmail, password: '' }); } else alert(data.error);
     } catch (error) {}
@@ -478,11 +496,11 @@ function HomeContent() {
     e.preventDefault();
     try {
       const payload = { ...profileForm, address: `CEP: ${profileForm.cep || ''} - ${profileForm.address || ''}` };
-      const res = await fetch(`${API_URL}/api/users/${user.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetchWithStore(`${API_URL}/api/users/${user.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (data.success) { 
         setUser(data.user); 
-        localStorage.setItem('@Canone:user', JSON.stringify(data.user));
+        localStorage.setItem('@Zenix:user', JSON.stringify(data.user));
         alert('Atualizado com sucesso!'); 
         setProfileForm(prev => ({ ...prev, password: '' })); 
       } else alert('Erro ao atualizar os dados.');
@@ -501,7 +519,7 @@ function HomeContent() {
 
     setIsSubmittingOrder(true);
     try {
-      const res = await fetch(`${API_URL}/api/orders`, {
+      const res = await fetchWithStore(`${API_URL}/api/orders`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId: isTotemMode ? 'TOTEM_MODE' : user.id, items: cart, address: customFullAddress, paymentMethod, total: cartTotal, useCashback, couponCode: appliedCoupon?.code || null, client: { name: isTotemMode ? totemName : user?.name, cpf: cpfNaNota } })
       });
@@ -517,7 +535,6 @@ function HomeContent() {
     } catch (error) {} finally { setIsSubmittingOrder(false); }
   };
 
-  // 🚨 FUNÇÃO COPIA E COLA DO PIX (BLINDADA PARA MOBILE) 🚨
   const copyPixToClipboard = () => {
     if (pixInfo && pixInfo.qr_code) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -548,7 +565,7 @@ function HomeContent() {
 
     return new Promise(async (resolve, reject) => {
       try {
-        const res = await fetch(`${API_URL}/api/orders`, {
+        const res = await fetchWithStore(`${API_URL}/api/orders`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ clientId: user.id, items: cart, address: fullAddress, paymentMethod: 'CREDIT_CARD_ONLINE', total: cartTotal, useCashback, mpData: formData, couponCode: appliedCoupon?.code || null, client: { name: user?.name, cpf: cpfNaNota } })
         });
@@ -567,7 +584,7 @@ function HomeContent() {
     e.preventDefault();
     setIsSubmittingReview(true);
     try {
-      const res = await fetch(`${API_URL}/api/avaliacoes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clienteNome: user.name, nota: reviewRating, comentario: reviewComment }) });
+      const res = await fetchWithStore(`${API_URL}/api/avaliacoes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clienteNome: user.name, nota: reviewRating, comentario: reviewComment }) });
       const data = await res.json();
       if (data.success) { 
           alert('Obrigado pela sua avaliação!'); 
@@ -581,7 +598,7 @@ function HomeContent() {
   const translateStatus = (status) => {
     const mapping = {
       'PENDING': { label: 'Aguardando Pagamento ⏳', color: 'text-zinc-500 bg-zinc-100 border-zinc-200 dark:text-zinc-400 dark:bg-zinc-500/10 dark:border-zinc-500/20' },
-      'PREPARING': { label: 'Na grelha 🔥', color: 'text-amber-600 bg-amber-100 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20' },
+      'PREPARING': { label: 'Em Preparação 🔥', color: 'text-amber-600 bg-amber-100 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20' },
       'READY': { label: 'Pedido Pronto 🛎️', color: 'text-emerald-600 bg-emerald-100 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20' },
       'IN_TRANSIT': { label: 'Saiu para entrega 🛵', color: 'text-blue-600 bg-blue-100 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/20' },
       'DELIVERED': { label: 'Pedido Entregue ✅', color: 'text-slate-700 bg-slate-200 border-slate-300 dark:text-zinc-300 dark:bg-zinc-800 dark:border-zinc-700' },
@@ -597,7 +614,7 @@ function HomeContent() {
     return badges;
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-[#0a0a0a] text-amber-500 font-bold"><div className="animate-pulse flex flex-col items-center"><span className="text-4xl mb-4">🍔</span><p>Preparando a Grelha...</p></div></div>;
+  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-[#0a0a0a] text-amber-500 font-bold"><div className="animate-pulse flex flex-col items-center"><span className="text-4xl mb-4">⚡</span><p>Carregando sistema...</p></div></div>;
 
   return (
     <div className={isDarkMode ? 'dark' : ''}>
@@ -608,9 +625,9 @@ function HomeContent() {
         {isTotemMode && (
           <div className="bg-white dark:bg-gradient-to-b dark:from-black dark:to-[#0a0a0a] border-b border-slate-200 dark:border-white/5 p-6 md:p-8 flex justify-between items-center sticky top-0 z-40 shadow-xl cursor-pointer transition-colors" onClick={handleFullscreen}>
               <div className="flex items-center gap-4">
-                  <span className="text-4xl animate-bounce">🍔</span>
+                  <span className="text-4xl animate-bounce">⚡</span>
                   <div>
-                    <h1 className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tight">Cânone Burger</h1>
+                    <h1 className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tight">Zenix</h1>
                     <span className="text-amber-600 dark:text-amber-500 font-bold text-sm tracking-widest uppercase">Autoatendimento</span>
                   </div>
               </div>
@@ -640,7 +657,7 @@ function HomeContent() {
                       <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-40 h-40 bg-amber-500/10 blur-3xl rounded-full pointer-events-none"></div>
                       
                       <h2 className="text-2xl md:text-3xl font-black text-amber-600 dark:text-amber-500 mb-6 uppercase tracking-[0.2em] drop-shadow-sm dark:drop-shadow-md">
-                        🔥 A Forja do Sabor
+                        ✨ Sobre o Estabelecimento
                       </h2>
                       <p className="text-slate-600 dark:text-zinc-300 text-sm md:text-base leading-loose italic relative z-10 font-medium md:px-8">
                         "{storeSettings.aboutUsText}"
@@ -664,7 +681,6 @@ function HomeContent() {
               <CheckoutView isStoreOpen={isStoreOpen} cart={cart} setView={setView} removeFromCart={removeFromCart} cep={cep} setCep={setCep} address={address} setAddress={setAddress} observations={observations} setObservations={setObservations} cpfNaNota={cpfNaNota} setCpfNaNota={setCpfNaNota} couponCode={couponCode} setCouponCode={setCouponCode} appliedCoupon={appliedCoupon} handleApplyCoupon={handleApplyCoupon} isValidatingCoupon={isValidatingCoupon} handleRemoveCoupon={handleRemoveCoupon} couponError={couponError} couponDiscount={couponDiscount} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} user={user} availableCashback={availableCashback} useCashback={useCashback} setUseCashback={setUseCashback} cartTotal={cartTotal} deliveryFee={finalDeliveryFee} discount={discount} finalTotal={finalTotal} isSubmittingOrder={isSubmittingOrder} handleCheckoutBtnClick={handleCheckoutBtnClick} isTotemMode={isTotemMode} totemName={totemName} setTotemName={setTotemName} />
             )}
 
-            {/* 🚨 TELA DO PIX ATUALIZADA AQUI 🚨 */}
             {view === 'payment_pix' && pixInfo && (
               <div className="animate-fade-in-up max-w-md mx-auto text-center py-10">
                 <div className="bg-white dark:bg-[#121212] p-8 rounded-3xl border border-slate-200 dark:border-amber-500/30 shadow-xl dark:shadow-[0_0_30px_rgba(245,158,11,0.15)] relative overflow-hidden transition-colors">
@@ -766,13 +782,13 @@ function HomeContent() {
         <FloatingCart cart={cart} view={view} cartTotal={cartTotal} handleVerSacola={handleVerSacola} />
         
         <ProductDetailsModal 
-           product={selectedProductModal} 
-           onClose={() => setSelectedProductModal(null)} 
-           onAddToCart={addToCart} 
-           renderProductBadges={renderProductBadges} 
-           menu={menu}
-           user={user}
-           availableCashback={availableCashback}
+            product={selectedProductModal} 
+            onClose={() => setSelectedProductModal(null)} 
+            onAddToCart={addToCart} 
+            renderProductBadges={renderProductBadges} 
+            menu={menu}
+            user={user}
+            availableCashback={availableCashback}
         />
 
         <ReviewModal reviewOrder={reviewOrder} setReviewOrder={setReviewOrder} reviewRating={reviewRating} setReviewRating={setReviewRating} reviewComment={reviewComment} setReviewComment={setReviewComment} isSubmittingReview={isSubmittingReview} handleSubmitReview={handleSubmitReview} />

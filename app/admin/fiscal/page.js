@@ -2,38 +2,64 @@
 import { useState, useEffect } from 'react';
 
 export default function FilaFiscal() {
+  const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
+    ? 'http://localhost:3333' 
+    : 'https://zenixfood-backend.onrender.com';
+
   const [pedidos, setPedidos] = useState([]);
   const [loadingId, setLoadingId] = useState(null);
 
-  // Busca os pedidos do backend (exemplo de chamada)
+  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
+  // Busca os pedidos concluídos do backend da loja atual
   useEffect(() => {
-    fetch('/api/admin/orders?status=concluido')
+    fetchWithStore(`${API_URL}/api/admin/orders?status=concluido`)
       .then(res => res.json())
       .then(data => setPedidos(data))
       .catch(err => console.error("Erro ao carregar pedidos:", err));
-  }, []);
+  }, [API_URL]);
 
   const emitirEImprimir = async (orderId) => {
     setLoadingId(orderId);
     try {
-      // 1. Dispara a emissão na Focus NFe
-      const response = await fetch(`/api/admin/orders/${orderId}/fiscal`, {
+      // 1. Dispara a emissão na Focus NFe com suporte multi-tenant
+      const response = await fetchWithStore(`${API_URL}/api/admin/orders/${orderId}/fiscal`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       });
       const data = await response.json();
 
       if (data.success) {
         // 2. A nota foi emitida! Pegamos o link do PDF (Danfe)
-        const urlDanfe = `https://api.focusnfe.com.br${data.data.caminho_danfe}`;
+        const urlDanfe = `https://api.focusnfe.com.br${data.data?.caminho_danfe || data.fiscalData?.urlDanfe || ''}`;
         
-        // 3. Chamada para a sua função de impressão atual
-        // Substitua 'suaFuncaoDeImprimir' pelo método que você já usa hoje
-        await suaFuncaoDeImprimir(urlDanfe);
+        // 3. Chamada para a impressora térmica local (Spooler na Porta 8080)
+        try {
+          await fetch('http://localhost:8080/imprimir-danfe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ urlDanfe })
+          });
+        } catch (printErr) {
+          console.error("Erro no spooler local de impressão da DANFE", printErr);
+        }
 
         // 4. Remove o pedido da fila ou atualiza o status na tela
         setPedidos(prev => prev.filter(p => p.id !== orderId));
       } else {
-        alert(`Erro na emissão: ${data.error}`);
+        alert(`Erro na emissão: ${data.error || 'Erro desconhecido'}`);
       }
     } catch (error) {
       alert('Erro de conexão.');
@@ -62,7 +88,7 @@ export default function FilaFiscal() {
               <button
                 onClick={() => emitirEImprimir(pedido.id)}
                 disabled={loadingId === pedido.id}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50"
+                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {loadingId === pedido.id ? 'Processando...' : 'Emitir e Imprimir'}
               </button>

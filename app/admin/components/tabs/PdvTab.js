@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 
 export default function PdvTab({ employeeUser, allProducts, menu }) {
-  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://canone-backend.onrender.com';
+  const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
   const [registerInfo, setRegisterInfo] = useState(null);
   const [shiftId, setShiftId] = useState(null);
@@ -47,6 +47,20 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeSourceTabNumber, setMergeSourceTabNumber] = useState('');
 
+  // 🛡️ Helper para injetar o x-store-id e o Token JWT automaticamente
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+    const storeId = localStorage.getItem('zenix_store_id');
+
+    const headers = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(storeId && { 'x-store-id': storeId }),
+      ...options.headers,
+    };
+
+    return fetch(url, { ...options, headers });
+  };
+
   useEffect(() => {
     checkRegisterStatus();
     fetchCustomers();
@@ -55,22 +69,21 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   }, [employeeUser]);
 
   const fetchSettings = async () => {
-    try { const res = await fetch(`${API_URL}/api/settings`); if (res.ok) { const data = await res.json(); setPrinterName(data.printerName || ''); } } catch(e){}
+    try { const res = await fetchWithStore(`${API_URL}/api/settings`); if (res.ok) { const data = await res.json(); setPrinterName(data.printerName || ''); } } catch(e){}
   }
 
   const checkRegisterStatus = async () => {
     if (!employeeUser) return;
     try {
-      const res = await fetch(`${API_URL}/api/pdv/status?employeeId=${employeeUser.id}`);
+      const res = await fetchWithStore(`${API_URL}/api/pdv/status?employeeId=${employeeUser.id}`);
       if (res.ok) { const data = await res.json(); setShiftId(data.shiftId || null); setRegisterInfo(data.activeRegister || null); }
     } catch (e) {}
     setLoading(false);
   };
 
-  const fetchCustomers = async () => { try { const res = await fetch(`${API_URL}/api/customers`); if (res.ok) setCustomers(await res.json()); } catch (e) {} };
-  const fetchEmployees = async () => { try { const res = await fetch(`${API_URL}/api/rh/employee-accounts`); if (res.ok) setEmployees(await res.json()); } catch (e) {} };
+  const fetchCustomers = async () => { try { const res = await fetchWithStore(`${API_URL}/api/customers`); if (res.ok) setCustomers(await res.json()); } catch (e) {} };
+  const fetchEmployees = async () => { try { const res = await fetchWithStore(`${API_URL}/api/rh/employee-accounts`); if (res.ok) setEmployees(await res.json()); } catch (e) {} };
 
-  // 🚨 CORREÇÃO: VOLTOU PARA LOCALHOST PARA O CHROME NÃO BLOQUEAR 🚨
   const handlePrint = (tipo, dados) => {
     const toastId = 'toast-' + Date.now();
     const toast = document.createElement('div');
@@ -100,7 +113,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   const handleOpenRegister = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/pdv/register/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId: employeeUser.id, openingBalance }) });
+      const res = await fetchWithStore(`${API_URL}/api/pdv/register/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId: employeeUser.id, openingBalance }) });
       const data = await res.json();
       if (data.success) { alert('Caixa aberto com sucesso!'); checkRegisterStatus(); } else alert(data.error);
     } catch (e) { alert('Erro ao abrir caixa.'); }
@@ -109,10 +122,10 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   const handleCloseRegister = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/pdv/register/close`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registerId: registerInfo.id, closingBalance: closeForm.cash || 0, closingDetails: closeForm }) });
+      const res = await fetchWithStore(`${API_URL}/api/pdv/register/close`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registerId: registerInfo.id, closingBalance: closeForm.cash || 0, closingDetails: closeForm }) });
       const data = await res.json();
       if (data.success) {
-        handlePrint('FECHAMENTO_CAIXA', data.register); // Envia para impressão e continua
+        handlePrint('FECHAMENTO_CAIXA', data.register); 
         alert('Caixa fechado com sucesso!'); 
         setShowCloseModal(false); setCloseForm({ cash: '', credit: '', debit: '', pix: '' }); checkRegisterStatus();
       } else alert(data.error);
@@ -122,10 +135,10 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   const handleMovement = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/pdv/movement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registerId: registerInfo.id, type: movementForm.type, amount: movementForm.amount, reason: movementForm.reason, managerAuth }) });
+      const res = await fetchWithStore(`${API_URL}/api/pdv/movement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registerId: registerInfo.id, type: movementForm.type, amount: movementForm.amount, reason: movementForm.reason, managerAuth }) });
       const data = await res.json();
       if (data.success) { 
-        handlePrint('MOVIMENTO_CAIXA', data.movement); // Envia para impressão e continua
+        handlePrint('MOVIMENTO_CAIXA', data.movement); 
         alert('Movimentação registrada com sucesso!'); 
         setShowMovementModal(false); setMovementForm({ type: 'OUT', amount: '', reason: '' }); setManagerAuth({ email: '', password: '' }); checkRegisterStatus(); 
       } else alert(data.error);
@@ -134,7 +147,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
 
   const loadTabByNumber = async (numberToSearch) => {
     try {
-      const res = await fetch(`${API_URL}/api/salao/tabs/number/${numberToSearch.trim()}`);
+      const res = await fetchWithStore(`${API_URL}/api/salao/tabs/number/${numberToSearch.trim()}`);
       if (res.ok) {
         const data = await res.json();
         setLoadedTab(data); 
@@ -183,10 +196,10 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
     e.preventDefault();
     if (!mergeSourceTabNumber.trim()) return;
     try {
-      const resSource = await fetch(`${API_URL}/api/salao/tabs/number/${mergeSourceTabNumber.trim()}`);
+      const resSource = await fetchWithStore(`${API_URL}/api/salao/tabs/number/${mergeSourceTabNumber.trim()}`);
       if (!resSource.ok) return alert('A Mesa que você quer juntar não foi encontrada.');
       const sourceTabData = await resSource.json();
-      const resMerge = await fetch(`${API_URL}/api/salao/tabs/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceTabId: sourceTabData.id, targetTabId: loadedTab.id }) });
+      const resMerge = await fetchWithStore(`${API_URL}/api/salao/tabs/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceTabId: sourceTabData.id, targetTabId: loadedTab.id }) });
       const mergeResult = await resMerge.json();
       if (mergeResult.success) { alert('Contas unificadas!'); setShowMergeModal(false); setMergeSourceTabNumber(''); await loadTabByNumber(loadedTab.number.toString()); } else alert(mergeResult.error || 'Erro.');
     } catch (e) { alert('Erro.'); }
@@ -202,7 +215,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
     e.preventDefault();
     const randomPassword = 'Canone' + Math.floor(Math.random() * 1000000) + '!';
     try {
-      const res = await fetch(`${API_URL}/api/auth/register`, {
+      const res = await fetchWithStore(`${API_URL}/api/auth/register`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...newCustomerForm, password: randomPassword })
       });
@@ -249,7 +262,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
              managerAuth: overrideAuth
         };
 
-        const res = await fetch(`${API_URL}/api/salao/tabs/${loadedTab.id}/close`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const res = await fetchWithStore(`${API_URL}/api/salao/tabs/${loadedTab.id}/close`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await res.json();
         
         if (data.success) { 
@@ -272,7 +285,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
           managerAuth: overrideAuth
       };
 
-      const res = await fetch(`${API_URL}/api/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetchWithStore(`${API_URL}/api/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
       
       if (data.success) { 
@@ -550,8 +563,8 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
             <h3 className="text-xl font-black text-slate-800 mb-4">💸 Nova Movimentação</h3>
             <form onSubmit={handleMovement} className="space-y-4 text-left">
                <select value={movementForm.type} onChange={e => setMovementForm({...movementForm, type: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-black text-slate-800 focus:outline-none">
-                 <option value="OUT">Retirada (Sangria)</option>
-                 <option value="IN">Entrada (Suprimento)</option>
+                  <option value="OUT">Retirada (Sangria)</option>
+                  <option value="IN">Entrada (Suprimento)</option>
                </select>
                <input type="number" step="0.01" required value={movementForm.amount} onChange={e => setMovementForm({...movementForm, amount: e.target.value})} placeholder="Valor R$" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-black text-slate-800 focus:border-amber-500 focus:outline-none" />
                <input type="text" required value={movementForm.reason} onChange={e => setMovementForm({...movementForm, reason: e.target.value})} placeholder="Motivo (Ex: Pagamento Fornecedor)" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold text-slate-800 focus:border-amber-500 focus:outline-none" />
