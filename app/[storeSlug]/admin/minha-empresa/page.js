@@ -12,8 +12,10 @@ export default function MinhaEmpresaPage() {
 
   const [loading, setLoading] = useState(true);
   const [storeData, setStoreData] = useState(null);
+  const [error, setError] = useState(null);
   const [invoices, setInvoices] = useState([]);
 
+  // Helper local para garantir o envio do x-store-id e Token JWT
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_adminToken') || localStorage.getItem('zenix_employeeToken');
     const storeId = localStorage.getItem('zenix_store_id');
@@ -30,36 +32,20 @@ export default function MinhaEmpresaPage() {
   useEffect(() => {
     const loadCompanyData = async () => {
       try {
+        // Busca os dados REAIS da loja atual no banco de dados
         const resStore = await fetchWithStore(`${API_URL}/api/admin/store-info`);
-        if (resStore.ok) {
-          const data = await resStore.json();
-          setStoreData(data.store);
+        const data = await resStore.json();
+
+        if (resStore.ok && data.success !== false) {
+          // data.store se o backend enviar { store: {...} } ou apenas data se enviar direto
+          setStoreData(data.store || data); 
+          setInvoices(data.invoices || []); // Faturas agora vêm do banco (vazio por enquanto)
         } else {
-          setStoreData({
-            name: 'Carregando...',
-            corporateName: 'Razão Social Padrão LTDA',
-            cnpj: '00.000.000/0001-00',
-            stateRegistration: 'Isento',
-            companyEmail: 'contato@loja.com',
-            companyPhone: '(00) 0000-0000',
-            ownerName: 'Administrador Responsável',
-            ownerCpf: '000.000.000-00',
-            address: 'Endereço Completo do Estabelecimento',
-            plan: 'PRO',
-            status: 'ACTIVE',
-            createdAt: new Date().toISOString()
-          });
+          setError(data.error || 'Não foi possível carregar os dados reais da loja.');
         }
-
-        // Mock de faturas
-        setInvoices([
-          { id: 'INV-2026-09', reference: 'Setembro 2026', dueDate: '2026-09-10', amount: 149.90, status: 'OPEN', link: '#' },
-          { id: 'INV-2026-08', reference: 'Agosto 2026', dueDate: '2026-08-10', amount: 149.90, status: 'PAID', link: '#' },
-          { id: 'INV-2026-07', reference: 'Julho 2026', dueDate: '2026-07-10', amount: 149.90, status: 'PAID', link: '#' },
-        ]);
-
       } catch (error) {
         console.error('Erro ao carregar dados da empresa:', error);
+        setError('Erro de conexão ao buscar dados do banco.');
       } finally {
         setLoading(false);
       }
@@ -72,16 +58,39 @@ export default function MinhaEmpresaPage() {
     alert(`Iniciando download da fatura ${invoiceId}...`);
   };
 
-  if (loading || !storeData) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="animate-pulse text-amber-500 font-black text-xl flex flex-col items-center gap-4">
           <span className="text-4xl">🏢</span>
-          Carregando dados da empresa...
+          Buscando dados oficiais da loja...
         </div>
       </div>
     );
   }
+
+  if (error || !storeData) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-center p-6">
+        <span className="text-6xl mb-4 text-red-500">⚠️</span>
+        <h1 className="text-2xl font-black text-slate-800 mb-2">Ops! Tivemos um problema.</h1>
+        <p className="text-slate-500">{error || 'Dados da loja não encontrados no banco.'}</p>
+      </div>
+    );
+  }
+
+  // Define visualmente o status da assinatura baseada no banco (TRIAL, ACTIVE, OVERDUE, BLOCKED)
+  const getSubscriptionStatus = (status) => {
+    switch(status) {
+      case 'ACTIVE': return { label: 'Assinatura Ativa', color: 'bg-emerald-400', shadow: 'shadow-[0_0_10px_rgba(52,211,153,0.8)]' };
+      case 'TRIAL': return { label: 'Período de Teste', color: 'bg-blue-400', shadow: 'shadow-[0_0_10px_rgba(96,165,250,0.8)]' };
+      case 'OVERDUE': return { label: 'Inadimplente (Atrasado)', color: 'bg-red-500', shadow: 'shadow-[0_0_10px_rgba(239,68,68,0.8)]' };
+      case 'BLOCKED': return { label: 'Acesso Bloqueado', color: 'bg-slate-800', shadow: '' };
+      default: return { label: 'Status Desconhecido', color: 'bg-slate-400', shadow: '' };
+    }
+  };
+
+  const subStatus = getSubscriptionStatus(storeData.subscriptionStatus);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
@@ -98,7 +107,7 @@ export default function MinhaEmpresaPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* COLUNA ESQUERDA: DADOS CADASTRAIS */}
+        {/* COLUNA ESQUERDA: DADOS CADASTRAIS (Ocupa 2 colunas no desktop) */}
         <div className="lg:col-span-2 space-y-6">
           
           {/* Card: Jurídico */}
@@ -119,7 +128,7 @@ export default function MinhaEmpresaPage() {
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CNPJ</p>
-                <p className="text-base font-mono font-bold text-slate-700">{storeData.cnpj || '-'}</p>
+                <p className="text-base font-mono font-bold text-slate-700">{storeData.documentCnpj || '-'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inscrição Estadual</p>
@@ -151,11 +160,11 @@ export default function MinhaEmpresaPage() {
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">E-mail Comercial</p>
-                <p className="text-sm font-bold text-slate-700">{storeData.companyEmail || '-'}</p>
+                <p className="text-sm font-bold text-slate-700">{storeData.email || '-'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Telefone / WhatsApp</p>
-                <p className="text-sm font-bold text-slate-700">{storeData.companyPhone || '-'}</p>
+                <p className="text-sm font-bold text-slate-700">{storeData.phone || '-'}</p>
               </div>
             </div>
           </div>
@@ -175,19 +184,19 @@ export default function MinhaEmpresaPage() {
               Seu Plano Atual
             </h2>
             
-            <div className="flex items-end gap-3 mb-2">
+            <div className="flex items-end gap-3 mb-2 relative z-10">
               <span className="text-4xl font-black">{storeData.plan || 'STANDARD'}</span>
             </div>
             
-            <div className="flex items-center gap-2 mt-4">
-              <span className={`w-3 h-3 rounded-full ${storeData.status === 'ACTIVE' ? 'bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.8)]' : 'bg-red-900'}`}></span>
-              <span className="text-sm font-black uppercase tracking-widest">
-                {storeData.status === 'ACTIVE' ? 'Assinatura Ativa' : 'Assinatura Bloqueada'}
+            <div className="flex items-center gap-2 mt-4 relative z-10">
+              <span className={`w-3 h-3 rounded-full ${subStatus.color} ${subStatus.shadow}`}></span>
+              <span className="text-sm font-black uppercase tracking-widest text-white">
+                {subStatus.label}
               </span>
             </div>
             
-            <p className="text-xs font-bold mt-6 bg-black/10 p-3 rounded-xl">
-              Dúvidas sobre o plano ou deseja fazer um upgrade? Entre em contato com o suporte Zenix.
+            <p className="text-xs font-bold mt-6 bg-black/10 p-3 rounded-xl relative z-10">
+              Valor da Mensalidade: <span className="font-black text-white ml-1">R$ {parseFloat(storeData.monthlyFee || 0).toFixed(2)}</span>
             </p>
           </div>
 
@@ -223,7 +232,7 @@ export default function MinhaEmpresaPage() {
 
                     <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
                       <span className="text-lg font-black text-slate-900">
-                        R$ {invoice.amount.toFixed(2)}
+                        R$ {parseFloat(invoice.amount).toFixed(2)}
                       </span>
                       <button 
                         onClick={() => handleDownloadInvoice(invoice.id)}

@@ -15,11 +15,19 @@ export default function MasterDashboard() {
   const [loading, setLoading] = useState(true);
   const [editingStore, setEditingStore] = useState(null);
 
+  // Estados de Faturas
+  const [viewingInvoicesStore, setViewingInvoicesStore] = useState(null);
+  const [invoices, setInvoices] = useState([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  
+  // Estado para Nova Cobrança
+  const [showNewInvoiceModal, setShowNewInvoiceModal] = useState(false);
+  const [newInvoiceForm, setNewInvoiceForm] = useState({ reference: '', amount: '', dueDate: '', notes: '' });
+
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
 
-  // Verifica se já tem o token master salvo no navegador
   useEffect(() => {
     if (localStorage.getItem('zenix_master_token') === 'authenticated') {
       setIsAuthenticated(true);
@@ -28,7 +36,6 @@ export default function MasterDashboard() {
     }
   }, []);
 
-  // Busca as lojas apenas se estiver autenticado
   useEffect(() => {
     if (isAuthenticated) {
       fetchStores();
@@ -54,7 +61,6 @@ export default function MasterDashboard() {
 
   const fetchStores = async () => {
     try {
-      // Neste mock, como a rota é interna, passamos um token genérico ou o que seu backend exigir
       const res = await fetch(`${API_URL}/api/master/stores`, {
         headers: { 'Authorization': `Bearer zenix_master` }
       });
@@ -91,21 +97,14 @@ export default function MasterDashboard() {
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
-    const payload = {
-      ...editingStore,
-      monthlyFee: parseFloat(editingStore.monthlyFee) || 0
-    };
+    const payload = { ...editingStore, monthlyFee: parseFloat(editingStore.monthlyFee) || 0 };
 
     try {
       const res = await fetch(`${API_URL}/api/master/stores/${editingStore.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer zenix_master`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer zenix_master` },
         body: JSON.stringify(payload)
       });
-      
       const data = await res.json();
       if (data.success) {
         alert('Loja atualizada com sucesso!');
@@ -121,16 +120,11 @@ export default function MasterDashboard() {
 
   const toggleStoreStatus = async (store) => {
     if (!confirm(`Deseja ${store.status === 'ACTIVE' ? 'BLOQUEAR' : 'DESBLOQUEAR'} o acesso ao sistema para a loja ${store.name}?`)) return;
-    
     const newStatus = store.status === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
-    
     try {
       await fetch(`${API_URL}/api/master/stores/${store.id}/status`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer zenix_master`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer zenix_master` },
         body: JSON.stringify({ status: newStatus })
       });
       fetchStores();
@@ -139,16 +133,84 @@ export default function MasterDashboard() {
     }
   };
 
+  // --- GESTÃO DE FATURAS ---
+  const handleOpenInvoices = async (store) => {
+    setViewingInvoicesStore(store);
+    setLoadingInvoices(true);
+    try {
+      // Tenta buscar da API (se existir)
+      const res = await fetch(`${API_URL}/api/master/stores/${store.id}/invoices`, {
+        headers: { 'Authorization': `Bearer zenix_master` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInvoices(data.invoices || []);
+      } else {
+        // Fallback: se a rota não existir ainda, exibe um array vazio
+        setInvoices([]);
+      }
+    } catch (error) {
+      setInvoices([]);
+    } finally {
+      setLoadingInvoices(false);
+    }
+  };
+
+  const handleOpenNewInvoice = () => {
+    setNewInvoiceForm({ 
+      reference: '', 
+      amount: viewingInvoicesStore.monthlyFee || '', 
+      dueDate: '', 
+      notes: '' 
+    });
+    setShowNewInvoiceModal(true);
+  };
+
+  const handleGenerateInvoice = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        storeId: viewingInvoicesStore.id,
+        reference: newInvoiceForm.reference,
+        amount: parseFloat(newInvoiceForm.amount),
+        dueDate: newInvoiceForm.dueDate,
+        notes: newInvoiceForm.notes,
+        status: 'OPEN'
+      };
+
+      const res = await fetch(`${API_URL}/api/master/stores/${viewingInvoicesStore.id}/invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer zenix_master` },
+        body: JSON.stringify(payload)
+      });
+      
+      if (res.ok) {
+        alert('Fatura gerada com sucesso!');
+        setShowNewInvoiceModal(false);
+        handleOpenInvoices(viewingInvoicesStore); // Recarrega a lista
+      } else {
+        // Fallback visual para demonstração caso backend não tenha a rota
+        alert('Modo Demonstração: Fatura gerada visualmente.');
+        setInvoices([...invoices, { id: Date.now().toString(), ...payload }]);
+        setShowNewInvoiceModal(false);
+      }
+    } catch (error) {
+      alert('Erro ao gerar fatura.');
+    }
+  };
+
+  const handlePrintInvoice = (invoice) => {
+    window.print(); // Solução nativa simples. Pode ser substituída por uma janela com o PDF.
+  };
+
+  const handleDownloadInvoice = (invoice) => {
+    alert(`Baixando PDF da fatura: ${invoice.reference}`);
+  };
+
   // --- CÁLCULOS DOS CARDS DE DASHBOARD ---
   const lojasAtivas = stores.filter(s => s.status === 'ACTIVE').length;
-  
-  const totalReceber = stores
-    .filter(s => s.status === 'ACTIVE')
-    .reduce((acc, s) => acc + (parseFloat(s.monthlyFee) || 0), 0);
-    
-  const totalAtrasado = stores
-    .filter(s => s.subscriptionStatus === 'OVERDUE')
-    .reduce((acc, s) => acc + (parseFloat(s.monthlyFee) || 0), 0);
+  const totalReceber = stores.filter(s => s.status === 'ACTIVE').reduce((acc, s) => acc + (parseFloat(s.monthlyFee) || 0), 0);
+  const totalAtrasado = stores.filter(s => s.subscriptionStatus === 'OVERDUE').reduce((acc, s) => acc + (parseFloat(s.monthlyFee) || 0), 0);
 
   const getStatusLabel = (status) => {
     const labels = {
@@ -168,30 +230,17 @@ export default function MasterDashboard() {
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4 font-sans selection:bg-amber-500 selection:text-black">
         <div className="bg-[#121212] border border-white/5 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
-          
           <div className="text-center mb-8">
             <span className="text-4xl mb-3 inline-block animate-pulse">⚡</span>
             <h1 className="text-2xl font-black text-white">Zenix Master</h1>
             <p className="text-slate-500 text-xs mt-1">Gestão Administrativa SaaS</p>
           </div>
-
           <form onSubmit={handleMasterLogin} className="space-y-4">
             <div>
-              <input 
-                type="password" 
-                required 
-                value={masterPassword} 
-                onChange={(e) => setMasterPassword(e.target.value)} 
-                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-4 text-sm text-center text-white focus:outline-none focus:border-amber-500 tracking-widest placeholder:tracking-normal" 
-                placeholder="Senha Master" 
-              />
+              <input type="password" required value={masterPassword} onChange={(e) => setMasterPassword(e.target.value)} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-4 text-sm text-center text-white focus:outline-none focus:border-amber-500 tracking-widest placeholder:tracking-normal" placeholder="Senha Master" />
             </div>
             {loginError && <p className="text-red-500 text-xs text-center font-bold">{loginError}</p>}
-            
-            <button 
-              type="submit" 
-              className="w-full bg-[#8b5cf6] hover:bg-[#7c3aed] text-white font-black py-4 rounded-xl transition-all shadow-lg shadow-purple-500/20 mt-2 cursor-pointer active:scale-95"
-            >
+            <button type="submit" className="w-full bg-[#8b5cf6] hover:bg-[#7c3aed] text-white font-black py-4 rounded-xl transition-all shadow-lg shadow-purple-500/20 mt-2 cursor-pointer active:scale-95">
               Acessar Backoffice
             </button>
           </form>
@@ -219,16 +268,8 @@ export default function MasterDashboard() {
           <p className="text-slate-500 text-sm mt-1">Gestão central de todos os inquilinos (restaurantes).</p>
         </div>
         <div className="flex gap-4">
-          <button 
-            onClick={handleLogout} 
-            className="bg-white/5 hover:bg-white/10 text-slate-400 px-4 py-3 rounded-xl font-bold transition-colors cursor-pointer text-sm"
-          >
-            Sair
-          </button>
-          <button 
-            onClick={() => router.push('/master/stores/new')} 
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-6 py-3 rounded-xl font-black transition-colors shadow-[0_0_15px_rgba(245,158,11,0.3)] cursor-pointer"
-          >
+          <button onClick={handleLogout} className="bg-white/5 hover:bg-white/10 text-slate-400 px-4 py-3 rounded-xl font-bold transition-colors cursor-pointer text-sm">Sair</button>
+          <button onClick={() => router.push('/master/stores/new')} className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-6 py-3 rounded-xl font-black transition-colors shadow-[0_0_15px_rgba(245,158,11,0.3)] cursor-pointer">
             + Cadastrar Loja
           </button>
         </div>
@@ -292,12 +333,18 @@ export default function MasterDashboard() {
                         {store.status === 'ACTIVE' ? 'SISTEMA LIBERADO' : 'SISTEMA BLOQUEADO'}
                       </button>
                     </td>
-                    <td className="px-6 py-5 text-right">
+                    <td className="px-6 py-5 text-right space-x-2">
+                      <button 
+                        onClick={() => handleOpenInvoices(store)} 
+                        className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                      >
+                        Faturas
+                      </button>
                       <button 
                         onClick={() => handleEditClick(store)} 
-                        className="bg-blue-500/10 opacity-0 group-hover:opacity-100 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                        className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer"
                       >
-                        Editar Dados
+                        Editar
                       </button>
                     </td>
                   </tr>
@@ -313,7 +360,149 @@ export default function MasterDashboard() {
         </div>
       </div>
 
-      {/* MODAL DE EDIÇÃO DA LOJA */}
+      {/* MODAL DE LISTAGEM DE FATURAS */}
+      {viewingInvoicesStore && !showNewInvoiceModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#121212] border border-white/10 p-8 rounded-[2rem] w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[90vh] animate-fade-in-up">
+            
+            <div className="flex justify-between items-center mb-6 shrink-0 border-b border-white/10 pb-4">
+              <div>
+                <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                  <span className="text-purple-500">💳</span> Faturas: {viewingInvoicesStore.name}
+                </h2>
+                <p className="text-slate-500 text-xs mt-1">Gerencie boletos e cobranças deste cliente.</p>
+              </div>
+              <button onClick={() => setViewingInvoicesStore(null)} className="w-10 h-10 bg-white/5 hover:bg-red-500/20 hover:text-red-500 text-slate-400 rounded-full flex items-center justify-center font-black text-lg transition-colors cursor-pointer">✕</button>
+            </div>
+
+            <div className="mb-4 shrink-0 flex justify-end">
+               <button onClick={handleOpenNewInvoice} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors shadow-lg cursor-pointer">
+                 + Gerar Nova Cobrança
+               </button>
+            </div>
+
+            <div className="overflow-y-auto pr-2 space-y-8 flex-1 hide-scrollbar">
+              {loadingInvoices ? (
+                <div className="text-center py-10 text-slate-500 animate-pulse">Buscando faturas...</div>
+              ) : (
+                <>
+                  {/* SEÇÃO: ATRASADAS */}
+                  {invoices.filter(i => i.status === 'OPEN' && new Date(i.dueDate) < new Date()).length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-[10px] font-black text-red-500 uppercase tracking-widest border-b border-red-500/20 pb-2">Vencidas / Atrasadas</h3>
+                      {invoices.filter(i => i.status === 'OPEN' && new Date(i.dueDate) < new Date()).map(inv => (
+                        <div key={inv.id} className="bg-red-500/5 border border-red-500/20 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4">
+                          <div>
+                            <p className="font-black text-white">{inv.reference}</p>
+                            <p className="text-xs text-red-400 font-bold mt-1">Vencido em: {new Date(inv.dueDate).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="text-xl font-black text-red-400">R$ {parseFloat(inv.amount).toFixed(2)}</span>
+                            <div className="flex gap-2">
+                              <button onClick={() => handlePrintInvoice(inv)} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-lg transition-colors cursor-pointer" title="Imprimir">🖨️</button>
+                              <button onClick={() => handleDownloadInvoice(inv)} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-lg transition-colors cursor-pointer" title="Baixar PDF">⬇️</button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* SEÇÃO: EM ABERTO / A VENCER */}
+                  {invoices.filter(i => i.status === 'OPEN' && new Date(i.dueDate) >= new Date()).length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest border-b border-amber-500/20 pb-2">A Vencer</h3>
+                      {invoices.filter(i => i.status === 'OPEN' && new Date(i.dueDate) >= new Date()).map(inv => (
+                        <div key={inv.id} className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4">
+                          <div>
+                            <p className="font-black text-white">{inv.reference}</p>
+                            <p className="text-xs text-amber-500 font-bold mt-1">Vence em: {new Date(inv.dueDate).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="text-xl font-black text-amber-400">R$ {parseFloat(inv.amount).toFixed(2)}</span>
+                            <div className="flex gap-2">
+                              <button onClick={() => handlePrintInvoice(inv)} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-lg transition-colors cursor-pointer" title="Imprimir">🖨️</button>
+                              <button onClick={() => handleDownloadInvoice(inv)} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-lg transition-colors cursor-pointer" title="Baixar PDF">⬇️</button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* SEÇÃO: PAGAS */}
+                  {invoices.filter(i => i.status === 'PAID').length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest border-b border-emerald-500/20 pb-2">Pagas</h3>
+                      {invoices.filter(i => i.status === 'PAID').map(inv => (
+                        <div key={inv.id} className="bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4 opacity-70 hover:opacity-100 transition-opacity">
+                          <div>
+                            <p className="font-black text-white">{inv.reference}</p>
+                            <p className="text-xs text-emerald-500 font-bold mt-1">Vencimento: {new Date(inv.dueDate).toLocaleDateString('pt-BR')} (PAGO)</p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="text-xl font-black text-emerald-400">R$ {parseFloat(inv.amount).toFixed(2)}</span>
+                            <div className="flex gap-2">
+                              <button onClick={() => handlePrintInvoice(inv)} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-lg transition-colors cursor-pointer" title="Imprimir Recibo">🖨️</button>
+                              <button onClick={() => handleDownloadInvoice(inv)} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-lg transition-colors cursor-pointer" title="Baixar Recibo">⬇️</button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {invoices.length === 0 && (
+                     <div className="text-center py-10 text-slate-500 font-medium">Nenhuma fatura encontrada para este cliente.</div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE GERAR NOVA COBRANÇA */}
+      {showNewInvoiceModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-[#121212] border border-emerald-500/30 p-8 rounded-[2rem] w-full max-w-md shadow-2xl relative flex flex-col animate-fade-in-up">
+            <h2 className="text-2xl font-black text-white mb-2">Gerar Nova Cobrança</h2>
+            <p className="text-slate-400 text-xs mb-6">Cliente: <span className="text-amber-500 font-bold">{viewingInvoicesStore?.name}</span></p>
+
+            <form onSubmit={handleGenerateInvoice} className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Referência / Título</label>
+                <input type="text" required value={newInvoiceForm.reference} onChange={e => setNewInvoiceForm({...newInvoiceForm, reference: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500" placeholder="Ex: Mensalidade - Outubro/2026" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Valor (R$)</label>
+                  <input type="number" step="0.01" required value={newInvoiceForm.amount} onChange={e => setNewInvoiceForm({...newInvoiceForm, amount: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-3 text-sm text-emerald-400 font-black focus:outline-none focus:border-emerald-500" placeholder="149.90" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Vencimento</label>
+                  <input type="date" required value={newInvoiceForm.dueDate} onChange={e => setNewInvoiceForm({...newInvoiceForm, dueDate: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Anotações (Opcional)</label>
+                <textarea value={newInvoiceForm.notes} onChange={e => setNewInvoiceForm({...newInvoiceForm, notes: e.target.value})} rows="2" className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500 resize-none" placeholder="Observações internas..."></textarea>
+              </div>
+
+              <div className="pt-4 flex gap-4 mt-2 border-t border-white/5">
+                <button type="button" onClick={() => setShowNewInvoiceModal(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 font-bold py-3.5 rounded-xl cursor-pointer transition-colors text-sm">
+                  Cancelar
+                </button>
+                <button type="submit" className="flex-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3.5 rounded-xl shadow-lg cursor-pointer transition-all active:scale-95 text-sm">
+                  Gerar Fatura
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE EDIÇÃO DA LOJA (Contém todos os campos do cadastro) */}
       {editingStore && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#121212] border border-white/10 p-8 rounded-[2rem] w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[90vh] animate-fade-in-up">
