@@ -14,9 +14,8 @@ export default function MinhaEmpresaPage() {
   const [storeData, setStoreData] = useState(null);
   const [invoices, setInvoices] = useState([]);
 
-  // Helper local para garantir o envio do x-store-id e Token JWT
   const fetchWithStore = async (url, options = {}) => {
-    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_adminToken');
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_adminToken') || localStorage.getItem('zenix_employeeToken');
     const storeId = localStorage.getItem('zenix_store_id');
 
     const headers = {
@@ -31,13 +30,11 @@ export default function MinhaEmpresaPage() {
   useEffect(() => {
     const loadCompanyData = async () => {
       try {
-        // 1. Busca os dados reais da loja no backend (adapte a rota conforme seu backend)
         const resStore = await fetchWithStore(`${API_URL}/api/admin/store-info`);
         if (resStore.ok) {
           const data = await resStore.json();
           setStoreData(data.store);
         } else {
-          // Fallback visual para demonstração caso a rota ainda não exista
           setStoreData({
             name: 'Carregando...',
             corporateName: 'Razão Social Padrão LTDA',
@@ -54,8 +51,7 @@ export default function MinhaEmpresaPage() {
           });
         }
 
-        // 2. Busca as faturas (Mock demonstrativo. Substitua pela rota real da sua API de pagamentos/Asaas/Stripe)
-        // const resInvoices = await fetchWithStore(`${API_URL}/api/admin/invoices`);
+        // Mock de faturas
         setInvoices([
           { id: 'INV-2026-09', reference: 'Setembro 2026', dueDate: '2026-09-10', amount: 149.90, status: 'OPEN', link: '#' },
           { id: 'INV-2026-08', reference: 'Agosto 2026', dueDate: '2026-08-10', amount: 149.90, status: 'PAID', link: '#' },
@@ -73,13 +69,12 @@ export default function MinhaEmpresaPage() {
   }, []);
 
   const handleDownloadInvoice = (invoiceId) => {
-    // Lógica para baixar o PDF da fatura via backend
     alert(`Iniciando download da fatura ${invoiceId}...`);
   };
 
   if (loading || !storeData) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a] flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="animate-pulse text-amber-500 font-black text-xl flex flex-col items-center gap-4">
           <span className="text-4xl">🏢</span>
           Carregando dados da empresa...
@@ -89,25 +84,25 @@ export default function MinhaEmpresaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-white font-sans p-4 md:p-8">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
       
       {/* CABEÇALHO */}
       <div className="mb-8">
         <h1 className="text-3xl font-black flex items-center gap-3">
           <span>🏢</span> Dados da Empresa e Assinatura
         </h1>
-        <p className="text-slate-500 dark:text-zinc-400 mt-1">
+        <p className="text-slate-500 mt-1">
           Gerencie as informações fiscais, contatos e o plano da sua loja.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* COLUNA ESQUERDA: DADOS CADASTRAIS (Ocupa 2 colunas no desktop) */}
+        {/* COLUNA ESQUERDA: DADOS CADASTRAIS */}
         <div className="lg:col-span-2 space-y-6">
           
           {/* Card: Jurídico */}
-          <div className="bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-sm relative overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-amber-500"></div>
             <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-6">
               <span>🏛️</span> Informações Fiscais
@@ -116,31 +111,31 @@ export default function MinhaEmpresaPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome Fantasia</p>
-                <p className="text-lg font-black text-slate-900 dark:text-white">{storeData.name}</p>
+                <p className="text-lg font-black text-slate-900">{storeData.name}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Razão Social</p>
-                <p className="text-base font-bold text-slate-700 dark:text-zinc-300">{storeData.corporateName}</p>
+                <p className="text-base font-bold text-slate-700">{storeData.corporateName || '-'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CNPJ</p>
-                <p className="text-base font-mono font-bold text-slate-700 dark:text-zinc-300">{storeData.cnpj}</p>
+                <p className="text-base font-mono font-bold text-slate-700">{storeData.cnpj || '-'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inscrição Estadual</p>
-                <p className="text-base font-mono font-bold text-slate-700 dark:text-zinc-300">{storeData.stateRegistration || 'Não informada'}</p>
+                <p className="text-base font-mono font-bold text-slate-700">{storeData.stateRegistration || 'Não informada'}</p>
               </div>
               <div className="md:col-span-2">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Endereço Completo</p>
-                <p className="text-sm font-bold text-slate-700 dark:text-zinc-300 mt-1 bg-slate-50 dark:bg-black/30 p-3 rounded-xl border border-slate-100 dark:border-white/5">
-                  {storeData.address}
+                <p className="text-sm font-bold text-slate-700 mt-1 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  {storeData.address || '-'}
                 </p>
               </div>
             </div>
           </div>
 
           {/* Card: Responsável e Contatos */}
-          <div className="bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
             <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-6">
               <span>👤</span> Responsável Legal & Contato
             </h2>
@@ -148,19 +143,19 @@ export default function MinhaEmpresaPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Sócio/Responsável</p>
-                <p className="text-base font-bold text-slate-900 dark:text-white">{storeData.ownerName}</p>
+                <p className="text-base font-bold text-slate-900">{storeData.ownerName || '-'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CPF do Responsável</p>
-                <p className="text-base font-mono font-bold text-slate-700 dark:text-zinc-300">{storeData.ownerCpf}</p>
+                <p className="text-base font-mono font-bold text-slate-700">{storeData.ownerCpf || '-'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">E-mail Comercial</p>
-                <p className="text-sm font-bold text-slate-700 dark:text-zinc-300">{storeData.companyEmail}</p>
+                <p className="text-sm font-bold text-slate-700">{storeData.companyEmail || '-'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Telefone / WhatsApp</p>
-                <p className="text-sm font-bold text-slate-700 dark:text-zinc-300">{storeData.companyPhone}</p>
+                <p className="text-sm font-bold text-slate-700">{storeData.companyPhone || '-'}</p>
               </div>
             </div>
           </div>
@@ -185,7 +180,7 @@ export default function MinhaEmpresaPage() {
             </div>
             
             <div className="flex items-center gap-2 mt-4">
-              <span className={`w-3 h-3 rounded-full ${storeData.status === 'ACTIVE' ? 'bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.8)]' : 'bg-red-400'}`}></span>
+              <span className={`w-3 h-3 rounded-full ${storeData.status === 'ACTIVE' ? 'bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.8)]' : 'bg-red-900'}`}></span>
               <span className="text-sm font-black uppercase tracking-widest">
                 {storeData.status === 'ACTIVE' ? 'Assinatura Ativa' : 'Assinatura Bloqueada'}
               </span>
@@ -197,7 +192,7 @@ export default function MinhaEmpresaPage() {
           </div>
 
           {/* Card: Histórico de Faturas */}
-          <div className="bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
             <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-6">
               <span>💳</span> Mensalidades e Faturas
             </h2>
@@ -205,20 +200,20 @@ export default function MinhaEmpresaPage() {
             {invoices.length === 0 ? (
               <div className="text-center py-8 opacity-50">
                 <span className="text-4xl mb-2 block">📄</span>
-                <p className="text-sm font-bold">Nenhuma fatura gerada ainda.</p>
+                <p className="text-sm font-bold text-slate-500">Nenhuma fatura gerada ainda.</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {invoices.map((invoice) => (
-                  <div key={invoice.id} className="bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/5 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-colors hover:border-amber-500/50">
+                  <div key={invoice.id} className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-colors hover:border-amber-500/50">
                     
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-black text-slate-800 dark:text-white">{invoice.reference}</span>
+                        <span className="text-xs font-black text-slate-800">{invoice.reference}</span>
                         {invoice.status === 'PAID' ? (
-                          <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md">Pago</span>
+                          <span className="bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md">Pago</span>
                         ) : (
-                          <span className="bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-500 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md">Em Aberto</span>
+                          <span className="bg-amber-100 text-amber-700 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md">Em Aberto</span>
                         )}
                       </div>
                       <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
@@ -227,12 +222,12 @@ export default function MinhaEmpresaPage() {
                     </div>
 
                     <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-                      <span className="text-lg font-black text-slate-900 dark:text-white">
+                      <span className="text-lg font-black text-slate-900">
                         R$ {invoice.amount.toFixed(2)}
                       </span>
                       <button 
                         onClick={() => handleDownloadInvoice(invoice.id)}
-                        className={`w-10 h-10 flex items-center justify-center rounded-xl cursor-pointer transition-colors shadow-sm ${invoice.status === 'PAID' ? 'bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-700 dark:text-white' : 'bg-amber-500 hover:bg-amber-400 text-slate-950'}`}
+                        className={`w-10 h-10 flex items-center justify-center rounded-xl cursor-pointer transition-colors shadow-sm ${invoice.status === 'PAID' ? 'bg-slate-200 hover:bg-slate-300 text-slate-700' : 'bg-amber-500 hover:bg-amber-400 text-slate-950'}`}
                         title="Baixar Fatura"
                       >
                         ⬇️
