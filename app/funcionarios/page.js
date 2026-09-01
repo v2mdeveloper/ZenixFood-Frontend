@@ -186,9 +186,10 @@ export default function FuncionariosPortal() {
   const [couponForm, setCouponForm] = useState({ code: '', type: 'FIXED', value: '', minOrderValue: '0', maxUses: '0' });
   const [nfcesEmitidas, setNfcesEmitidas] = useState({}); 
 
-  // 🛡️ Helper para injetar o x-store-id e o Token JWT automaticamente
+
+//Helper local atualizado com interceptador de Inadimplência
   const fetchWithStore = async (url, options = {}) => {
-    const token = localStorage.getItem('zenix_employeeToken');
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = localStorage.getItem('zenix_store_id');
 
     const headers = {
@@ -197,7 +198,16 @@ export default function FuncionariosPortal() {
       ...options.headers,
     };
 
-    return fetch(url, { ...options, headers });
+    const response = await fetch(url, { ...options, headers });
+
+    // SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
+    if (response.status === 402) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+      }
+    }
+
+    return response;
   };
 
   const logEmployeeAction = async (actionDesc) => {

@@ -98,7 +98,16 @@ function HomeContent() {
       ...options.headers,
     };
 
-    return fetch(url, { ...options, headers });
+    const response = await fetch(url, { ...options, headers });
+
+    // E O BACKEND BARRAR POR FALTA DE PAGAMENTO:
+    if (response.status === 402) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+      }
+    }
+
+    return response;
   };
 
   // 💳 Inicializa o Mercado Pago dinamicamente com a chave da loja

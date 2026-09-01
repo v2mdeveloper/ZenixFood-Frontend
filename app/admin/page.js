@@ -200,8 +200,8 @@ export default function AdminDashboard() {
     : 'https://zenixfood-backend.onrender.com';
 
   // 🛡️ Helper para injetar o x-store-id e o Token JWT automaticamente em todas as requisições
-  const fetchWithStore = async (url, options = {}) => {
-    const token = localStorage.getItem('zenix_token');
+const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = localStorage.getItem('zenix_store_id');
 
     const headers = {
@@ -210,9 +210,17 @@ export default function AdminDashboard() {
       ...options.headers,
     };
 
-    return fetch(url, { ...options, headers });
-  };
+    const response = await fetch(url, { ...options, headers });
 
+    // SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
+    if (response.status === 402) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+      }
+    }
+
+    return response;
+  };
   useEffect(() => {
     const savedToken = localStorage.getItem('zenix_token');
     const savedEmployee = localStorage.getItem('zenix_loggedEmployee');

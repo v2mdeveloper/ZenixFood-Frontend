@@ -30,9 +30,9 @@ export default function SalaoTab({ employeeUser }) {
   const [targetTabNumber, setTargetTabNumber] = useState('');
   const [managerAuth, setManagerAuth] = useState({ email: '', password: '' });
 
-  // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
-  const fetchWithStore = async (url, options = {}) => {
-    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+  // Helper local para garantir o envio do x-store-id e Token JWT
+ const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = localStorage.getItem('zenix_store_id');
 
     const headers = {
@@ -41,7 +41,16 @@ export default function SalaoTab({ employeeUser }) {
       ...options.headers,
     };
 
-    return fetch(url, { ...options, headers });
+    const response = await fetch(url, { ...options, headers });
+
+    //SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
+    if (response.status === 402) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+      }
+    }
+
+    return response;
   };
 
   useEffect(() => {
