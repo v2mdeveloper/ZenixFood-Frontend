@@ -20,7 +20,7 @@ import CostelaModal from '../components/modals/CostelaModal';
 import UpsellModal from '../components/modals/UpsellModal';
 import ProductDetailsModal from '../components/modals/ProductDetailsModal';
 
-function HomeContent() {
+function HomeContent({ storeSlug }) {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [selectedProductModal, setSelectedProductModal] = useState(null);
 
@@ -87,7 +87,7 @@ function HomeContent() {
   const API_URL = 'https://zenixfood-backend.onrender.com';
   const searchParams = useSearchParams();
 
-  //Helper local para multi-tenant (envio do x-store-id e Token JWT)
+  // Helper local atualizado com rota dinâmica de bloqueio
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = localStorage.getItem('zenix_store_id');
@@ -100,17 +100,15 @@ function HomeContent() {
 
     const response = await fetch(url, { ...options, headers });
 
-    // E O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
-        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+        window.location.href = `/${storeSlug}/bloqueado`; // Redireciona com o slug atual
       }
     }
 
     return response;
   };
 
-  // 💳 Inicializa o Mercado Pago dinamicamente com a chave da loja
   useEffect(() => {
     if (storeSettings?.mercadoPagoPublicKey) {
       initMercadoPago(storeSettings.mercadoPagoPublicKey);
@@ -851,7 +849,7 @@ export default function StorePage() {
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-amber-500">Iniciando...</div>}>
-      <HomeContent />
+      <HomeContent storeSlug={storeSlug} />
     </Suspense>
   );
 }

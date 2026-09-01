@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation'; // 👈 Importando o useParams
 
 import AdminLogin from './components/AdminLogin';
 import ExpeditionTab from './components/tabs/ExpeditionTab';
@@ -119,6 +120,9 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
 }
 
 export default function AdminDashboard() {
+  const params = useParams();
+  const storeSlug = params?.storeSlug || ''; // 👈 Extraindo storeSlug
+
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [loggedEmployee, setLoggedEmployee] = useState(null);
   const [adminLoginForm, setAdminLoginForm] = useState({ storeId: '', email: '', password: '' });
@@ -199,8 +203,7 @@ export default function AdminDashboard() {
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
 
-  // 🛡️ Helper para injetar o x-store-id e o Token JWT automaticamente em todas as requisições
-const fetchWithStore = async (url, options = {}) => {
+  const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = localStorage.getItem('zenix_store_id');
 
@@ -212,15 +215,15 @@ const fetchWithStore = async (url, options = {}) => {
 
     const response = await fetch(url, { ...options, headers });
 
-    // SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
-        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+        window.location.href = `/${storeSlug}/bloqueado`; // 👈 Atualizado
       }
     }
 
     return response;
   };
+
   useEffect(() => {
     const savedToken = localStorage.getItem('zenix_token');
     const savedEmployee = localStorage.getItem('zenix_loggedEmployee');
@@ -343,7 +346,7 @@ const fetchWithStore = async (url, options = {}) => {
     localStorage.removeItem('zenix_loggedEmployee');
     setIsAdminAuthenticated(false);
     setLoggedEmployee(null);
-    window.location.href = "/admin"; 
+    window.location.href = `/${storeSlug}/admin`; // 👈 Atualizado
   };
 
   const fetchVisits = async () => {
@@ -852,6 +855,10 @@ const fetchWithStore = async (url, options = {}) => {
 
   const getMetodoPagamentoLabel = (method) => ({'PIX_ONLINE':'Pix (Pago no Site) 📱','CREDIT_CARD_ONLINE':'Cartão de Crédito (Pago no Site) 💳','CREDIT_CARD_DELIVERY':'Cartão na Entrega (Maquininha) 💳','CASH':'Dinheiro na Entrega 💵'}[method] || method);
 
+  // 👈 Definição da regra de permissão para Minha Empresa
+  const isAdmin = loggedEmployee?.role === 'ADMIN' || loggedEmployee?.role === 'OWNER' || loggedEmployee?.role === 'Gerente Geral' || loggedEmployee?.id === 'ADMIN_MASTER';
+  const canViewCompany = isAdmin || loggedEmployee?.canViewCompanyData === true;
+
   const menuItems = [
     { id: 'pdv', label: 'PDV / Frente de Caixa', icon: '💻' },
     { id: 'salao', label: 'Salão & Mesas', icon: '🪑' },
@@ -877,7 +884,7 @@ const fetchWithStore = async (url, options = {}) => {
   }
 
   if (loggedEmployee?.role?.toLowerCase().includes('entregador')) {
-    if (typeof window !== 'undefined') window.location.href = '/entregador';
+    if (typeof window !== 'undefined') window.location.href = `/${storeSlug}/entregadores`; // 👈 Atualizado slug no redirecionamento
     return (
       <div className="flex h-screen items-center justify-center bg-slate-900 text-amber-500 font-bold">
           Redirecionando para a Rota de Entregas...
@@ -923,16 +930,16 @@ const fetchWithStore = async (url, options = {}) => {
                   
                   {isKdsMenuOpen && isSidebarOpen && (
                     <div className="ml-4 mt-2 space-y-1 pl-4 border-l border-slate-200 animate-fade-in-up">
-                      <a href="/kds-cozinha" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
+                      <a href={`/${storeSlug}/kds-cozinha`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
                         <span className="text-sm">👨‍🍳</span> Cozinha Principal
                       </a>
-                      <a href="/kds-delivery" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
+                      <a href={`/${storeSlug}/kds-delivery`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
                         <span className="text-sm">🛵</span> Expedição Delivery
                       </a>
-                      <a href="/kds-bebidas" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
+                      <a href={`/${storeSlug}/kds-bebidas`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
                         <span className="text-sm">🍹</span> Bar & Bebidas
                       </a>
-                      <a href="/kds-cliente" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
+                      <a href={`/${storeSlug}/kds-cliente`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
                         <span className="text-sm">📺</span> Painel de Senhas (TV)
                       </a>
                     </div>
@@ -957,6 +964,14 @@ const fetchWithStore = async (url, options = {}) => {
               </button>
             );
           })}
+
+          {/* 👈 Novo Botão Minha Empresa condicionado à permissão */}
+          {canViewCompany && (
+            <a href={`/${storeSlug}/admin/minha-empresa`} className="w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer text-slate-500 hover:bg-slate-50 hover:text-slate-900 mt-4 border-t border-slate-100 pt-6">
+              <span className="text-xl shrink-0 flex items-center justify-center w-8">🏢</span>
+              {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm text-left">Minha Empresa</span>}
+            </a>
+          )}
         </nav>
 
         <div className="p-4 border-t border-slate-100">

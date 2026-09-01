@@ -21,7 +21,7 @@ export default function RhTab() {
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState(null);
   const [employeeForm, setEmployeeForm] = useState({
-    name: '', cpf: '', age: '', address: '', email: '', phone: '', password: '', profileId: '', isActive: true, receivesTips: false, creditLimit: '', discountPercent: ''
+    name: '', cpf: '', age: '', address: '', email: '', phone: '', password: '', profileId: '', isActive: true, receivesTips: false, creditLimit: '', discountPercent: '', canViewCompanyData: false
   });
 
   const [logs, setLogs] = useState([]);
@@ -161,7 +161,7 @@ export default function RhTab() {
       if (data.success) { 
         setShowEmployeeModal(false); 
         setEditingEmployeeId(null); 
-        setEmployeeForm({ name: '', cpf: '', age: '', address: '', email: '', phone: '', password: '', profileId: '', isActive: true, receivesTips: false, creditLimit: '', discountPercent: '' }); 
+        setEmployeeForm({ name: '', cpf: '', age: '', address: '', email: '', phone: '', password: '', profileId: '', isActive: true, receivesTips: false, creditLimit: '', discountPercent: '', canViewCompanyData: false }); 
         fetchData(); 
       }
       else alert(data.error || 'Erro ao salvar funcionário');
@@ -173,7 +173,8 @@ export default function RhTab() {
     setEmployeeForm({ 
       name: emp.name, cpf: emp.cpf, age: emp.age, address: emp.address, email: emp.email, phone: emp.phone, password: '', 
       profileId: emp.profileId, isActive: emp.isActive, receivesTips: emp.receivesTips,
-      creditLimit: emp.creditLimit || '', discountPercent: emp.discountPercent || '' 
+      creditLimit: emp.creditLimit || '', discountPercent: emp.discountPercent || '',
+      canViewCompanyData: emp.canViewCompanyData || false
     });
     setShowEmployeeModal(true);
   };
@@ -269,8 +270,8 @@ export default function RhTab() {
       <div className="flex flex-wrap gap-4 border-b border-slate-200 pb-4 mb-6">
         <button onClick={() => setRhSubTab('equipe')} className={`font-bold pb-2 transition-all cursor-pointer ${rhSubTab === 'equipe' ? 'text-amber-600 border-b-2 border-amber-500' : 'text-slate-500 hover:text-amber-500'}`}>👔 Equipe e Permissões</button>
         <button onClick={() => setRhSubTab('contas')} className={`font-bold pb-2 transition-all cursor-pointer flex items-center gap-2 ${rhSubTab === 'contas' ? 'text-amber-600 border-b-2 border-amber-500' : 'text-slate-500 hover:text-amber-500'}`}>
-           💰 Contas e Fiado 
-           {employeeAccounts.some(e => e.hasOverdue) && <span className="w-2 h-2 rounded-full bg-red-500"></span>}
+            💰 Contas e Fiado 
+            {employeeAccounts.some(e => e.hasOverdue) && <span className="w-2 h-2 rounded-full bg-red-500"></span>}
         </button>
       </div>
 
@@ -304,7 +305,7 @@ export default function RhTab() {
             </div>
             <div className="flex gap-3">
               <button onClick={fetchLogs} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors cursor-pointer">📋 Ver Logs de Acesso</button>
-              <button onClick={() => { setEditingEmployeeId(null); setEmployeeForm({ name: '', cpf: '', age: '', address: '', email: '', phone: '', password: '', profileId: '', isActive: true, receivesTips: false, creditLimit: '', discountPercent: '' }); setShowEmployeeModal(true); }} className="bg-amber-500 hover:bg-amber-600 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm flex items-center gap-2 cursor-pointer">➕ Novo Funcionário</button>
+              <button onClick={() => { setEditingEmployeeId(null); setEmployeeForm({ name: '', cpf: '', age: '', address: '', email: '', phone: '', password: '', profileId: '', isActive: true, receivesTips: false, creditLimit: '', discountPercent: '', canViewCompanyData: false }); setShowEmployeeModal(true); }} className="bg-amber-500 hover:bg-amber-600 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm flex items-center gap-2 cursor-pointer">➕ Novo Funcionário</button>
             </div>
           </div>
 
@@ -499,6 +500,23 @@ export default function RhTab() {
                  )}
               </div>
 
+              {/* BLOCO NOVA PERMISSÃO: VER EMPRESA */}
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl flex items-center justify-between mt-2">
+                <div>
+                  <p className="text-sm font-black text-slate-900">Dados da Empresa e Faturas</p>
+                  <p className="text-[10px] text-slate-500 font-bold mt-0.5">Permite visualizar o CNPJ, plano contratado e histórico de mensalidades da loja.</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer"
+                    checked={employeeForm.canViewCompanyData}
+                    onChange={(e) => setEmployeeForm({ ...employeeForm, canViewCompanyData: e.target.checked })}
+                  />
+                  <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+              </div>
+
               <button type="submit" className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-xl shadow-lg transition-all mt-6 cursor-pointer">Salvar Funcionário</button>
             </form>
           </div>
@@ -528,7 +546,7 @@ export default function RhTab() {
                </div>
                <div className="flex items-end">
                  <button onClick={exportExtratoToExcel} className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-5 py-2 rounded-lg shadow-sm transition-all text-xs cursor-pointer flex items-center gap-2">
-                   📥 Exportar Excel
+                    📥 Exportar Excel
                  </button>
                </div>
             </div>

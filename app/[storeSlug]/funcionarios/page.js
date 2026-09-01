@@ -118,6 +118,9 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
 }
 
 function FuncionariosPortal() {
+  const params = useParams();
+  const storeSlug = params.storeSlug || '';
+
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
@@ -203,7 +206,7 @@ function FuncionariosPortal() {
     // SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
-        window.location.href = '/bloqueado'; 
+        window.location.href = `/${storeSlug}/bloqueado`; 
       }
     }
 
@@ -776,7 +779,7 @@ const handleEditCategory = async (e) => {
              headers: { 'Content-Type': 'application/json' }, 
              body: JSON.stringify({ pedido: pedidoAtual, dadosNota: dataBackend.fiscalData, printerName: settingsForm.printerName }) 
           });
-         
+          
         if (resImpressora.ok) alert("NFC-e emitida na SEFAZ e impressa NATIVAMENTE!"); else alert("NFC-e Emitida, mas falha ao imprimir local.");
       } else { alert(`🚫 NF-e Recusada:\n${dataBackend.error}`); }
     } catch (error) { alert('Erro de comunicação. Verifique se o Servidor Local está rodando.'); } finally { setLoadingNfceId(null); }
@@ -859,6 +862,8 @@ const handleEditCategory = async (e) => {
      );
   }
 
+  const canViewCompany = employeeUser?.canViewCompanyData === true; // 👈 Regra de permissão
+
   // ==========================================
   // DASHBOARD RESTRITO DO FUNCIONÁRIO
   // ==========================================
@@ -903,16 +908,16 @@ const handleEditCategory = async (e) => {
                   
                   {isKdsMenuOpen && isSidebarOpen && (
                     <div className="ml-4 mt-2 space-y-1 pl-4 border-l border-slate-200 animate-fade-in-up">
-                      <a href="/kds-cozinha" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
+                      <a href={`/${storeSlug}/kds-cozinha`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-amber-500 hover:bg-white/5 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
                         <span className="text-sm">👨‍🍳</span> Cozinha Principal
                       </a>
-                      <a href="/kds-delivery" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
+                      <a href={`/${storeSlug}/kds-delivery`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-amber-500 hover:bg-white/5 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
                         <span className="text-sm">🛵</span> Expedição Delivery
                       </a>
-                      <a href="/kds-bebidas" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
+                      <a href={`/${storeSlug}/kds-bebidas`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-amber-500 hover:bg-white/5 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
                         <span className="text-sm">🍹</span> Bar & Bebidas
                       </a>
-                      <a href="/kds-cliente" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
+                      <a href={`/${storeSlug}/kds-cliente`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-amber-500 hover:bg-white/5 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
                         <span className="text-sm">📺</span> Painel de Senhas (TV)
                       </a>
                     </div>
@@ -928,6 +933,15 @@ const handleEditCategory = async (e) => {
               </button>
             );
           })}
+
+          {/* 👈 Botão Minha Empresa condicionado à permissão */}
+          {canViewCompany && (
+            <a href={`/${storeSlug}/admin/minha-empresa`} className="w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer text-slate-400 hover:bg-white/5 hover:text-white mt-4 border-t border-white/5 pt-6">
+              <span className="text-xl shrink-0 flex items-center justify-center w-8">🏢</span>
+              {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm text-left">Minha Empresa</span>}
+            </a>
+          )}
+
         </nav>
         <div className="p-4 border-t border-white/5">
           <button onClick={handleLogout} className={`w-full flex items-center gap-4 px-3 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all cursor-pointer ${!isSidebarOpen && 'justify-center'}`} title={!isSidebarOpen ? "Desconectar" : ""}>
