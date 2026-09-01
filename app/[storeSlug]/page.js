@@ -3,22 +3,22 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
-import Header from './components/Header';
-import Footer from './components/Footer';
-import FloatingCart from './components/FloatingCart';
+import Header from '../components/Header';
+import Footer from '../components/Footer';
+import FloatingCart from '../components/FloatingCart';
 
-import MenuView from './components/views/MenuView';
-import AuthView from './components/views/AuthView';
-import CheckoutView from './components/views/CheckoutView';
-import OrdersView from './components/views/OrdersView';
-import ProfileView from './components/views/ProfileView';
-import LiveCamView from './components/views/LiveCamView';
+import MenuView from '../components/views/MenuView';
+import AuthView from '../components/views/AuthView';
+import CheckoutView from '../components/views/CheckoutView';
+import OrdersView from '../components/views/OrdersView';
+import ProfileView from '../components/views/ProfileView';
+import LiveCamView from '../components/views/LiveCamView';
 
-import CarrosselAvaliacoes from './components/CarrosselAvaliacoes';
-import ReviewModal from './components/modals/ReviewModal';
-import CostelaModal from './components/modals/CostelaModal';
-import UpsellModal from './components/modals/UpsellModal';
-import ProductDetailsModal from './components/modals/ProductDetailsModal';
+import CarrosselAvaliacoes from '../components/CarrosselAvaliacoes';
+import ReviewModal from '../components/modals/ReviewModal';
+import CostelaModal from '../components/modals/CostelaModal';
+import UpsellModal from '../components/modals/UpsellModal';
+import ProductDetailsModal from '../components/modals/ProductDetailsModal';
 
 function HomeContent() {
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -87,7 +87,7 @@ function HomeContent() {
   const API_URL = 'https://zenixfood-backend.onrender.com';
   const searchParams = useSearchParams();
 
-  // 🛡️ Helper local para multi-tenant (envio do x-store-id e Token JWT)
+  //Helper local para multi-tenant (envio do x-store-id e Token JWT)
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = localStorage.getItem('zenix_store_id');
@@ -808,7 +808,47 @@ function HomeContent() {
   );
 }
 
-export default function Home() {
+import { useParams } from 'next/navigation';
+
+export default function StorePage() {
+  const params = useParams();
+  const storeSlug = params.storeSlug; 
+  
+  const [storeStatus, setStoreStatus] = useState('LOADING'); // LOADING, FOUND, NOT_FOUND
+
+  useEffect(() => {
+    if (!storeSlug) return;
+
+    const identifyStore = async () => {
+      try {
+        const res = await fetch(`https://zenixfood-backend.onrender.com/api/stores/slug/${storeSlug}`);
+        const data = await res.json();
+
+        if (data.success) {
+          // Salva o ID da loja para que o `fetchWithStore` consiga usar nas requisições
+          localStorage.setItem('zenix_store_id', data.store.id);
+          setStoreStatus('FOUND');
+        } else {
+          setStoreStatus('NOT_FOUND');
+        }
+      } catch (error) {
+        setStoreStatus('NOT_FOUND');
+      }
+    };
+
+    identifyStore();
+  }, [storeSlug]);
+
+  if (storeStatus === 'LOADING') return <div className="min-h-screen bg-black flex items-center justify-center text-amber-500 font-black text-xl animate-pulse">Carregando loja...</div>;
+  
+  if (storeStatus === 'NOT_FOUND') return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6">
+        <span className="text-6xl mb-4">🔍</span>
+        <h1 className="text-3xl font-black text-white mb-2">Loja não encontrada</h1>
+        <p className="text-slate-400">Verifique se o endereço da URL foi digitado corretamente.</p>
+      </div>
+  );
+
   return (
     <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-amber-500">Iniciando...</div>}>
       <HomeContent />
