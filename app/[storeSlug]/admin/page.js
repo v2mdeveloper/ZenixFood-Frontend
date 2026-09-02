@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 
+// Importação dos Componentes
 import AdminLogin from './components/AdminLogin';
 import ExpeditionTab from './components/tabs/ExpeditionTab';
 import OrderHistoryTab from './components/tabs/OrderHistoryTab';
@@ -21,7 +22,8 @@ import SalaoTab from './components/tabs/SalaoTab';
 import MinhaEmpresaTab from './components/tabs/MinhaEmpresaTab';
 import OrderDetailsModal from './components/modals/OrderDetailsModal';
 
-function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
+// COMPONENTE: ABA DE IMPRESSORAS (Embutido de forma segura)
+const ImpressorasTab = ({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) => {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
   const [groupForm, setGroupForm] = useState({ name: '', printerId: '', regraFiscalId: '' });
 
@@ -36,90 +38,87 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
 
   const handleAddPrinter = async (e) => {
     e.preventDefault();
-    if (!printerForm.name || !printerForm.address) return alert("Preencha o Nome e o IP/Compartilhamento.");
+    if (!printerForm.name || !printerForm.address) return alert("Preencha o Nome e o IP.");
     try {
       const res = await fetchWithStore(`${API_URL}/api/printers`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(printerForm) });
       if ((await res.json()).success) { setPrinterForm({ name: '', type: 'USB', address: '' }); fetchPrintersAndGroups(); }
-    } catch (e) { alert("Erro ao salvar impressora."); }
+    } catch (e) { alert("Erro ao salvar."); }
   };
 
   const handleDeletePrinter = async (id) => {
-    if(!confirm("Excluir impressora? Grupos vinculados ficarão sem destino.")) return;
-    try { await fetchWithStore(`${API_URL}/api/printers/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) { alert("Erro"); }
+    if(!confirm("Excluir impressora?")) return;
+    try { await fetchWithStore(`${API_URL}/api/printers/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) {}
   };
 
   const handleAddGroup = async (e) => {
     e.preventDefault();
-    if (!groupForm.name) return alert("Dê um nome ao grupo (ex: Bebidas Frias).");
+    if (!groupForm.name) return alert("Dê um nome ao grupo.");
     try {
       const res = await fetchWithStore(`${API_URL}/api/product-groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: groupForm.name, printerId: groupForm.printerId || null, regraFiscalId: groupForm.regraFiscalId || null }) });
       if ((await res.json()).success) { setGroupForm({ name: '', printerId: '', regraFiscalId: '' }); fetchPrintersAndGroups(); }
-    } catch (e) { alert("Erro ao criar grupo."); }
+    } catch (e) { alert("Erro ao criar."); }
   };
 
   const handleDeleteGroup = async (id) => {
-    if(!confirm("Excluir grupo? Produtos associados a ele ficarão sem grupo.")) return;
-    try { await fetchWithStore(`${API_URL}/api/product-groups/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) { alert("Erro"); }
+    if(!confirm("Excluir grupo?")) return;
+    try { await fetchWithStore(`${API_URL}/api/product-groups/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) {}
   };
 
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
-        <h3 className="text-xl font-black text-slate-800 mb-2 flex items-center gap-2">🖨️ Cadastro de Impressoras</h3>
-        <p className="text-sm text-slate-500 mb-6">Cadastre as impressoras físicas da sua loja (Cozinha, Bar, Expedição).</p>
+        <h3 className="text-xl font-black text-slate-800 mb-2">🖨️ Cadastro de Impressoras</h3>
+        <p className="text-sm text-slate-500 mb-6">Cadastre as impressoras físicas da sua loja.</p>
         <form onSubmit={handleAddPrinter} className="flex flex-col md:flex-row gap-4 mb-8 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-          <input type="text" name="printerName" placeholder="Nome (Ex: Grelha / Bar)" value={printerForm.name} onChange={e => setPrinterForm({...printerForm, name: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 font-bold text-slate-700" />
+          <input type="text" name="printerName" placeholder="Nome" value={printerForm.name} onChange={e => setPrinterForm({...printerForm, name: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 font-bold text-slate-700" />
           <select name="printerType" value={printerForm.type} onChange={e => setPrinterForm({...printerForm, type: e.target.value})} className="border border-slate-300 p-3 rounded-xl focus:outline-amber-500 text-slate-700 font-bold">
             <option value="USB">USB (Compartilhada)</option>
             <option value="IP">Rede (IP Local)</option>
           </select>
           <input type="text" name="printerAddress" placeholder={printerForm.type === 'IP' ? "Ex: 192.168.0.100" : "Ex: IMPCOZINHA"} value={printerForm.address} onChange={e => setPrinterForm({...printerForm, address: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 font-bold text-slate-700" />
-          <button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md">Salvar</button>
+          <button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-bold">Salvar</button>
         </form>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {printers.map(p => (
             <div key={p.id} className="flex justify-between items-center bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
               <div><p className="font-black text-slate-800 text-lg">{p.name}</p><p className="text-slate-500 text-sm font-medium">{p.type === 'IP' ? '🌐 IP:' : '🔌 USB:'} {p.address}</p></div>
-              <button onClick={() => handleDeletePrinter(p.id)} className="text-red-500 hover:text-red-700 font-bold bg-red-50 px-3 py-2 rounded-xl transition-all">Excluir</button>
+              <button onClick={() => handleDeletePrinter(p.id)} className="text-red-500 font-bold bg-red-50 px-3 py-2 rounded-xl">Excluir</button>
             </div>
           ))}
-          {printers.length === 0 && <p className="text-slate-400 italic">Nenhuma impressora cadastrada.</p>}
         </div>
       </div>
 
       <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
-        <h3 className="text-xl font-black text-slate-800 mb-2 flex items-center gap-2">⚙️ Grupos de Produção (Praças)</h3>
-        <p className="text-sm text-slate-500 mb-6">Crie grupos (Ex: Bebidas Frias) e direcione-os para a impressora correta.</p>
+        <h3 className="text-xl font-black text-slate-800 mb-2">⚙️ Grupos de Produção</h3>
         <form onSubmit={handleAddGroup} className="flex flex-col md:flex-row gap-4 mb-8 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-          <input type="text" name="groupName" placeholder="Nome do Grupo (Ex: Bebidas)" value={groupForm.name} onChange={e => setGroupForm({...groupForm, name: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 font-bold text-slate-700" />
+          <input type="text" name="groupName" placeholder="Nome do Grupo" value={groupForm.name} onChange={e => setGroupForm({...groupForm, name: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 font-bold text-slate-700" />
           <select name="groupPrinterId" value={groupForm.printerId} onChange={e => setGroupForm({...groupForm, printerId: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 text-slate-700 font-bold">
-            <option value="">Sem Impressora (Não imprime ticket)</option>
-            {printers.map(p => <option key={p.id} value={p.id}>Imprime em: {p.name}</option>)}
+            <option value="">Sem Impressora</option>
+            {printers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select name="groupRegraFiscalId" value={groupForm.regraFiscalId} onChange={e => setGroupForm({...groupForm, regraFiscalId: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 text-slate-700 font-bold">
-            <option value="">Regra Fiscal Padrão (Nenhuma)</option>
-            {fiscalData.regras && fiscalData.regras.map(r => <option key={r.id} value={r.id}>{r.descricao}</option>)}
+            <option value="">Regra Fiscal Padrão</option>
+            {fiscalData?.regras && fiscalData.regras.map(r => <option key={r.id} value={r.id}>{r.descricao}</option>)}
           </select>
-          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-black px-6 py-3 rounded-xl font-black transition-all shadow-md">Criar Grupo</button>
+          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-black px-6 py-3 rounded-xl font-black shadow-md">Criar</button>
         </form>
         <div className="grid grid-cols-1 gap-3">
           {productGroups.map(g => (
             <div key={g.id} className="flex justify-between items-center bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
               <div className="flex gap-6 items-center">
                 <p className="font-black text-slate-800 text-lg">{g.name}</p>
-                <span className="text-slate-600 bg-slate-100 px-3 py-1 rounded-lg text-xs font-bold">🖨️ {g.printer?.name || 'Nenhuma (Apenas Caixa)'}</span>
-                {g.regraFiscalId && <span className="text-emerald-700 bg-emerald-100 px-3 py-1 rounded-lg text-xs font-bold">🧾 Tem Regra Fiscal</span>}
+                <span className="text-slate-600 bg-slate-100 px-3 py-1 rounded-lg text-xs font-bold">🖨️ {g.printer?.name || 'Nenhuma'}</span>
               </div>
-              <button onClick={() => handleDeleteGroup(g.id)} className="text-red-500 hover:text-red-700 font-bold bg-red-50 px-3 py-2 rounded-xl transition-all">Excluir</button>
+              <button onClick={() => handleDeleteGroup(g.id)} className="text-red-500 font-bold bg-red-50 px-3 py-2 rounded-xl">Excluir</button>
             </div>
           ))}
-          {productGroups.length === 0 && <p className="text-slate-400 italic">Nenhum grupo criado.</p>}
         </div>
       </div>
     </div>
   );
-}
+};
 
+// COMPONENTE: ADMIN DASHBOARD PRINCIPAL
 export default function AdminDashboard() {
   const params = useParams();
   const storeSlug = params?.storeSlug || ''; 
@@ -207,28 +206,15 @@ export default function AdminDashboard() {
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = localStorage.getItem('zenix_store_id');
-
-    const headers = {
-      ...(token && { 'Authorization': `Bearer ${token}` }),
-      ...(storeId && { 'x-store-id': storeId }),
-      ...options.headers,
-    };
-
+    const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-store-id': storeId }), ...options.headers };
     const response = await fetch(url, { ...options, headers });
-
-    if (response.status === 402) {
-      if (typeof window !== 'undefined') {
-        window.location.href = `/${storeSlug}/bloqueado`;
-      }
-    }
-
+    if (response.status === 402 && typeof window !== 'undefined') window.location.href = `/${storeSlug}/bloqueado`;
     return response;
   };
 
   useEffect(() => {
     const savedToken = localStorage.getItem('zenix_token');
     const savedEmployee = localStorage.getItem('zenix_loggedEmployee');
-    
     if (savedToken) {
       setIsAdminAuthenticated(true);
       if (savedEmployee) {
@@ -239,25 +225,20 @@ export default function AdminDashboard() {
         localStorage.setItem('zenix_loggedEmployee', JSON.stringify(fallbackAdmin));
       }
     }
-    
     const cachedPrints = sessionStorage.getItem('zenix_printedIds');
     if (cachedPrints) setPrintedOrderIds(JSON.parse(cachedPrints));
-
     const autoPrintSetting = localStorage.getItem('zenix_autoPrint');
     if (autoPrintSetting !== null) setIsAutoPrintEnabled(autoPrintSetting === 'true');
-
     const savedNfces = localStorage.getItem('zenix_nfcesEmitidas');
     if (savedNfces) setNfcesEmitidas(JSON.parse(savedNfces));
   }, []);
 
   useEffect(() => {
-    if (isAdminAuthenticated) {
-      if (!loggedEmployee || !loggedEmployee.role?.toLowerCase().includes('entregador')) {
-        fetchAllData();
-        const interval = setInterval(fetchOrders, 7000);
-        return () => clearInterval(interval);
-      }
-    } else {
+    if (isAdminAuthenticated && (!loggedEmployee || !loggedEmployee.role?.toLowerCase().includes('entregador'))) {
+      fetchAllData();
+      const interval = setInterval(fetchOrders, 7000);
+      return () => clearInterval(interval);
+    } else if (!isAdminAuthenticated) {
       setLoading(false);
     }
   }, [isAdminAuthenticated, loggedEmployee]);
@@ -291,24 +272,18 @@ export default function AdminDashboard() {
              if (!jobs[pId]) jobs[pId] = [];
              jobs[pId].push(item);
           }
-
           for (const [pId, items] of Object.entries(jobs)) {
              const printerObj = printers.find(p => p.id === pId);
              const printerConfig = printerObj ? { type: printerObj.type, address: printerObj.address } : null;
              const isPartial = pId !== 'DEFAULT'; 
              const partialOrder = { ...printingOrder, items };
-
              await fetch('http://localhost:8080/imprimir', {
                method: 'POST',
                headers: { 'Content-Type': 'application/json' },
                body: JSON.stringify({ pedido: partialOrder, printerName: settingsForm.printerName, printerConfig, isPartial })
              });
           }
-        } catch (error) {
-          console.error("Erro no spooler", error);
-        } finally {
-          setPrintingOrder(null);
-        }
+        } catch (error) {} finally { setPrintingOrder(null); }
       };
       mandarParaImpressorasLocais();
     }
@@ -319,26 +294,16 @@ export default function AdminDashboard() {
     if (!adminLoginForm.storeId) return alert("Informe o ID ou Slug da Loja!");
     try {
       const response = await fetch(`${API_URL}/api/auth/admin/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-store-id": adminLoginForm.storeId
-        },
+        method: "POST", headers: { "Content-Type": "application/json", "x-store-id": adminLoginForm.storeId },
         body: JSON.stringify({ email: adminLoginForm.email, password: adminLoginForm.password })
       });
-
       const data = await response.json();
       if (response.ok && data.success) {
         localStorage.setItem("zenix_token", data.token);
         localStorage.setItem("zenix_store_id", adminLoginForm.storeId);
         setIsAdminAuthenticated(true);
-      } else {
-        alert(data.error || "Erro ao logar");
-      }
-    } catch (err) {
-      console.error("Erro:", err);
-      alert("Erro de conexão ao efetuar login.");
-    }
+      } else { alert(data.error || "Erro ao logar"); }
+    } catch (err) { alert("Erro de conexão ao efetuar login."); }
   };
 
   const handleAdminLogout = () => {
@@ -351,38 +316,25 @@ export default function AdminDashboard() {
   };
 
   const fetchVisits = async () => {
-    try {
-      const res = await fetchWithStore(`${API_URL}/api/admin/analytics?_=${Date.now()}`);
-      if (res.ok) setVisitsData(await res.json());
-    } catch (e) { console.error('Erro ao buscar visitas', e); }
+    try { const res = await fetchWithStore(`${API_URL}/api/admin/analytics?_=${Date.now()}`); if (res.ok) setVisitsData(await res.json()); } catch (e) {}
   };
 
   const fetchAllData = async () => {
     await Promise.all([
       fetchOrders(), fetchMenu(), fetchProducts(), fetchCustomers(), fetchInsumos(), 
-      fetchCoupons(), fetchSystemSettings(), fetchFiscalData(), fetchVisits(),
-      fetchPrintersAndGroups(), fetchDeliveryPersons()
+      fetchCoupons(), fetchSystemSettings(), fetchFiscalData(), fetchVisits(), fetchPrintersAndGroups(), fetchDeliveryPersons()
     ]);
     setLoading(false);
   };
 
   const fetchDeliveryPersons = async () => {
-    try {
-      const res = await fetchWithStore(`${API_URL}/api/rh/delivery-persons`);
-      if (res.ok) setDeliveryPersons(await res.json());
-    } catch (e) { console.error(e); }
+    try { const res = await fetchWithStore(`${API_URL}/api/rh/delivery-persons`); if (res.ok) setDeliveryPersons(await res.json()); } catch (e) {}
   };
 
   const assignDelivery = async (orderIds, deliveryPersonId) => {
     try {
-      const res = await fetchWithStore(`${API_URL}/api/orders/dispatch`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderIds, deliveryPersonId })
-      });
-      if ((await res.json()).success) {
-        alert('📦 Pedidos despachados com sucesso!');
-        fetchOrders();
-      } else alert('Erro ao despachar.');
+      const res = await fetchWithStore(`${API_URL}/api/orders/dispatch`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderIds, deliveryPersonId }) });
+      if ((await res.json()).success) { alert('📦 Pedidos despachados com sucesso!'); fetchOrders(); } else alert('Erro ao despachar.');
     } catch (e) { alert('Erro de conexão ao despachar.'); }
   };
 
@@ -392,14 +344,11 @@ export default function AdminDashboard() {
       if (pRes.ok) setPrinters(await pRes.json());
       const gRes = await fetchWithStore(`${API_URL}/api/product-groups?_=${Date.now()}`);
       if (gRes.ok) setProductGroups(await gRes.json());
-    } catch (e) { console.error('Erro ao buscar impressoras'); }
+    } catch (e) {}
   };
 
   const fetchCoupons = async () => {
-    try {
-      const res = await fetchWithStore(`${API_URL}/api/admin/coupons?_=${Date.now()}`);
-      if (res.ok) setCoupons(await res.json());
-    } catch (e) { console.error('Erro ao buscar cupons', e); }
+    try { const res = await fetchWithStore(`${API_URL}/api/admin/coupons?_=${Date.now()}`); if (res.ok) setCoupons(await res.json()); } catch (e) {}
   };
 
   const handleAddCoupon = async (e) => {
@@ -439,21 +388,15 @@ export default function AdminDashboard() {
           }
         }
       }
-    } catch (error) { console.error('Erro ao buscar pedidos:', error); }
+    } catch (error) {}
   };
 
   const triggerManualPrint = async (order) => { 
     try {
-      const res = await fetch('http://localhost:8080/imprimir', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pedido: order, isPartial: false })
-      });
+      const res = await fetch('http://localhost:8080/imprimir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pedido: order, isPartial: false }) });
       if (!res.ok) throw new Error('Falha na impressora');
       alert('🖨️ Pedido enviado para a impressora!');
-    } catch (error) {
-      alert("⚠️ Erro de Impressão: Verifique se o Servidor de Impressão Local está aberto!");
-    }
+    } catch (error) { alert("⚠️ Erro de Impressão: Verifique se o Servidor Local está aberto!"); }
   };
 
   const fetchMenu = async () => {
@@ -464,21 +407,15 @@ export default function AdminDashboard() {
         setMenu(data);
         if (data.length > 0 && !newProduct.categoryId) setNewProduct(prev => ({ ...prev, categoryId: data[0].id }));
       }
-    } catch (error) { console.error('Erro ao buscar categorias'); }
+    } catch (error) {}
   };
 
   const fetchProducts = async () => {
-    try {
-      const res = await fetchWithStore(`${API_URL}/api/products?_=${Date.now()}`);
-      if (res.ok) setAllProducts(await res.json());
-    } catch (error) { console.error('Erro ao buscar produtos'); }
+    try { const res = await fetchWithStore(`${API_URL}/api/products?_=${Date.now()}`); if (res.ok) setAllProducts(await res.json()); } catch (error) {}
   };
 
   const fetchCustomers = async () => {
-    try {
-      const res = await fetchWithStore(`${API_URL}/api/customers?_=${Date.now()}`);
-      if (res.ok) setCustomers(await res.json());
-    } catch (error) { console.error('Erro ao buscar clientes'); }
+    try { const res = await fetchWithStore(`${API_URL}/api/customers?_=${Date.now()}`); if (res.ok) setCustomers(await res.json()); } catch (error) {}
   };
 
   const fetchSystemSettings = async () => {
@@ -489,13 +426,11 @@ export default function AdminDashboard() {
         setSettingsForm({
           isManualFechado: data.isManualFechado, deliveryFee: Number(data.deliveryFee), cashbackPercent: Number(data.cashbackPercent),
           promoBannerUrl: data.promoBannerUrl || '', promoBannerLink: data.promoBannerLink || '',
-          youtubeLiveId: data.youtubeLiveId || '', printerName: data.printerName || '',
-          aboutUsText: data.aboutUsText || '', 
-          schedule: data.schedule || settingsForm.schedule,
-          storeCnpj: data.storeCnpj || ''
+          youtubeLiveId: data.youtubeLiveId || '', printerName: data.printerName || '', aboutUsText: data.aboutUsText || '', 
+          schedule: data.schedule || settingsForm.schedule, storeCnpj: data.storeCnpj || ''
         });
       }
-    } catch (error) { console.error('Erro ao carregar configurações.'); }
+    } catch (error) {}
   };
 
   const fetchFiscalData = async () => {
@@ -505,21 +440,15 @@ export default function AdminDashboard() {
         const data = await res.json();
         if (data) setFiscalData({ icms: data.icms || [], pisCofins: data.pisCofins || [], ibsCbs: data.ibsCbs || [], regras: data.regras || [], cnpjLoja: data.cnpjLoja || '' });
       }
-    } catch (error) { console.error('Erro ao carregar dados fiscais.'); }
+    } catch (error) {}
   };
 
   const fetchInsumos = async () => {
-    try {
-      const res = await fetchWithStore(`${API_URL}/api/insumos?_=${Date.now()}`);
-      if (res.ok) setInsumos(await res.json());
-    } catch (e) { console.error('Erro Insumos'); }
+    try { const res = await fetchWithStore(`${API_URL}/api/insumos?_=${Date.now()}`); if (res.ok) setInsumos(await res.json()); } catch (e) {}
   };
 
   const fetchMovimentacoes = async () => {
-    try {
-      const res = await fetchWithStore(`${API_URL}/api/estoque/movimentacoes?_=${Date.now()}`);
-      if (res.ok) setMovimentacoes(await res.json());
-    } catch (e) { console.error('Erro Movs'); }
+    try { const res = await fetchWithStore(`${API_URL}/api/estoque/movimentacoes?_=${Date.now()}`); if (res.ok) setMovimentacoes(await res.json()); } catch (e) {}
   };
 
   const saveFiscalData = async (newData) => {
@@ -545,38 +474,17 @@ export default function AdminDashboard() {
     try {
       const resBackend = await fetchWithStore(`${API_URL}/api/admin/orders/${orderId}/fiscal`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
       const dataBackend = await resBackend.json();
-      
       if (dataBackend.success) {
-        setNfcesEmitidas(prev => {
-            const newState = { ...prev, [orderId]: dataBackend.fiscalData };
-            localStorage.setItem('zenix_nfcesEmitidas', JSON.stringify(newState));
-            return newState;
-        });
+        setNfcesEmitidas(prev => { const newState = { ...prev, [orderId]: dataBackend.fiscalData }; localStorage.setItem('zenix_nfcesEmitidas', JSON.stringify(newState)); return newState; });
         fetchOrders(); 
-
-        const resImpressora = await fetch('http://localhost:8080/imprimir-nfce', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ pedido: pedidoAtual, dadosNota: dataBackend.fiscalData, printerName: settingsForm.printerName }) 
-        });
-        if (resImpressora.ok) alert("NFC-e emitida na SEFAZ e impressa NATIVAMENTE com sucesso!");
-        else alert("A nota foi emitida na SEFAZ, mas ocorreu um erro ao se comunicar com a impressora térmica local.");
-      } else {
-        const erroBruto = dataBackend.details ? JSON.stringify(dataBackend.details, null, 2) : 'Sem detalhes adicionais.';
-        alert(`🚫 NF-e Recusada:\n${dataBackend.error}\n\nDetalhes Técnicos:\n${erroBruto}`);
-      }
-    } catch (error) {
-      alert('Erro de comunicação.');
-    } finally {
-      setLoadingNfceId(null);
-    }
+        const resImpressora = await fetch('http://localhost:8080/imprimir-nfce', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pedido: pedidoAtual, dadosNota: dataBackend.fiscalData, printerName: settingsForm.printerName }) });
+        if (resImpressora.ok) alert("NFC-e emitida na SEFAZ e impressa NATIVAMENTE com sucesso!"); else alert("A nota foi emitida na SEFAZ, mas ocorreu um erro ao se comunicar com a impressora térmica local.");
+      } else { alert(`🚫 NF-e Recusada:\n${dataBackend.error}`); }
+    } catch (error) { alert('Erro de comunicação.'); } finally { setLoadingNfceId(null); }
   };
 
   const carregarFicha = async (productId) => {
-    try {
-      const res = await fetchWithStore(`${API_URL}/api/products/${productId}/fichas`);
-      if (res.ok) { const data = await res.json(); setFichasVisiveis(prev => ({ ...prev, [productId]: data })); }
-    } catch (e) { console.error('Erro Ficha'); }
+    try { const res = await fetchWithStore(`${API_URL}/api/products/${productId}/fichas`); if (res.ok) { const data = await res.json(); setFichasVisiveis(prev => ({ ...prev, [productId]: data })); } } catch (e) {}
   };
 
   const handleUploadXMLPreview = async (e) => {
@@ -596,9 +504,7 @@ export default function AdminDashboard() {
           if (autoMatch) initialMappings[item.id] = { action: 'LINK', mappedInsumoId: autoMatch.id };
           else initialMappings[item.id] = { action: 'NEW', mappedInsumoId: '' };
         });
-        setXmlMappings(initialMappings);
-        setShowXmlModal(true);
-        setXmlFile(null);
+        setXmlMappings(initialMappings); setShowXmlModal(true); setXmlFile(null);
       } else { alert(data.error || 'Erro desconhecido ao processar o XML.'); }
     } catch (e) { alert('Erro de conexão ao enviar o XML.'); }
     setLoading(false);
@@ -695,31 +601,16 @@ export default function AdminDashboard() {
   const handleAddCategory = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetchWithStore(`${API_URL}/api/categories`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ name: newCategoryName, isDrink: newCategoryIsDrink }) 
-      });
-      if ((await res.json()).success) { 
-        setNewCategoryName(''); 
-        setNewCategoryIsDrink(false);
-        fetchMenu(); 
-      }
+      const res = await fetchWithStore(`${API_URL}/api/categories`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newCategoryName, isDrink: newCategoryIsDrink }) });
+      if ((await res.json()).success) { setNewCategoryName(''); setNewCategoryIsDrink(false); fetchMenu(); }
     } catch (error) { alert('Erro ao criar categoria.'); }
   };
 
   const handleEditCategory = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetchWithStore(`${API_URL}/api/categories/${editingCategory.id}`, { 
-        method: 'PUT', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ name: editingCategory.name, isDrink: editingCategory.isDrink }) 
-      });
-      if ((await res.json()).success) { 
-        setEditingCategory(null); 
-        fetchMenu(); 
-      }
+      const res = await fetchWithStore(`${API_URL}/api/categories/${editingCategory.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editingCategory.name, isDrink: editingCategory.isDrink }) });
+      if ((await res.json()).success) { setEditingCategory(null); fetchMenu(); }
     } catch (error) { alert('Erro ao editar categoria.'); }
   };
 
@@ -748,7 +639,6 @@ export default function AdminDashboard() {
     const newMenu = [...menu];
     const catIndex = newMenu.findIndex(c => c.id === categoryId);
     if (catIndex === -1) return;
-
     const catProducts = [...newMenu[catIndex].products];
     if (direction === 'up' && productIndex > 0) {
       const temp = catProducts[productIndex];
@@ -759,19 +649,12 @@ export default function AdminDashboard() {
       catProducts[productIndex] = catProducts[productIndex + 1];
       catProducts[productIndex + 1] = temp;
     } else return;
-
     newMenu[catIndex].products = catProducts;
     setMenu(newMenu); 
-
     try {
       const reordered = catProducts.map((prod, i) => ({ id: prod.id, order: i }));
-      await fetchWithStore(`${API_URL}/api/products/reorder`, { 
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ products: reordered }) 
-      });
-    } catch (error) { 
-      alert('Erro ao reordenar produtos no servidor.'); 
-    }
+      await fetchWithStore(`${API_URL}/api/products/reorder`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ products: reordered }) });
+    } catch (error) { alert('Erro ao reordenar produtos no servidor.'); }
   };
 
   const handleAddProduct = async (e) => {
@@ -1020,6 +903,7 @@ export default function AdminDashboard() {
            {activeTab === 'fiscal' && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
            {activeTab === 'config' && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={handleUpdateAdminConfig} />}
            
+           {/* RENDERIZANDO A ABA MINHA EMPRESA AQUI */}
            {activeTab === 'minha-empresa' && canViewCompany && <MinhaEmpresaTab />}
         </div>
       </main>
