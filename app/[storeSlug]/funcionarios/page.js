@@ -17,7 +17,7 @@ import OrderDetailsModal from '../admin/components/modals/OrderDetailsModal';
 import PdvTab from '../admin/components/tabs/PdvTab';
 import SalaoTab from '../admin/components/tabs/SalaoTab';
 import TurnosTab from '../admin/components/tabs/TurnosTab';
-import MinhaEmpresaTab from '../admin/components/tabs/MinhaEmpresaTab'; // 👈 ABA IMPORTADA AQUI
+import MinhaEmpresaTab from '../admin/components/tabs/MinhaEmpresaTab'; 
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
@@ -118,10 +118,7 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
   );
 }
 
-function FuncionariosPortal() {
-  const params = useParams();
-  const storeSlug = params.storeSlug || '';
-
+function FuncionariosPortal({ storeSlug }) {
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
@@ -573,7 +570,7 @@ function FuncionariosPortal() {
     } catch (error) { alert('Erro ao alterar destaque.'); }
   };
 
- const handleAddCategory = async (e) => {
+  const handleAddCategory = async (e) => {
     e.preventDefault();
     try {
       const res = await fetchWithStore(`${API_URL}/api/categories`, { 
@@ -582,7 +579,7 @@ function FuncionariosPortal() {
         body: JSON.stringify({ name: newCategoryName, isDrink: newCategoryIsDrink }) 
       });
       if ((await res.json()).success) { 
-        if (typeof logEmployeeAction === 'function') logEmployeeAction(`Criou nova categoria: ${newCategoryName}`);
+        logEmployeeAction(`Criou nova categoria: ${newCategoryName}`);
         setNewCategoryName(''); 
         setNewCategoryIsDrink(false);
         fetchMenu(); 
@@ -590,7 +587,7 @@ function FuncionariosPortal() {
     } catch (error) { alert('Erro ao criar categoria.'); }
   };
 
-const handleEditCategory = async (e) => {
+  const handleEditCategory = async (e) => {
     e.preventDefault();
     try {
       const res = await fetchWithStore(`${API_URL}/api/categories/${editingCategory.id}`, { 
@@ -599,7 +596,7 @@ const handleEditCategory = async (e) => {
         body: JSON.stringify({ name: editingCategory.name, isDrink: editingCategory.isDrink }) 
       });
       if ((await res.json()).success) { 
-        if (typeof logEmployeeAction === 'function') logEmployeeAction(`Editou a categoria para: ${editingCategory.name}`);
+        logEmployeeAction(`Editou a categoria para: ${editingCategory.name}`);
         setEditingCategory(null); 
         fetchMenu(); 
       }
@@ -1062,12 +1059,9 @@ const handleEditCategory = async (e) => {
   );
 }
 
-// ============================================================================
-// WRAPPER SAAS (Identifica a loja pela URL e libera o sistema)
-// ============================================================================
 export default function FuncionariosWrapper() {
   const params = useParams();
-  const storeSlug = params.storeSlug;
+  const storeSlug = params?.storeSlug || '';
   const [storeStatus, setStoreStatus] = useState('LOADING');
 
   useEffect(() => {
@@ -1110,5 +1104,5 @@ export default function FuncionariosWrapper() {
     );
   }
 
-  return <FuncionariosPortal />;
+  return <FuncionariosPortal storeSlug={storeSlug} />;
 }

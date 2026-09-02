@@ -18,7 +18,7 @@ import RhTab from './components/tabs/RhTab';
 import PdvTab from './components/tabs/PdvTab'; 
 import TurnosTab from './components/tabs/TurnosTab'; 
 import SalaoTab from './components/tabs/SalaoTab';
-import MinhaEmpresaTab from './components/tabs/MinhaEmpresaTab'; // 👈 ABA IMPORTADA AQUI
+import MinhaEmpresaTab from './components/tabs/MinhaEmpresaTab';
 import OrderDetailsModal from './components/modals/OrderDetailsModal';
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
