@@ -17,6 +17,7 @@ import OrderDetailsModal from '../admin/components/modals/OrderDetailsModal';
 import PdvTab from '../admin/components/tabs/PdvTab';
 import SalaoTab from '../admin/components/tabs/SalaoTab';
 import TurnosTab from '../admin/components/tabs/TurnosTab';
+import MinhaEmpresaTab from '../admin/components/tabs/MinhaEmpresaTab'; // 👈 ABA IMPORTADA AQUI
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
@@ -190,7 +191,6 @@ function FuncionariosPortal() {
   const [couponForm, setCouponForm] = useState({ code: '', type: 'FIXED', value: '', minOrderValue: '0', maxUses: '0' });
   const [nfcesEmitidas, setNfcesEmitidas] = useState({}); 
 
-  // Helper Multi-Tenant com interceptador de inadimplência
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = localStorage.getItem('zenix_store_id');
@@ -203,7 +203,6 @@ function FuncionariosPortal() {
 
     const response = await fetch(url, { ...options, headers });
 
-    // SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
         window.location.href = `/${storeSlug}/bloqueado`; 
@@ -368,7 +367,7 @@ function FuncionariosPortal() {
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'x-store-id': currentStoreId // Puxado automaticamente do Wrapper!
+          'x-store-id': currentStoreId 
         }, 
         body: JSON.stringify({ email: loginForm.email, password: loginForm.password })
       });
@@ -889,7 +888,6 @@ const handleEditCategory = async (e) => {
           </div>
           {permittedMenuItems.map((item) => {
             
-            // Renderiza o especial se for o menu KDS em cascata
             if (item.isDropdown) {
               return (
                 <div key={item.id} className="flex flex-col">
@@ -936,10 +934,18 @@ const handleEditCategory = async (e) => {
 
           {/* 👈 Botão Minha Empresa condicionado à permissão */}
           {canViewCompany && (
-            <a href={`/${storeSlug}/admin/minha-empresa`} className="w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer text-slate-400 hover:bg-white/5 hover:text-white mt-4 border-t border-white/5 pt-6">
+            <button
+              onClick={() => setActiveTab('minha-empresa')}
+              className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer mt-4 border-t border-white/5 pt-6 ${
+                activeTab === 'minha-empresa'
+                  ? 'bg-amber-500 text-black shadow-md'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+              title={!isSidebarOpen ? "Minha Empresa" : ""}
+            >
               <span className="text-xl shrink-0 flex items-center justify-center w-8">🏢</span>
               {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm text-left">Minha Empresa</span>}
-            </a>
+            </button>
           )}
 
         </nav>
@@ -953,7 +959,9 @@ const handleEditCategory = async (e) => {
 
       <main className="flex-1 flex flex-col h-screen relative overflow-hidden bg-slate-50">
         <header className="h-20 flex items-center justify-between px-8 bg-white border-b border-slate-200 shadow-sm z-20">
-           <h1 className="text-2xl font-black text-slate-800">{permittedMenuItems.find(m => m.id === activeTab)?.label || 'Acesso Restrito'}</h1>
+           <h1 className="text-2xl font-black text-slate-800">
+             {activeTab === 'minha-empresa' ? 'Minha Empresa' : permittedMenuItems.find(m => m.id === activeTab)?.label || 'Acesso Restrito'}
+           </h1>
            <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600">
                 <input type="checkbox" checked={isAutoPrintEnabled} onChange={(e) => toggleAutoPrintState(e.target.checked)} className="rounded text-amber-500 focus:ring-0 border-slate-300 w-4 h-4 cursor-pointer" />
@@ -981,6 +989,9 @@ const handleEditCategory = async (e) => {
            {activeTab === 'impressoes' && isPermitted('impressoes') && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
            {activeTab === 'fiscal' && isPermitted('fiscal') && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
            {activeTab === 'config' && isPermitted('config') && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={()=>{}} />}
+           
+           {/* RENDERIZANDO A ABA MINHA EMPRESA AQUI */}
+           {activeTab === 'minha-empresa' && canViewCompany && <MinhaEmpresaTab />}
         </div>
       </main>
 

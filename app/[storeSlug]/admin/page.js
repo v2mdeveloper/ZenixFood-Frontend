@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation'; // 👈 Importando o useParams
+import { useParams } from 'next/navigation';
 
 import AdminLogin from './components/AdminLogin';
 import ExpeditionTab from './components/tabs/ExpeditionTab';
@@ -18,6 +18,7 @@ import RhTab from './components/tabs/RhTab';
 import PdvTab from './components/tabs/PdvTab'; 
 import TurnosTab from './components/tabs/TurnosTab'; 
 import SalaoTab from './components/tabs/SalaoTab';
+import MinhaEmpresaTab from './components/tabs/MinhaEmpresaTab'; // 👈 ABA IMPORTADA AQUI
 import OrderDetailsModal from './components/modals/OrderDetailsModal';
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
@@ -121,7 +122,7 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
 
 export default function AdminDashboard() {
   const params = useParams();
-  const storeSlug = params?.storeSlug || ''; // 👈 Extraindo storeSlug
+  const storeSlug = params?.storeSlug || ''; 
 
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [loggedEmployee, setLoggedEmployee] = useState(null);
@@ -217,7 +218,7 @@ export default function AdminDashboard() {
 
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
-        window.location.href = `/${storeSlug}/bloqueado`; // 👈 Atualizado
+        window.location.href = `/${storeSlug}/bloqueado`;
       }
     }
 
@@ -346,7 +347,7 @@ export default function AdminDashboard() {
     localStorage.removeItem('zenix_loggedEmployee');
     setIsAdminAuthenticated(false);
     setLoggedEmployee(null);
-    window.location.href = `/${storeSlug}/admin`; // 👈 Atualizado
+    window.location.href = `/${storeSlug}/admin`;
   };
 
   const fetchVisits = async () => {
@@ -855,7 +856,6 @@ export default function AdminDashboard() {
 
   const getMetodoPagamentoLabel = (method) => ({'PIX_ONLINE':'Pix (Pago no Site) 📱','CREDIT_CARD_ONLINE':'Cartão de Crédito (Pago no Site) 💳','CREDIT_CARD_DELIVERY':'Cartão na Entrega (Maquininha) 💳','CASH':'Dinheiro na Entrega 💵'}[method] || method);
 
-  // 👈 Definição da regra de permissão para Minha Empresa
   const isAdmin = loggedEmployee?.role === 'ADMIN' || loggedEmployee?.role === 'OWNER' || loggedEmployee?.role === 'Gerente Geral' || loggedEmployee?.id === 'ADMIN_MASTER';
   const canViewCompany = isAdmin || loggedEmployee?.canViewCompanyData === true;
 
@@ -884,7 +884,7 @@ export default function AdminDashboard() {
   }
 
   if (loggedEmployee?.role?.toLowerCase().includes('entregador')) {
-    if (typeof window !== 'undefined') window.location.href = `/${storeSlug}/entregadores`; // 👈 Atualizado slug no redirecionamento
+    if (typeof window !== 'undefined') window.location.href = `/${storeSlug}/entregadores`;
     return (
       <div className="flex h-screen items-center justify-center bg-slate-900 text-amber-500 font-bold">
           Redirecionando para a Rota de Entregas...
@@ -965,13 +965,20 @@ export default function AdminDashboard() {
             );
           })}
 
-          {/* 👈 Novo Botão Minha Empresa condicionado à permissão */}
           {canViewCompany && (
-            <a href={`/${storeSlug}/admin/minha-empresa`} className="w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer text-slate-500 hover:bg-slate-50 hover:text-slate-900 mt-4 border-t border-slate-100 pt-6">
+            <button
+              onClick={() => setActiveTab('minha-empresa')}
+              className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer mt-4 border-t border-slate-200 pt-6 ${
+                activeTab === 'minha-empresa'
+                  ? 'bg-amber-500 text-black shadow-md'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
               <span className="text-xl shrink-0 flex items-center justify-center w-8">🏢</span>
               {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm text-left">Minha Empresa</span>}
-            </a>
+            </button>
           )}
+
         </nav>
 
         <div className="p-4 border-t border-slate-100">
@@ -985,7 +992,7 @@ export default function AdminDashboard() {
       <main className="flex-1 flex flex-col h-screen relative overflow-hidden bg-slate-50">
         <header className="h-20 flex items-center justify-between px-8 bg-white border-b border-slate-200 shadow-sm z-20">
            <h1 className="text-2xl font-black text-slate-800">
-             {menuItems.find(m => m.id === activeTab)?.label}
+             {activeTab === 'minha-empresa' ? 'Minha Empresa' : menuItems.find(m => m.id === activeTab)?.label || 'Acesso Restrito'}
            </h1>
            <div className="flex items-center gap-4">
               <label htmlFor="autoPrintEnabled" className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer text-slate-600 hover:text-slate-900 transition-colors">
@@ -1012,6 +1019,8 @@ export default function AdminDashboard() {
            {activeTab === 'impressoes' && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
            {activeTab === 'fiscal' && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
            {activeTab === 'config' && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={handleUpdateAdminConfig} />}
+           
+           {activeTab === 'minha-empresa' && canViewCompany && <MinhaEmpresaTab />}
         </div>
       </main>
 
