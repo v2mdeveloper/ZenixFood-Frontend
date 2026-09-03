@@ -87,7 +87,7 @@ export default function TotemModerno() {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
           setIsIdle(true);
-          setCart([]); // Esvazia o carrinho por segurança
+          setCart([]); // Esvazia o carrinho
           if (menu.length > 0) setActiveCategory(menu[0].id);
         }, 60000); // 60 segundos
       }
@@ -107,9 +107,22 @@ export default function TotemModerno() {
     };
   }, [isIdle, menu]);
 
+  // 🚀 LÓGICA DE TELA CHEIA (FULLSCREEN) AO TOCAR NA BANDEIRA
   const handleStart = (selectedLang) => {
     setLanguage(selectedLang);
     setIsIdle(false);
+
+    // Solicita tela cheia no elemento principal da página
+    const elem = document.documentElement;
+    if (!document.fullscreenElement) {
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(err => console.warn(err));
+      } else if (elem.webkitRequestFullscreen) { /* Safari */
+        elem.webkitRequestFullscreen().catch(err => console.warn(err));
+      } else if (elem.msRequestFullscreen) { /* IE11 */
+        elem.msRequestFullscreen().catch(err => console.warn(err));
+      }
+    }
   };
 
   const addToCart = (product) => {
@@ -133,7 +146,7 @@ export default function TotemModerno() {
   };
 
   const totalCart = cart.reduce((acc, curr) => acc + (Number(curr.price) * curr.quantity), 0);
-  const t = i18n[lang]; // Atalho para as traduções
+  const t = i18n[lang];
 
   if (loading) return <div className="h-screen bg-slate-50 flex items-center justify-center text-3xl font-black text-amber-500 animate-pulse">Iniciando Totem...</div>;
   if (!storeData) return <div className="h-screen bg-slate-50 flex items-center justify-center text-2xl font-bold text-red-500">Loja não encontrada.</div>;
@@ -143,8 +156,8 @@ export default function TotemModerno() {
   // ==========================================
   if (isIdle) {
     return (
-      <div className="relative w-screen h-screen flex flex-col items-center justify-end pb-32 bg-slate-900 animate-fade-in-up">
-        {/* Fundo do Totem (Imagem ou Gradiente Padrão) */}
+      <div className="relative w-screen h-screen flex flex-col items-center justify-end pb-32 bg-slate-900 animate-fade-in-up overflow-hidden">
+        {/* Fundo do Totem */}
         {storeData.totemCoverImageUrl ? (
            <img src={storeData.totemCoverImageUrl} alt="Capa do Totem" className="absolute inset-0 w-full h-full object-cover opacity-60" />
         ) : storeData.coverImageUrl ? (
@@ -159,7 +172,7 @@ export default function TotemModerno() {
            <p className="text-2xl font-bold text-white drop-shadow-lg">Select your language / Seleccione su idioma</p>
         </div>
 
-        {/* Botões de Bandeira */}
+        {/* Botões de Bandeira que disparam o Fullscreen */}
         <div className="relative z-10 flex gap-10">
            <button onClick={() => handleStart('pt')} className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-2xl hover:scale-105 transition-transform bg-white focus:outline-none">
               <img src="https://flagcdn.com/w320/br.png" alt="Português (Brasil)" className="w-full h-full object-cover" />
@@ -181,7 +194,7 @@ export default function TotemModerno() {
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden select-none animate-fade-in-up">
       
-      {/* SIDEBAR - CATEGORIAS (ESTILO MCDONALDS) */}
+      {/* SIDEBAR - CATEGORIAS */}
       <aside className="w-32 md:w-48 bg-white shadow-[2px_0_15px_rgba(0,0,0,0.05)] flex flex-col z-20">
         <div className="h-24 md:h-32 flex items-center justify-center p-4 border-b border-slate-100 shrink-0">
            {storeData.logoUrl ? (
@@ -213,10 +226,8 @@ export default function TotemModerno() {
         </div>
       </aside>
 
-      {/* ÁREA PRINCIPAL (PRODUTOS E HEADER) */}
       <main className="flex-1 flex flex-col relative bg-slate-100">
         
-        {/* HEADER SIMPLES TOTEM */}
         <header className="h-20 bg-white shadow-sm flex items-center px-8 shrink-0 justify-between">
           <h1 className="text-2xl font-black text-slate-800">
             {menu.find(c => c.id === activeCategory)?.name || t.selectCategory}
@@ -231,7 +242,6 @@ export default function TotemModerno() {
           </div>
         </header>
 
-        {/* LISTA DE PRODUTOS GRID */}
         <div className="flex-1 overflow-y-auto p-6 pb-40">
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
             {menu.find(c => c.id === activeCategory)?.products?.filter(p => p.isActive !== false).map(prod => (
@@ -252,9 +262,7 @@ export default function TotemModerno() {
           </div>
         </div>
 
-        {/* BARRA DE CARRINHO (RODAPÉ FIXO) */}
         <div className="absolute bottom-0 left-0 w-full bg-white shadow-[0_-10px_30px_rgba(0,0,0,0.1)] flex items-center justify-between p-4 md:p-6 z-30">
-           
            <div className="flex-1 overflow-x-auto hide-scrollbar flex items-center gap-4 pr-6">
              {cart.length === 0 ? (
                <p className="text-slate-400 font-bold italic">{t.emptyCart}</p>
@@ -292,7 +300,8 @@ export default function TotemModerno() {
 
       {/* DEV FOOTER ABSOLUTO */}
       <div className="absolute top-2 right-4 text-[10px] text-slate-400 font-bold z-50 mix-blend-multiply">
-        Desenvolvido por ZenixFood
+        Desenvolvido por V2M Commercial Automation & Software Developer
+        &copy; {new Date().getFullYear()} - Tecnologia em Food Service. Todos os direitos reservados.
       </div>
     </div>
   );
