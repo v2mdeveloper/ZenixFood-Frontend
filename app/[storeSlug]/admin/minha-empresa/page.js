@@ -14,12 +14,7 @@ export default function MinhaEmpresaTab() {
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_adminToken') || localStorage.getItem('zenix_employeeToken');
     const storeId = localStorage.getItem('zenix_store_id');
-
-    const headers = {
-      ...(token && { 'Authorization': `Bearer ${token}` }),
-      ...(storeId && { 'x-store-id': storeId }),
-      ...options.headers,
-    };
+    const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-store-id': storeId }), ...options.headers };
     return fetch(url, { ...options, headers });
   };
 
@@ -28,7 +23,6 @@ export default function MinhaEmpresaTab() {
       try {
         const resStore = await fetchWithStore(`${API_URL}/api/admin/store-info`);
         const data = await resStore.json();
-
         if (resStore.ok && data.success !== false) {
           setStoreData(data.store || data); 
           setInvoices(data.invoices || []);
@@ -48,25 +42,8 @@ export default function MinhaEmpresaTab() {
     alert(`Iniciando download da fatura ${invoiceId}...`);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 animate-fade-in-up">
-        <div className="animate-pulse text-amber-500 font-black text-xl flex flex-col items-center gap-4">
-          <span className="text-4xl">🏢</span> Buscando dados oficiais da loja...
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !storeData) {
-    return (
-      <div className="flex flex-col items-center justify-center text-center py-20 animate-fade-in-up">
-        <span className="text-6xl mb-4 text-red-500">⚠️</span>
-        <h1 className="text-2xl font-black text-slate-800 mb-2">Ops! Tivemos um problema.</h1>
-        <p className="text-slate-500">{error || 'Dados da loja não encontrados no banco.'}</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="flex items-center justify-center py-20 animate-pulse text-amber-500 font-black text-xl gap-4"><span className="text-4xl">🏢</span> Buscando dados oficiais da loja...</div>;
+  if (error || !storeData) return <div className="flex flex-col items-center justify-center text-center py-20"><span className="text-6xl mb-4 text-red-500">⚠️</span><h1 className="text-2xl font-black text-slate-800 mb-2">Ops! Tivemos um problema.</h1><p className="text-slate-500">{error || 'Dados da loja não encontrados no banco.'}</p></div>;
 
   const getSubscriptionStatus = (status) => {
     switch(status) {
@@ -131,7 +108,7 @@ export default function MinhaEmpresaTab() {
             {invoices.length === 0 ? (
               <div className="text-center py-8 opacity-50">
                 <span className="text-4xl mb-2 block">📄</span>
-                <p className="text-sm font-bold text-slate-500">Nenhuma fatura gerada ainda.</p>
+                <p className="text-sm font-bold text-slate-500">Nenhuma fatura gerada.</p>
               </div>
             ) : (
               <div className="space-y-3">

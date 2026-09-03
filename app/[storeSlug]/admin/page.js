@@ -43,7 +43,7 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
   };
 
   const handleDeletePrinter = async (id) => {
-    if(!confirm("Excluir impressora? Grupos vinculados ficarão sem destino.")) return;
+    if(!confirm("Excluir impressora?")) return;
     try { await fetchWithStore(`${API_URL}/api/printers/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) {}
   };
 
@@ -65,7 +65,6 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
     <div className="space-y-6 animate-fade-in-up">
       <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
         <h3 className="text-xl font-black text-slate-800 mb-2">🖨️ Cadastro de Impressoras</h3>
-        <p className="text-sm text-slate-500 mb-6">Cadastre as impressoras físicas da sua loja.</p>
         <form onSubmit={handleAddPrinter} className="flex flex-col md:flex-row gap-4 mb-8 bg-slate-50 p-4 rounded-2xl border border-slate-100">
           <input type="text" name="printerName" placeholder="Nome" value={printerForm.name} onChange={e => setPrinterForm({...printerForm, name: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 font-bold text-slate-700" />
           <select name="printerType" value={printerForm.type} onChange={e => setPrinterForm({...printerForm, type: e.target.value})} className="border border-slate-300 p-3 rounded-xl focus:outline-amber-500 text-slate-700 font-bold">
@@ -117,15 +116,12 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
 export default function AdminDashboard() {
   const params = useParams();
   const storeSlug = params?.storeSlug || ''; 
-
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [loggedEmployee, setLoggedEmployee] = useState(null);
   const [adminLoginForm, setAdminLoginForm] = useState({ storeId: '', email: '', password: '' });
-  
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('pdv'); 
   const [isKdsMenuOpen, setIsKdsMenuOpen] = useState(false); 
-
   const [orders, setOrders] = useState([]);
   const [menu, setMenu] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
@@ -135,9 +131,7 @@ export default function AdminDashboard() {
   const [searchProduct, setSearchProduct] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryIsDrink, setNewCategoryIsDrink] = useState(false);
-  
   const [newProduct, setNewProduct] = useState({ name: '', description: '', price: '', price700g: '', price1kg: '', costPrice: '', categoryId: '', imageUrl: '', regraFiscalId: '', ncm: '', ean: '', groupId: '' });
-  
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -145,39 +139,23 @@ export default function AdminDashboard() {
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
   const [visitsData, setVisitsData] = useState({ visits: [], totalVisits: 0 });
   const [adminConfig, setAdminConfig] = useState({ name: '', email: '', password: '' });
-  
   const [settingsForm, setSettingsForm] = useState({
-    isManualFechado: false, deliveryFee: 5.00, cashbackPercent: 5,
-    promoBannerUrl: '', promoBannerLink: '',
-    youtubeLiveId: '', printerName: '', 
-    aboutUsText: '', 
-    schedule: {
-      "0": { isOpen: true, open: "18:00", close: "23:30" }, 
-      "1": { isOpen: false, open: "18:00", close: "23:30" }, 
-      "2": { isOpen: true, open: "18:00", close: "23:30" }, 
-      "3": { isOpen: true, open: "18:00", close: "23:30" }, 
-      "4": { isOpen: true, open: "18:00", close: "23:30" }, 
-      "5": { isOpen: true, open: "18:00", close: "23:30" }, 
-      "6": { isOpen: true, open: "18:00", close: "23:30" }
-    }
+    isManualFechado: false, deliveryFee: 5.00, cashbackPercent: 5, promoBannerUrl: '', promoBannerLink: '', youtubeLiveId: '', printerName: '', aboutUsText: '', 
+    schedule: { "0": { isOpen: true, open: "18:00", close: "23:30" }, "1": { isOpen: false, open: "18:00", close: "23:30" }, "2": { isOpen: true, open: "18:00", close: "23:30" }, "3": { isOpen: true, open: "18:00", close: "23:30" }, "4": { isOpen: true, open: "18:00", close: "23:30" }, "5": { isOpen: true, open: "18:00", close: "23:30" }, "6": { isOpen: true, open: "18:00", close: "23:30" } }
   });
-
   const [fiscalData, setFiscalData] = useState({ icms: [], pisCofins: [], ibsCbs: [], regras: [], cnpjLoja: '' });
   const [formIcms, setFormIcms] = useState({ id: '', descricao: '', regime: 'Simples Nacional', cfop: '', cst: '', aliquota: '' });
   const [formPis, setFormPis] = useState({ id: '', descricao: '', cstPis: '', aliqPis: '', cstCofins: '', aliqCofins: '' });
   const [formIbsCbs, setFormIbsCbs] = useState({ id: '', descricao: '', cst: '000', classificacao: '000001', aliqIbsUf: '0.1', aliqCbs: '0.9' });
   const [formRegra, setFormRegra] = useState({ id: '', ordenar: '', descricao: '', icmsId: '', pisCofinsId: '', ibsCbsId: '', ipi: '' });
-  
   const [fiscalSubTab, setFiscalSubTab] = useState('fila');
   const [loadingNfceId, setLoadingNfceId] = useState(null);
   const [isAutoPrintEnabled, setIsAutoPrintEnabled] = useState(true);
   const [printedOrderIds, setPrintedOrderIds] = useState([]);
   const [printingOrder, setPrintingOrder] = useState(null);
-  
   const [printers, setPrinters] = useState([]);
   const [productGroups, setProductGroups] = useState([]);
   const [deliveryPersons, setDeliveryPersons] = useState([]);
-
   const [insumos, setInsumos] = useState([]);
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [fichasVisiveis, setFichasVisiveis] = useState({});
@@ -298,7 +276,7 @@ export default function AdminDashboard() {
         localStorage.setItem("zenix_store_id", adminLoginForm.storeId);
         setIsAdminAuthenticated(true);
       } else { alert(data.error || "Erro ao logar"); }
-    } catch (err) { alert("Erro de conexão ao efetuar login."); }
+    } catch (err) { alert("Erro de conexão."); }
   };
 
   const handleAdminLogout = () => {
@@ -330,7 +308,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/orders/dispatch`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderIds, deliveryPersonId }) });
       if ((await res.json()).success) { alert('Pedidos despachados com sucesso!'); fetchOrders(); } else alert('Erro ao despachar.');
-    } catch (e) { alert('Erro de conexão ao despachar.'); }
+    } catch (e) {}
   };
 
   const fetchPrintersAndGroups = async () => {
@@ -352,14 +330,14 @@ export default function AdminDashboard() {
       const res = await fetchWithStore(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...couponForm, active: true }) });
       const data = await res.json();
       if (data.success) { setCouponForm({ code: '', type: 'FIXED', value: '', minOrderValue: '0', maxUses: '0' }); fetchCoupons(); } else { alert(data.error || "Erro ao criar cupom."); }
-    } catch (e) { alert("Erro de conexão ao criar cupom."); }
+    } catch (e) {}
   };
 
   const toggleCouponStatus = async (coupon) => {
     try {
       const res = await fetchWithStore(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...coupon, active: !coupon.active }) });
       if ((await res.json()).success) fetchCoupons();
-    } catch (e) { alert("Erro ao alterar status do cupom."); }
+    } catch (e) {}
   };
 
   const fetchOrders = async () => {
@@ -391,7 +369,7 @@ export default function AdminDashboard() {
       const res = await fetch('http://localhost:8080/imprimir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pedido: order, isPartial: false }) });
       if (!res.ok) throw new Error('Falha na impressora');
       alert('Pedido enviado para a impressora!');
-    } catch (error) { alert("Erro de Impressão: Verifique se o Servidor Local está aberto!"); }
+    } catch (error) { alert("Erro de Impressão!"); }
   };
 
   const fetchMenu = async () => {
@@ -450,7 +428,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) });
       if ((await res.json()).success) { setFiscalData(newData); }
-    } catch (error) { alert('Erro ao salvar dados fiscais.'); }
+    } catch (error) {}
   };
 
   const handleSaveCnpj = async (cnpj) => {
@@ -460,7 +438,7 @@ export default function AdminDashboard() {
       const res = await fetchWithStore(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) });
       const data = await res.json();
       if (data.success) { setFiscalData(newData); alert('CNPJ Salvo com sucesso!'); } else { alert('Erro ao salvar CNPJ.'); }
-    } catch (error) { alert('Erro de conexão ao salvar CNPJ.'); }
+    } catch (error) {}
   };
 
   const emitirEImprimirNfceLocal = async (orderId) => {
@@ -473,7 +451,7 @@ export default function AdminDashboard() {
         setNfcesEmitidas(prev => { const newState = { ...prev, [orderId]: dataBackend.fiscalData }; localStorage.setItem('zenix_nfcesEmitidas', JSON.stringify(newState)); return newState; });
         fetchOrders(); 
         const resImpressora = await fetch('http://localhost:8080/imprimir-nfce', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pedido: pedidoAtual, dadosNota: dataBackend.fiscalData, printerName: settingsForm.printerName }) });
-        if (resImpressora.ok) alert("NFC-e emitida na SEFAZ e impressa NATIVAMENTE com sucesso!"); else alert("A nota foi emitida na SEFAZ, mas ocorreu um erro ao se comunicar com a impressora térmica local.");
+        if (resImpressora.ok) alert("NFC-e emitida!"); else alert("A nota foi emitida na SEFAZ, mas ocorreu erro na impressora local.");
       } else { alert(`NF-e Recusada:\n${dataBackend.error}`); }
     } catch (error) { alert('Erro de comunicação.'); } finally { setLoadingNfceId(null); }
   };
@@ -500,8 +478,8 @@ export default function AdminDashboard() {
           else initialMappings[item.id] = { action: 'NEW', mappedInsumoId: '' };
         });
         setXmlMappings(initialMappings); setShowXmlModal(true); setXmlFile(null);
-      } else { alert(data.error || 'Erro desconhecido ao processar o XML.'); }
-    } catch (e) { alert('Erro de conexão ao enviar o XML.'); }
+      } else { alert(data.error || 'Erro ao processar o XML.'); }
+    } catch (e) {}
     setLoading(false);
   };
 
@@ -521,7 +499,7 @@ export default function AdminDashboard() {
       const res = await fetchWithStore(`${API_URL}/api/estoque/xml/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chaveNfe: xmlPreviewData.chaveNfe, items: payloadItems }) });
       const data = await res.json();
       if (data.success) { alert(data.message); setShowXmlModal(false); fetchInsumos(); fetchMovimentacoes(); fetchProducts(); } else alert(data.error);
-    } catch(e) { alert('Erro na importação.'); }
+    } catch(e) {}
     setLoading(false);
   };
 
@@ -530,7 +508,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/insumos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novoInsumo) });
       if ((await res.json()).success) { setNovoInsumo({ name: '', unit: 'UN', cost: '', stock: '' }); fetchInsumos(); }
-    } catch (e) { alert('Erro ao salvar insumo.'); }
+    } catch (e) {}
   };
 
   const handleEditInsumoSubmit = async (e) => {
@@ -538,7 +516,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/insumos/${editingInsumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingInsumo) });
       if ((await res.json()).success) { setEditingInsumo(null); fetchInsumos(); fetchProducts(); }
-    } catch (e) { alert('Erro ao salvar edição do insumo.'); }
+    } catch (e) {}
   };
 
   const toggleInsumoStatus = async (insumo) => {
@@ -571,7 +549,7 @@ export default function AdminDashboard() {
     if (!novaMovimentacao.insumoId) return alert('Selecione o insumo');
     try {
       const res = await fetchWithStore(`${API_URL}/api/estoque/manual`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaMovimentacao) });
-      if ((await res.json()).success) { alert('Movimentação registrada com sucesso!'); setNovaMovimentacao({ insumoId: '', type: 'IN', quantity: '', reason: '' }); fetchInsumos(); if (estoqueSubTab === 'movimentacoes') fetchMovimentacoes(); } else alert('Erro ao registrar movimentação manual.');
+      if ((await res.json()).success) { alert('Movimentação registrada com sucesso!'); setNovaMovimentacao({ insumoId: '', type: 'IN', quantity: '', reason: '' }); fetchInsumos(); if (estoqueSubTab === 'movimentacoes') fetchMovimentacoes(); } else alert('Erro ao registrar.');
     } catch (error) {}
   };
 
@@ -608,7 +586,7 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteCategory = async (categoryId) => {
-    if (!confirm('Tem certeza que deseja excluir esta categoria?')) return;
+    if (!confirm('Excluir esta categoria?')) return;
     try {
       const res = await fetchWithStore(`${API_URL}/api/categories/${categoryId}`, { method: 'DELETE' });
       const data = await res.json();
@@ -682,10 +660,10 @@ export default function AdminDashboard() {
   const toggleFeatureProduct = async (product) => {
     const isCurrentlyFeatured = product.isFeatured;
     const currentHighlightsCount = allProducts.filter(p => p.isFeatured).length;
-    if (!isCurrentlyFeatured && currentHighlightsCount >= 5) { alert("Você já tem 5 produtos em destaque."); return; }
+    if (!isCurrentlyFeatured && currentHighlightsCount >= 5) { alert("Limite de destaques atingido."); return; }
     try {
       const res = await fetchWithStore(`${API_URL}/api/products/${product.id}/feature`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isFeatured: !isCurrentlyFeatured }) });
-      if ((await res.json()).success) { fetchProducts(); }
+      if ((await res.json()).success) fetchProducts(); 
     } catch (error) {}
   };
 
@@ -694,7 +672,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/admin/customers/${editingCustomer.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingCustomer) });
       const data = await res.json();
-      if (data.success) { alert('Dados do cliente atualizados com sucesso!'); setEditingCustomer(null); fetchCustomers(); } else { alert('Erro ao editar cliente.'); }
+      if (data.success) { alert('Dados atualizados!'); setEditingCustomer(null); fetchCustomers(); } else { alert('Erro ao editar cliente.'); }
     } catch (error) {}
   };
 
@@ -702,7 +680,7 @@ export default function AdminDashboard() {
     e.preventDefault(); 
     try {
       const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminConfig) });
-      if ((await res.json()).success) alert("Perfil atualizado e salvo!"); else alert("Erro ao atualizar.");
+      if ((await res.json()).success) alert("Perfil atualizado!"); else alert("Erro ao atualizar.");
     } catch(e) {}
   };
 
@@ -710,7 +688,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     try {
       const res = await fetchWithStore(`${API_URL}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsForm) });
-      if ((await res.json()).success) alert('Configurações salvas!'); else alert('Erro ao salvar as configurações.');
+      if ((await res.json()).success) alert('Configurações salvas!'); else alert('Erro.');
     } catch (error) {}
   };
 
@@ -730,7 +708,7 @@ export default function AdminDashboard() {
   const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(searchCustomer.toLowerCase()) || c.email.toLowerCase().includes(searchCustomer.toLowerCase()) || (c.phone && c.phone.includes(searchCustomer)) || (c.cpf && c.cpf.includes(searchCustomer)));
   const filteredProducts = allProducts.filter(p => p.name.toLowerCase().includes(searchProduct.toLowerCase()));
 
-  const getMetodoPagamentoLabel = (method) => ({'PIX_ONLINE':'Pix (Pago no Site)','CREDIT_CARD_ONLINE':'Cartão de Crédito (Pago no Site)','CREDIT_CARD_DELIVERY':'Cartão na Entrega (Maquininha)','CASH':'Dinheiro na Entrega'}[method] || method);
+  const getMetodoPagamentoLabel = (method) => ({'PIX_ONLINE':'Pix','CREDIT_CARD_ONLINE':'Cartão Online','CREDIT_CARD_DELIVERY':'Cartão Entrega','CASH':'Dinheiro'}[method] || method);
 
   const isAdmin = loggedEmployee?.role === 'ADMIN' || loggedEmployee?.role === 'OWNER' || loggedEmployee?.role === 'Gerente Geral' || loggedEmployee?.id === 'ADMIN_MASTER';
   const canViewCompany = isAdmin || loggedEmployee?.canViewCompanyData === true;
@@ -761,7 +739,7 @@ export default function AdminDashboard() {
 
   if (loggedEmployee?.role?.toLowerCase().includes('entregador')) {
     if (typeof window !== 'undefined') window.location.href = `/${storeSlug}/entregadores`;
-    return <div className="flex h-screen items-center justify-center bg-slate-900 text-amber-500 font-bold">Redirecionando para a Rota de Entregas...</div>;
+    return <div className="flex h-screen items-center justify-center bg-slate-900 text-amber-500 font-bold">Redirecionando...</div>;
   }
 
   if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 text-amber-600 font-bold">Carregando painel administrativo...</div>;
@@ -770,11 +748,7 @@ export default function AdminDashboard() {
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
       <aside className={`relative flex flex-col bg-white border-r border-slate-200 transition-all duration-300 ease-in-out z-30 shadow-sm ${isSidebarOpen ? 'w-72' : 'w-20'}`}>
         <div className="h-20 flex items-center justify-between px-4 border-b border-slate-100">
-          {isSidebarOpen && (
-            <div className="flex items-center gap-3 overflow-hidden whitespace-nowrap animate-fade-in-up px-2">
-              <span className="font-black text-slate-900 text-xl tracking-tight">Zenix<span className="text-amber-500">Food</span></span>
-            </div>
-          )}
+          {isSidebarOpen && <span className="font-black text-slate-900 text-xl px-2">Zenix<span className="text-amber-500">Food</span></span>}
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors mx-auto">
             {isSidebarOpen ? '◀' : '☰'}
           </button>
@@ -791,10 +765,9 @@ export default function AdminDashboard() {
                   </button>
                   {isKdsMenuOpen && isSidebarOpen && (
                     <div className="ml-4 mt-2 space-y-1 pl-4 border-l border-slate-200 animate-fade-in-up">
-                      <a href={`/${storeSlug}/kds-cozinha`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">Cozinha Principal</a>
-                      <a href={`/${storeSlug}/kds-delivery`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">Expedição Delivery</a>
-                      <a href={`/${storeSlug}/kds-bebidas`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">Bar & Bebidas</a>
-                      <a href={`/${storeSlug}/kds-cliente`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">Painel de Senhas</a>
+                      <a href={`/${storeSlug}/kds-cozinha`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 py-2">👨‍🍳 Cozinha Principal</a>
+                      <a href={`/${storeSlug}/kds-delivery`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 py-2">🛵 Expedição</a>
+                      <a href={`/${storeSlug}/kds-bebidas`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 py-2">🍹 Bar & Bebidas</a>
                     </div>
                   )}
                 </div>
@@ -816,23 +789,12 @@ export default function AdminDashboard() {
           )}
         </nav>
         <div className="p-4 border-t border-slate-100">
-          <button onClick={handleAdminLogout} className={`w-full flex items-center gap-4 px-3 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all cursor-pointer ${!isSidebarOpen && 'justify-center'}`}>
-            <span className="text-xl shrink-0 flex items-center justify-center w-8">🚪</span>
-            {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm">Sair do Sistema</span>}
-          </button>
+          <button onClick={handleAdminLogout} className="w-full flex items-center gap-4 px-3 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all cursor-pointer justify-center">🚪 {isSidebarOpen && "Sair"}</button>
         </div>
       </aside>
       <main className="flex-1 flex flex-col h-screen relative overflow-hidden bg-slate-50">
         <header className="h-20 flex items-center justify-between px-8 bg-white border-b border-slate-200 shadow-sm z-20">
-           <h1 className="text-2xl font-black text-slate-800">
-             {activeTab === 'minha-empresa' ? 'Minha Empresa' : menuItems.find(m => m.id === activeTab)?.label || 'Acesso Restrito'}
-           </h1>
-           <div className="flex items-center gap-4">
-              <label htmlFor="autoPrintEnabled" className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer text-slate-600 hover:text-slate-900 transition-colors">
-                <input id="autoPrintEnabled" name="autoPrintEnabled" type="checkbox" checked={isAutoPrintEnabled} onChange={(e) => toggleAutoPrintState(e.target.checked)} className="rounded text-amber-500 focus:ring-0 border-slate-300 w-4 h-4 cursor-pointer" />
-                Spooler
-              </label>
-           </div>
+           <h1 className="text-2xl font-black text-slate-800">{activeTab === 'minha-empresa' ? 'Minha Empresa' : menuItems.find(m => m.id === activeTab)?.label || 'Acesso Restrito'}</h1>
         </header>
         <div className="flex-1 overflow-y-auto p-6 md:p-8 pb-32">
            {activeTab === 'pdv' && <PdvTab employeeUser={{ id: 'ADMIN_MASTER', name: 'Administrador Master', role: 'Gerente Geral' }} allProducts={allProducts} menu={menu} />}
@@ -850,11 +812,10 @@ export default function AdminDashboard() {
            {activeTab === 'estoque' && <StockTab estoqueSubTab={estoqueSubTab} setEstoqueSubTab={setEstoqueSubTab} fetchMovimentacoes={fetchMovimentacoes} handleUploadXMLPreview={handleUploadXMLPreview} setXmlFile={setXmlFile} novaMovimentacao={novaMovimentacao} setNovaMovimentacao={setNovaMovimentacao} insumos={insumos} handleMovimentacaoManual={handleMovimentacaoManual} novoInsumo={novoInsumo} setNovoInsumo={setNovoInsumo} handleSalvarInsumo={handleSalvarInsumo} toggleInsumoStatus={toggleInsumoStatus} setEditingInsumo={setEditingInsumo} editingInsumo={editingInsumo} handleEditInsumoSubmit={handleEditInsumoSubmit} allProducts={allProducts} fichasVisiveis={fichasVisiveis} carregarFicha={carregarFicha} setFichasVisiveis={setFichasVisiveis} calculateCmv={calculateCmv} getCmvColor={getCmvColor} handleRemoveFicha={handleRemoveFicha} handleAddFicha={handleAddFicha} movimentacoes={movimentacoes} showXmlModal={showXmlModal} setShowXmlModal={setShowXmlModal} xmlPreviewData={xmlPreviewData} xmlMappings={xmlMappings} updateMapping={updateMapping} handleConfirmXmlImport={handleConfirmXmlImport} />}
            {activeTab === 'impressoes' && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
            {activeTab === 'fiscal' && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
-           {activeTab === 'config' && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={handleUpdateAdminConfig} />}
+           {activeTab === 'config' && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={handleUpdateAdminConfig} />}
            {activeTab === 'minha-empresa' && canViewCompany && <MinhaEmpresaTab />}
         </div>
       </main>
-      
       {editingCategory && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-6 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up">
@@ -863,10 +824,7 @@ export default function AdminDashboard() {
               <input type="text" required value={editingCategory.name} onChange={(e) => setEditingCategory({...editingCategory, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500 mb-4" />
               <label className="flex items-center gap-3 cursor-pointer bg-slate-50 p-3 rounded-xl border border-slate-200 hover:border-blue-300 transition-colors">
                 <input type="checkbox" checked={editingCategory.isDrink || false} onChange={e => setEditingCategory({...editingCategory, isDrink: e.target.checked})} className="w-5 h-5 accent-blue-600 cursor-pointer shrink-0" />
-                <div className="flex flex-col">
-                   <span className="text-xs font-black text-slate-800">KDS Bar</span>
-                   <span className="text-[10px] text-slate-500 leading-tight mt-0.5">Enviar itens para o Bar.</span>
-                </div>
+                <span className="text-xs font-black text-slate-800">KDS Bar</span>
               </label>
               <div className="flex gap-4 pt-4 border-t border-slate-100 mt-2">
                 <button type="button" onClick={() => setEditingCategory(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all cursor-pointer">Cancelar</button>
@@ -883,15 +841,6 @@ export default function AdminDashboard() {
             <form onSubmit={handleEditCustomer} className="space-y-4">
               <input type="text" required value={editingCustomer.name || ''} onChange={(e) => setEditingCustomer({...editingCustomer, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
               <input type="email" required value={editingCustomer.email || ''} onChange={(e) => setEditingCustomer({...editingCustomer, email: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
-              <input type="text" value={editingCustomer.address || ''} onChange={(e) => setEditingCustomer({...editingCustomer, address: e.target.value})} placeholder="Rua, Número, Bairro..." className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
-              <div className="grid grid-cols-2 gap-4">
-                <input type="tel" value={editingCustomer.phone || ''} onChange={(e) => setEditingCustomer({...editingCustomer, phone: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
-                <input type="text" value={editingCustomer.cpf || ''} onChange={(e) => setEditingCustomer({...editingCustomer, cpf: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
-              </div>
-              <input type="date" value={editingCustomer.birthDate || ''} onChange={(e) => setEditingCustomer({...editingCustomer, birthDate: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
-              <div className="pt-3 border-t border-slate-200">
-                 <input type="password" value={editingCustomer.password || ''} onChange={(e) => setEditingCustomer({...editingCustomer, password: e.target.value})} placeholder="Nova senha..." className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500" />
-              </div>
               <div className="flex gap-4 pt-4">
                 <button type="button" onClick={() => setEditingCustomer(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all cursor-pointer">Cancelar</button>
                 <button type="submit" className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-xl transition-all shadow-md cursor-pointer">Salvar</button>
