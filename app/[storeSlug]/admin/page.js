@@ -140,6 +140,7 @@ export default function AdminDashboard() {
   const [visitsData, setVisitsData] = useState({ visits: [], totalVisits: 0 });
   const [adminConfig, setAdminConfig] = useState({ name: '', email: '', password: '' });
   const [settingsForm, setSettingsForm] = useState({
+    logoUrl: '', coverImageUrl: '', totemCoverImageUrl: '', ifoodLink: '', ninetyNineFoodLink: '',
     isManualFechado: false, deliveryFee: 5.00, cashbackPercent: 5, promoBannerUrl: '', promoBannerLink: '', youtubeLiveId: '', printerName: '', aboutUsText: '', 
     schedule: { "0": { isOpen: true, open: "18:00", close: "23:30" }, "1": { isOpen: false, open: "18:00", close: "23:30" }, "2": { isOpen: true, open: "18:00", close: "23:30" }, "3": { isOpen: true, open: "18:00", close: "23:30" }, "4": { isOpen: true, open: "18:00", close: "23:30" }, "5": { isOpen: true, open: "18:00", close: "23:30" }, "6": { isOpen: true, open: "18:00", close: "23:30" } }
   });
@@ -400,7 +401,9 @@ export default function AdminDashboard() {
           isManualFechado: data.isManualFechado, deliveryFee: Number(data.deliveryFee), cashbackPercent: Number(data.cashbackPercent),
           promoBannerUrl: data.promoBannerUrl || '', promoBannerLink: data.promoBannerLink || '',
           youtubeLiveId: data.youtubeLiveId || '', printerName: data.printerName || '', aboutUsText: data.aboutUsText || '', 
-          schedule: data.schedule || settingsForm.schedule, storeCnpj: data.storeCnpj || ''
+          schedule: data.schedule || settingsForm.schedule, storeCnpj: data.storeCnpj || '',
+          logoUrl: data.logoUrl || '', coverImageUrl: data.coverImageUrl || '', totemCoverImageUrl: data.totemCoverImageUrl || '',
+          ifoodLink: data.ifoodLink || '', ninetyNineFoodLink: data.ninetyNineFoodLink || ''
         });
       }
     } catch (error) {}
