@@ -1,8 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-
-// Importação dos Componentes
 import AdminLogin from './components/AdminLogin';
 import ExpeditionTab from './components/tabs/ExpeditionTab';
 import OrderHistoryTab from './components/tabs/OrderHistoryTab';
@@ -22,8 +20,7 @@ import SalaoTab from './components/tabs/SalaoTab';
 import MinhaEmpresaTab from './components/tabs/MinhaEmpresaTab';
 import OrderDetailsModal from './components/modals/OrderDetailsModal';
 
-// COMPONENTE: ABA DE IMPRESSORAS (Embutido de forma segura)
-const ImpressorasTab = ({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) => {
+function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
   const [groupForm, setGroupForm] = useState({ name: '', printerId: '', regraFiscalId: '' });
 
@@ -33,20 +30,20 @@ const ImpressorasTab = ({ printers, setPrinters, productGroups, setProductGroups
       if (pRes.ok) setPrinters(await pRes.json());
       const gRes = await fetchWithStore(`${API_URL}/api/product-groups`);
       if (gRes.ok) setProductGroups(await gRes.json());
-    } catch (e) { console.error(e); }
+    } catch (e) {}
   };
 
   const handleAddPrinter = async (e) => {
     e.preventDefault();
-    if (!printerForm.name || !printerForm.address) return alert("Preencha o Nome e o IP.");
+    if (!printerForm.name || !printerForm.address) return alert("Preencha o Nome e o IP/Compartilhamento.");
     try {
       const res = await fetchWithStore(`${API_URL}/api/printers`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(printerForm) });
       if ((await res.json()).success) { setPrinterForm({ name: '', type: 'USB', address: '' }); fetchPrintersAndGroups(); }
-    } catch (e) { alert("Erro ao salvar."); }
+    } catch (e) {}
   };
 
   const handleDeletePrinter = async (id) => {
-    if(!confirm("Excluir impressora?")) return;
+    if(!confirm("Excluir impressora? Grupos vinculados ficarão sem destino.")) return;
     try { await fetchWithStore(`${API_URL}/api/printers/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) {}
   };
 
@@ -56,7 +53,7 @@ const ImpressorasTab = ({ printers, setPrinters, productGroups, setProductGroups
     try {
       const res = await fetchWithStore(`${API_URL}/api/product-groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: groupForm.name, printerId: groupForm.printerId || null, regraFiscalId: groupForm.regraFiscalId || null }) });
       if ((await res.json()).success) { setGroupForm({ name: '', printerId: '', regraFiscalId: '' }); fetchPrintersAndGroups(); }
-    } catch (e) { alert("Erro ao criar."); }
+    } catch (e) {}
   };
 
   const handleDeleteGroup = async (id) => {
@@ -87,7 +84,6 @@ const ImpressorasTab = ({ printers, setPrinters, productGroups, setProductGroups
           ))}
         </div>
       </div>
-
       <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
         <h3 className="text-xl font-black text-slate-800 mb-2">⚙️ Grupos de Produção</h3>
         <form onSubmit={handleAddGroup} className="flex flex-col md:flex-row gap-4 mb-8 bg-slate-50 p-4 rounded-2xl border border-slate-100">
@@ -116,9 +112,8 @@ const ImpressorasTab = ({ printers, setPrinters, productGroups, setProductGroups
       </div>
     </div>
   );
-};
+}
 
-// COMPONENTE: ADMIN DASHBOARD PRINCIPAL
 export default function AdminDashboard() {
   const params = useParams();
   const storeSlug = params?.storeSlug || ''; 
@@ -334,7 +329,7 @@ export default function AdminDashboard() {
   const assignDelivery = async (orderIds, deliveryPersonId) => {
     try {
       const res = await fetchWithStore(`${API_URL}/api/orders/dispatch`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderIds, deliveryPersonId }) });
-      if ((await res.json()).success) { alert('📦 Pedidos despachados com sucesso!'); fetchOrders(); } else alert('Erro ao despachar.');
+      if ((await res.json()).success) { alert('Pedidos despachados com sucesso!'); fetchOrders(); } else alert('Erro ao despachar.');
     } catch (e) { alert('Erro de conexão ao despachar.'); }
   };
 
@@ -395,8 +390,8 @@ export default function AdminDashboard() {
     try {
       const res = await fetch('http://localhost:8080/imprimir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pedido: order, isPartial: false }) });
       if (!res.ok) throw new Error('Falha na impressora');
-      alert('🖨️ Pedido enviado para a impressora!');
-    } catch (error) { alert("⚠️ Erro de Impressão: Verifique se o Servidor Local está aberto!"); }
+      alert('Pedido enviado para a impressora!');
+    } catch (error) { alert("Erro de Impressão: Verifique se o Servidor Local está aberto!"); }
   };
 
   const fetchMenu = async () => {
@@ -479,7 +474,7 @@ export default function AdminDashboard() {
         fetchOrders(); 
         const resImpressora = await fetch('http://localhost:8080/imprimir-nfce', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pedido: pedidoAtual, dadosNota: dataBackend.fiscalData, printerName: settingsForm.printerName }) });
         if (resImpressora.ok) alert("NFC-e emitida na SEFAZ e impressa NATIVAMENTE com sucesso!"); else alert("A nota foi emitida na SEFAZ, mas ocorreu um erro ao se comunicar com a impressora térmica local.");
-      } else { alert(`🚫 NF-e Recusada:\n${dataBackend.error}`); }
+      } else { alert(`NF-e Recusada:\n${dataBackend.error}`); }
     } catch (error) { alert('Erro de comunicação.'); } finally { setLoadingNfceId(null); }
   };
 
@@ -525,8 +520,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/estoque/xml/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chaveNfe: xmlPreviewData.chaveNfe, items: payloadItems }) });
       const data = await res.json();
-      if (data.success) { alert(data.message); setShowXmlModal(false); fetchInsumos(); fetchMovimentacoes(); fetchProducts(); } 
-      else alert(data.error);
+      if (data.success) { alert(data.message); setShowXmlModal(false); fetchInsumos(); fetchMovimentacoes(); fetchProducts(); } else alert(data.error);
     } catch(e) { alert('Erro na importação.'); }
     setLoading(false);
   };
@@ -552,7 +546,7 @@ export default function AdminDashboard() {
       const novoStatus = insumo.isActive === false ? true : false;
       const res = await fetchWithStore(`${API_URL}/api/insumos/${insumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...insumo, isActive: novoStatus }) });
       if ((await res.json()).success) fetchInsumos();
-    } catch (e) { alert('Erro ao alterar status do insumo'); }
+    } catch (e) {}
   };
 
   const handleAddFicha = async (e, productId) => {
@@ -564,12 +558,12 @@ export default function AdminDashboard() {
       const res = await fetchWithStore(`${API_URL}/api/products/${productId}/fichas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ insumoId, quantity }) });
       const data = await res.json();
       if (data.success) { carregarFicha(productId); fetchProducts(); } else alert(data.error);
-    } catch (e) { alert('Erro ao salvar ficha'); }
+    } catch (e) {}
   };
 
   const handleRemoveFicha = async (fichaId, productId) => {
     if(!confirm('Remover este item da ficha?')) return;
-    try { await fetchWithStore(`${API_URL}/api/fichas/${fichaId}`, { method: 'DELETE' }); carregarFicha(productId); fetchProducts(); } catch(e) { alert('Erro'); }
+    try { await fetchWithStore(`${API_URL}/api/fichas/${fichaId}`, { method: 'DELETE' }); carregarFicha(productId); fetchProducts(); } catch(e) {}
   };
 
   const handleMovimentacaoManual = async (e) => {
@@ -577,9 +571,8 @@ export default function AdminDashboard() {
     if (!novaMovimentacao.insumoId) return alert('Selecione o insumo');
     try {
       const res = await fetchWithStore(`${API_URL}/api/estoque/manual`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaMovimentacao) });
-      if ((await res.json()).success) { alert('Movimentação registrada com sucesso!'); setNovaMovimentacao({ insumoId: '', type: 'IN', quantity: '', reason: '' }); fetchInsumos(); if (estoqueSubTab === 'movimentacoes') fetchMovimentacoes(); } 
-      else alert('Erro ao registrar movimentação manual.');
-    } catch (error) { alert('Erro de comunicação.'); }
+      if ((await res.json()).success) { alert('Movimentação registrada com sucesso!'); setNovaMovimentacao({ insumoId: '', type: 'IN', quantity: '', reason: '' }); fetchInsumos(); if (estoqueSubTab === 'movimentacoes') fetchMovimentacoes(); } else alert('Erro ao registrar movimentação manual.');
+    } catch (error) {}
   };
 
   const handleAddIcms = (e) => { e.preventDefault(); const updatedIcms = [...(fiscalData.icms || []), { ...formIcms, id: formIcms.id || Date.now().toString() }]; saveFiscalData({ ...fiscalData, icms: updatedIcms }); setFormIcms({ id: '', descricao: '', regime: 'Simples Nacional', cfop: '', cst: '', aliquota: '' }); };
@@ -595,7 +588,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/orders/${orderId}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) });
       if ((await res.json()).success) fetchOrders();
-    } catch (error) { alert('Erro ao atualizar status do pedido.'); }
+    } catch (error) {}
   };
 
   const handleAddCategory = async (e) => {
@@ -603,7 +596,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/categories`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newCategoryName, isDrink: newCategoryIsDrink }) });
       if ((await res.json()).success) { setNewCategoryName(''); setNewCategoryIsDrink(false); fetchMenu(); }
-    } catch (error) { alert('Erro ao criar categoria.'); }
+    } catch (error) {}
   };
 
   const handleEditCategory = async (e) => {
@@ -611,7 +604,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/categories/${editingCategory.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editingCategory.name, isDrink: editingCategory.isDrink }) });
       if ((await res.json()).success) { setEditingCategory(null); fetchMenu(); }
-    } catch (error) { alert('Erro ao editar categoria.'); }
+    } catch (error) {}
   };
 
   const handleDeleteCategory = async (categoryId) => {
@@ -620,7 +613,7 @@ export default function AdminDashboard() {
       const res = await fetchWithStore(`${API_URL}/api/categories/${categoryId}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) fetchMenu(); else alert(data.error);
-    } catch (error) { alert('Erro ao excluir categoria.'); }
+    } catch (error) {}
   };
 
   const moveCategory = async (index, direction) => {
@@ -632,7 +625,7 @@ export default function AdminDashboard() {
     try {
       const reordered = newMenu.map((cat, i) => ({ id: cat.id, order: i }));
       await fetchWithStore(`${API_URL}/api/categories/reorder`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categories: reordered }) });
-    } catch (error) { alert('Erro de comunicação ao reordenar.'); }
+    } catch (error) {}
   };
 
   const moveProduct = async (categoryId, productIndex, direction) => {
@@ -654,7 +647,7 @@ export default function AdminDashboard() {
     try {
       const reordered = catProducts.map((prod, i) => ({ id: prod.id, order: i }));
       await fetchWithStore(`${API_URL}/api/products/reorder`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ products: reordered }) });
-    } catch (error) { alert('Erro ao reordenar produtos no servidor.'); }
+    } catch (error) {}
   };
 
   const handleAddProduct = async (e) => {
@@ -667,7 +660,7 @@ export default function AdminDashboard() {
         setNewProduct({ name: '', description: '', price: '', price700g: '', price1kg: '', costPrice: '', categoryId: menu[0]?.id || '', imageUrl: '', regraFiscalId: '', ncm: '', ean: '', groupId: '' });
         setIsCreatingProduct(false); fetchProducts(); fetchMenu(); 
       }
-    } catch (error) { alert('Erro ao salvar produto.'); }
+    } catch (error) {}
   };
 
   const handleEditProduct = async (e) => {
@@ -676,7 +669,7 @@ export default function AdminDashboard() {
       const payload = { ...editingProduct, costPrice: editingProduct.costPrice ? Number(editingProduct.costPrice) : 0, groupId: editingProduct.groupId || null };
       const res = await fetchWithStore(`${API_URL}/api/products/${editingProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if ((await res.json()).success) { setEditingProduct(null); fetchProducts(); fetchMenu(); }
-    } catch (error) { alert('Erro ao editar produto.'); }
+    } catch (error) {}
   };
 
   const toggleProductStatus = async (product) => {
@@ -693,7 +686,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/products/${product.id}/feature`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isFeatured: !isCurrentlyFeatured }) });
       if ((await res.json()).success) { fetchProducts(); }
-    } catch (error) { alert('Erro ao alterar destaque.'); }
+    } catch (error) {}
   };
 
   const handleEditCustomer = async (e) => {
@@ -702,7 +695,7 @@ export default function AdminDashboard() {
       const res = await fetchWithStore(`${API_URL}/api/admin/customers/${editingCustomer.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingCustomer) });
       const data = await res.json();
       if (data.success) { alert('Dados do cliente atualizados com sucesso!'); setEditingCustomer(null); fetchCustomers(); } else { alert('Erro ao editar cliente.'); }
-    } catch (error) { alert('Erro de conexão com o servidor.'); }
+    } catch (error) {}
   };
 
   const handleUpdateAdminConfig = async (e) => { 
@@ -710,7 +703,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminConfig) });
       if ((await res.json()).success) alert("Perfil atualizado e salvo!"); else alert("Erro ao atualizar.");
-    } catch(e) { alert("Erro de comunicação."); }
+    } catch(e) {}
   };
 
   const handleSaveSystemSettings = async (e) => {
@@ -718,7 +711,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithStore(`${API_URL}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsForm) });
       if ((await res.json()).success) alert('Configurações salvas!'); else alert('Erro ao salvar as configurações.');
-    } catch (error) { alert('Erro de conexão.'); }
+    } catch (error) {}
   };
 
   const toggleAutoPrintState = (checked) => { setIsAutoPrintEnabled(checked); localStorage.setItem('zenix_autoPrint', checked ? 'true' : 'false'); };
@@ -737,7 +730,7 @@ export default function AdminDashboard() {
   const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(searchCustomer.toLowerCase()) || c.email.toLowerCase().includes(searchCustomer.toLowerCase()) || (c.phone && c.phone.includes(searchCustomer)) || (c.cpf && c.cpf.includes(searchCustomer)));
   const filteredProducts = allProducts.filter(p => p.name.toLowerCase().includes(searchProduct.toLowerCase()));
 
-  const getMetodoPagamentoLabel = (method) => ({'PIX_ONLINE':'Pix (Pago no Site) 📱','CREDIT_CARD_ONLINE':'Cartão de Crédito (Pago no Site) 💳','CREDIT_CARD_DELIVERY':'Cartão na Entrega (Maquininha) 💳','CASH':'Dinheiro na Entrega 💵'}[method] || method);
+  const getMetodoPagamentoLabel = (method) => ({'PIX_ONLINE':'Pix (Pago no Site)','CREDIT_CARD_ONLINE':'Cartão de Crédito (Pago no Site)','CREDIT_CARD_DELIVERY':'Cartão na Entrega (Maquininha)','CASH':'Dinheiro na Entrega'}[method] || method);
 
   const isAdmin = loggedEmployee?.role === 'ADMIN' || loggedEmployee?.role === 'OWNER' || loggedEmployee?.role === 'Gerente Geral' || loggedEmployee?.id === 'ADMIN_MASTER';
   const canViewCompany = isAdmin || loggedEmployee?.canViewCompanyData === true;
@@ -768,20 +761,13 @@ export default function AdminDashboard() {
 
   if (loggedEmployee?.role?.toLowerCase().includes('entregador')) {
     if (typeof window !== 'undefined') window.location.href = `/${storeSlug}/entregadores`;
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-900 text-amber-500 font-bold">
-          Redirecionando para a Rota de Entregas...
-      </div>
-    );
+    return <div className="flex h-screen items-center justify-center bg-slate-900 text-amber-500 font-bold">Redirecionando para a Rota de Entregas...</div>;
   }
 
-  if (loading) return (
-    <div className="flex h-screen items-center justify-center bg-slate-50 text-amber-600 font-bold"><div className="animate-pulse flex flex-col items-center"><div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div><p>Carregando painel administrativo...</p></div></div>
-  );
+  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 text-amber-600 font-bold">Carregando painel administrativo...</div>;
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
-      
       <aside className={`relative flex flex-col bg-white border-r border-slate-200 transition-all duration-300 ease-in-out z-30 shadow-sm ${isSidebarOpen ? 'w-72' : 'w-20'}`}>
         <div className="h-20 flex items-center justify-between px-4 border-b border-slate-100">
           {isSidebarOpen && (
@@ -789,81 +775,46 @@ export default function AdminDashboard() {
               <span className="font-black text-slate-900 text-xl tracking-tight">Zenix<span className="text-amber-500">Food</span></span>
             </div>
           )}
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors mx-auto" title={isSidebarOpen ? "Recolher Menu" : "Expandir Menu"}>
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors mx-auto">
             {isSidebarOpen ? '◀' : '☰'}
           </button>
         </div>
-
         <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto hide-scrollbar">
           {menuItems.map((item) => {
             if (item.isDropdown) {
               return (
                 <div key={item.id} className="flex flex-col">
-                  <button 
-                    onClick={() => {
-                      if (!isSidebarOpen) setIsSidebarOpen(true);
-                      setIsKdsMenuOpen(!isKdsMenuOpen);
-                    }} 
-                    className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isKdsMenuOpen ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-                  >
+                  <button onClick={() => { if (!isSidebarOpen) setIsSidebarOpen(true); setIsKdsMenuOpen(!isKdsMenuOpen); }} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isKdsMenuOpen ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
                     <span className="text-xl shrink-0 flex items-center justify-center w-8">{item.icon}</span>
                     {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm flex-1 text-left">{item.label}</span>}
                     {isSidebarOpen && <span className="text-[10px] font-black">{isKdsMenuOpen ? '▼' : '▶'}</span>}
                   </button>
-                  
                   {isKdsMenuOpen && isSidebarOpen && (
                     <div className="ml-4 mt-2 space-y-1 pl-4 border-l border-slate-200 animate-fade-in-up">
-                      <a href={`/${storeSlug}/kds-cozinha`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
-                        <span className="text-sm">👨‍🍳</span> Cozinha Principal
-                      </a>
-                      <a href={`/${storeSlug}/kds-delivery`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
-                        <span className="text-sm">🛵</span> Expedição Delivery
-                      </a>
-                      <a href={`/${storeSlug}/kds-bebidas`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
-                        <span className="text-sm">🍹</span> Bar & Bebidas
-                      </a>
-                      <a href={`/${storeSlug}/kds-cliente`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">
-                        <span className="text-sm">📺</span> Painel de Senhas (TV)
-                      </a>
+                      <a href={`/${storeSlug}/kds-cozinha`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">Cozinha Principal</a>
+                      <a href={`/${storeSlug}/kds-delivery`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">Expedição Delivery</a>
+                      <a href={`/${storeSlug}/kds-bebidas`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">Bar & Bebidas</a>
+                      <a href={`/${storeSlug}/kds-cliente`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-600 hover:bg-slate-50 py-2.5 px-3 rounded-lg transition-colors cursor-pointer">Painel de Senhas</a>
                     </div>
                   )}
                 </div>
               );
             }
-
             const isActive = activeTab === item.id;
             return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-amber-500 text-black shadow-md'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
+              <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isActive ? 'bg-amber-500 text-black shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
                 <span className="text-xl shrink-0 flex items-center justify-center w-8">{item.icon}</span>
                 {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm">{item.label}</span>}
               </button>
             );
           })}
-
           {canViewCompany && (
-            <button
-              onClick={() => setActiveTab('minha-empresa')}
-              className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer mt-4 border-t border-slate-200 pt-6 ${
-                activeTab === 'minha-empresa'
-                  ? 'bg-amber-500 text-black shadow-md'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-            >
+            <button onClick={() => setActiveTab('minha-empresa')} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer mt-4 border-t border-slate-200 pt-6 ${activeTab === 'minha-empresa' ? 'bg-amber-500 text-black shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
               <span className="text-xl shrink-0 flex items-center justify-center w-8">🏢</span>
               {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm text-left">Minha Empresa</span>}
             </button>
           )}
-
         </nav>
-
         <div className="p-4 border-t border-slate-100">
           <button onClick={handleAdminLogout} className={`w-full flex items-center gap-4 px-3 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all cursor-pointer ${!isSidebarOpen && 'justify-center'}`}>
             <span className="text-xl shrink-0 flex items-center justify-center w-8">🚪</span>
@@ -871,7 +822,6 @@ export default function AdminDashboard() {
           </button>
         </div>
       </aside>
-
       <main className="flex-1 flex flex-col h-screen relative overflow-hidden bg-slate-50">
         <header className="h-20 flex items-center justify-between px-8 bg-white border-b border-slate-200 shadow-sm z-20">
            <h1 className="text-2xl font-black text-slate-800">
@@ -880,11 +830,10 @@ export default function AdminDashboard() {
            <div className="flex items-center gap-4">
               <label htmlFor="autoPrintEnabled" className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer text-slate-600 hover:text-slate-900 transition-colors">
                 <input id="autoPrintEnabled" name="autoPrintEnabled" type="checkbox" checked={isAutoPrintEnabled} onChange={(e) => toggleAutoPrintState(e.target.checked)} className="rounded text-amber-500 focus:ring-0 border-slate-300 w-4 h-4 cursor-pointer" />
-                Spooler de Impressão (Porta 8080)
+                Spooler
               </label>
            </div>
         </header>
-
         <div className="flex-1 overflow-y-auto p-6 md:p-8 pb-32">
            {activeTab === 'pdv' && <PdvTab employeeUser={{ id: 'ADMIN_MASTER', name: 'Administrador Master', role: 'Gerente Geral' }} allProducts={allProducts} menu={menu} />}
            {activeTab === 'salao' && <SalaoTab employeeUser={{ id: 'ADMIN_MASTER', name: 'Administrador Master', role: 'Gerente Geral' }} />}
@@ -902,74 +851,55 @@ export default function AdminDashboard() {
            {activeTab === 'impressoes' && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
            {activeTab === 'fiscal' && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
            {activeTab === 'config' && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={handleUpdateAdminConfig} />}
-           
-           {/* RENDERIZANDO A ABA MINHA EMPRESA AQUI */}
            {activeTab === 'minha-empresa' && canViewCompany && <MinhaEmpresaTab />}
         </div>
       </main>
-
+      
       {editingCategory && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-6 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up">
             <h3 className="text-xl font-black text-amber-600 mb-4">Editar Categoria</h3>
             <form onSubmit={handleEditCategory} className="space-y-4">
-              <div>
-                <label htmlFor="editCatNameFunc" className="text-xs text-slate-500 block mb-1">Nome da Categoria</label>
-                <input id="editCatNameFunc" name="editCatNameFunc" type="text" required value={editingCategory.name} onChange={(e) => setEditingCategory({...editingCategory, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500 mb-4" />
-              </div>
-              
+              <input type="text" required value={editingCategory.name} onChange={(e) => setEditingCategory({...editingCategory, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500 mb-4" />
               <label className="flex items-center gap-3 cursor-pointer bg-slate-50 p-3 rounded-xl border border-slate-200 hover:border-blue-300 transition-colors">
-                <input 
-                  type="checkbox" 
-                  checked={editingCategory.isDrink || false} 
-                  onChange={e => setEditingCategory({...editingCategory, isDrink: e.target.checked})} 
-                  className="w-5 h-5 accent-blue-600 cursor-pointer shrink-0"
-                />
+                <input type="checkbox" checked={editingCategory.isDrink || false} onChange={e => setEditingCategory({...editingCategory, isDrink: e.target.checked})} className="w-5 h-5 accent-blue-600 cursor-pointer shrink-0" />
                 <div className="flex flex-col">
-                   <span className="text-xs font-black text-slate-800">🍹 KDS Bar (Bebidas)</span>
-                   <span className="text-[10px] text-slate-500 leading-tight mt-0.5">Enviar itens desta categoria para o KDS do Bar.</span>
+                   <span className="text-xs font-black text-slate-800">KDS Bar</span>
+                   <span className="text-[10px] text-slate-500 leading-tight mt-0.5">Enviar itens para o Bar.</span>
                 </div>
               </label>
-
               <div className="flex gap-4 pt-4 border-t border-slate-100 mt-2">
                 <button type="button" onClick={() => setEditingCategory(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all cursor-pointer">Cancelar</button>
-                <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-black py-3 rounded-xl transition-all shadow-md cursor-pointer">Salvar Edição</button>
+                <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-black py-3 rounded-xl transition-all shadow-md cursor-pointer">Salvar</button>
               </div>
             </form>
           </div>
         </div>
       )}
-
       {editingCustomer && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-6 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up">
-            <h3 className="text-xl font-black text-slate-900 mb-4">Editar Dados do Cliente</h3>
+            <h3 className="text-xl font-black text-slate-900 mb-4">Editar Cliente</h3>
             <form onSubmit={handleEditCustomer} className="space-y-4">
-              <div><label htmlFor="custNameFunc" className="text-xs text-slate-500 block mb-1">Nome Completo</label><input id="custNameFunc" name="custNameFunc" type="text" required value={editingCustomer.name || ''} onChange={(e) => setEditingCustomer({...editingCustomer, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" /></div>
-              <div><label htmlFor="custEmailFunc" className="text-xs text-slate-500 block mb-1">E-mail</label><input id="custEmailFunc" name="custEmailFunc" type="email" required value={editingCustomer.email || ''} onChange={(e) => setEditingCustomer({...editingCustomer, email: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" /></div>
-              <div>
-                <label htmlFor="custAddrFunc" className="text-xs text-slate-500 block mb-1">Endereço Completo</label>
-                <input id="custAddrFunc" name="custAddrFunc" type="text" value={editingCustomer.address || ''} onChange={(e) => setEditingCustomer({...editingCustomer, address: e.target.value})} placeholder="Rua, Número, Bairro, CEP..." className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
-              </div>
+              <input type="text" required value={editingCustomer.name || ''} onChange={(e) => setEditingCustomer({...editingCustomer, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
+              <input type="email" required value={editingCustomer.email || ''} onChange={(e) => setEditingCustomer({...editingCustomer, email: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
+              <input type="text" value={editingCustomer.address || ''} onChange={(e) => setEditingCustomer({...editingCustomer, address: e.target.value})} placeholder="Rua, Número, Bairro..." className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
               <div className="grid grid-cols-2 gap-4">
-                <div><label htmlFor="custPhoneFunc" className="text-xs text-slate-500 block mb-1">WhatsApp</label><input id="custPhoneFunc" name="custPhoneFunc" type="tel" value={editingCustomer.phone || ''} onChange={(e) => setEditingCustomer({...editingCustomer, phone: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" /></div>
-                <div><label htmlFor="custCpfFunc" className="text-xs text-slate-500 block mb-1">CPF</label><input id="custCpfFunc" name="custCpfFunc" type="text" value={editingCustomer.cpf || ''} onChange={(e) => setEditingCustomer({...editingCustomer, cpf: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" /></div>
+                <input type="tel" value={editingCustomer.phone || ''} onChange={(e) => setEditingCustomer({...editingCustomer, phone: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
+                <input type="text" value={editingCustomer.cpf || ''} onChange={(e) => setEditingCustomer({...editingCustomer, cpf: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
               </div>
-              <div><label htmlFor="custDateFunc" className="text-xs text-slate-500 block mb-1">Data de Nascimento</label><input id="custDateFunc" name="custDateFunc" type="date" value={editingCustomer.birthDate || ''} onChange={(e) => setEditingCustomer({...editingCustomer, birthDate: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" /></div>
+              <input type="date" value={editingCustomer.birthDate || ''} onChange={(e) => setEditingCustomer({...editingCustomer, birthDate: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
               <div className="pt-3 border-t border-slate-200">
-                 <label htmlFor="custPassFunc" className="text-xs font-bold text-amber-600 block mb-1">Alterar Senha do Cliente</label>
-                 <p className="text-[10px] text-slate-500 mb-2">Deixe em branco para não alterar.</p>
-                 <input id="custPassFunc" name="custPassFunc" type="password" value={editingCustomer.password || ''} onChange={(e) => setEditingCustomer({...editingCustomer, password: e.target.value})} placeholder="••••••••" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500" />
+                 <input type="password" value={editingCustomer.password || ''} onChange={(e) => setEditingCustomer({...editingCustomer, password: e.target.value})} placeholder="Nova senha..." className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500" />
               </div>
               <div className="flex gap-4 pt-4">
                 <button type="button" onClick={() => setEditingCustomer(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all cursor-pointer">Cancelar</button>
-                <button type="submit" className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-xl transition-all shadow-md cursor-pointer">Salvar Edição</button>
+                <button type="submit" className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-xl transition-all shadow-md cursor-pointer">Salvar</button>
               </div>
             </form>
           </div>
         </div>
       )}
-
       <OrderDetailsModal order={selectedOrderDetails} onClose={() => setSelectedOrderDetails(null)} triggerManualPrint={triggerManualPrint} getMetodoPagamentoLabel={getMetodoPagamentoLabel} getProductSizeLabel={getProductSizeLabel} />
     </div>
   );
