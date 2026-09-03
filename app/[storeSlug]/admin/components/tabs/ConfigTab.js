@@ -1,12 +1,16 @@
-function ConfigTab({ settingsForm, setSettingsForm, handleSaveSystemSettings, daysOfWeek, adminConfig, setAdminConfig, handleUpdateAdminConfig }) {
+'use client';
+
+export default function ConfigTab({ settingsForm, setSettingsForm, handleSaveSystemSettings, daysOfWeek, adminConfig, setAdminConfig, handleUpdateAdminConfig }) {
   return (
     <main className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start animate-fade-in-up">
       <section className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
         <h2 className="text-xl font-black text-amber-600 mb-6 uppercase tracking-wider">⚙️ Configurações da Loja</h2>
+        
         <form onSubmit={handleSaveSystemSettings} className="space-y-5">
           
           <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-6 space-y-4">
             <h3 className="text-sm font-bold text-purple-700 mb-2 flex items-center gap-2">🎨 Personalização Visual & Apps</h3>
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Logotipo (URL)</label>
@@ -21,14 +25,15 @@ function ConfigTab({ settingsForm, setSettingsForm, handleSaveSystemSettings, da
                 <input type="url" value={settingsForm.totemCoverImageUrl || ''} onChange={e => setSettingsForm({...settingsForm, totemCoverImageUrl: e.target.value})} className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-purple-500" placeholder="https://..." />
               </div>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-purple-200/50 pt-4">
               <div>
                 <label className="text-[10px] text-red-600 font-bold uppercase block mb-1">Link do iFood</label>
-                <input type="url" value={settingsForm.ifoodLink || ''} onChange={e => setSettingsForm({...settingsForm, ifoodLink: e.target.value})} className="w-full bg-white border border-red-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-red-500" />
+                <input type="url" value={settingsForm.ifoodLink || ''} onChange={e => setSettingsForm({...settingsForm, ifoodLink: e.target.value})} className="w-full bg-white border border-red-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-red-500" placeholder="Opcional" />
               </div>
               <div>
                 <label className="text-[10px] text-amber-600 font-bold uppercase block mb-1">Link do 99Food</label>
-                <input type="url" value={settingsForm.ninetyNineFoodLink || ''} onChange={e => setSettingsForm({...settingsForm, ninetyNineFoodLink: e.target.value})} className="w-full bg-white border border-amber-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-amber-500" />
+                <input type="url" value={settingsForm.ninetyNineFoodLink || ''} onChange={e => setSettingsForm({...settingsForm, ninetyNineFoodLink: e.target.value})} className="w-full bg-white border border-amber-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-amber-500" placeholder="Opcional" />
               </div>
             </div>
           </div>
