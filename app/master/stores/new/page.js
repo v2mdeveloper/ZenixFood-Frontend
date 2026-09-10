@@ -14,7 +14,7 @@ export default function MasterNewStorePage() {
 
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
-    : 'https://canone-backend.onrender.com';
+    : 'https://zenixfood-backend.onrender.com';
 
   // --- MÁSCARAS DE VALIDAÇÃO ---
   const handleRazaoSocialChange = (e) => {
