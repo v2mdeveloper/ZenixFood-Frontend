@@ -3,22 +3,22 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
-import Header from '../components/Header';
-import Footer from '../components/Footer';
-import FloatingCart from '../components/FloatingCart';
+import Header from './components/Header';
+import Footer from './components/Footer';
+import FloatingCart from './components/FloatingCart';
 
-import MenuView from '../components/views/MenuView';
-import AuthView from '../components/views/AuthView';
-import CheckoutView from '../components/views/CheckoutView';
-import OrdersView from '../components/views/OrdersView';
-import ProfileView from '../components/views/ProfileView';
-import LiveCamView from '../components/views/LiveCamView';
+import MenuView from './components/views/MenuView';
+import AuthView from './components/views/AuthView';
+import CheckoutView from './components/views/CheckoutView';
+import OrdersView from './components/views/OrdersView';
+import ProfileView from './components/views/ProfileView';
+import LiveCamView from './components/views/LiveCamView';
 
-import CarrosselAvaliacoes from '../components/CarrosselAvaliacoes';
-import ReviewModal from '../components/modals/ReviewModal';
-import CostelaModal from '../components/modals/CostelaModal';
-import UpsellModal from '../components/modals/UpsellModal';
-import ProductDetailsModal from '../components/modals/ProductDetailsModal';
+import CarrosselAvaliacoes from './components/CarrosselAvaliacoes';
+import ReviewModal from './components/modals/ReviewModal';
+import CostelaModal from './components/modals/CostelaModal';
+import UpsellModal from './components/modals/UpsellModal';
+import ProductDetailsModal from './components/modals/ProductDetailsModal';
 
 function HomeContent({ storeSlug }) {
   const [isDarkMode, setIsDarkMode] = useState(true);
