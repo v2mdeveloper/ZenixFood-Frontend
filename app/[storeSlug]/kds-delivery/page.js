@@ -1,5 +1,5 @@
 'use client';
-import KdsEngine from './../../components/kds-engine/KdsEngine';
+import KdsEngine from '../KdsEngine';
 export default function KdsDeliveryPage() {
   return <KdsEngine mode="DELIVERY" />;
 }
