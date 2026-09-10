@@ -1,855 +1,858 @@
 'use client';
-import { useState, useEffect, Suspense, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import AdminLogin from './components/AdminLogin';
+import ExpeditionTab from './components/tabs/ExpeditionTab';
+import OrderHistoryTab from './components/tabs/OrderHistoryTab';
+import AnalyticsTab from './components/tabs/AnalyticsTab';
+import CategoriesTab from './components/tabs/CategoriesTab';
+import CrmTab from './components/tabs/CrmTab';
+import PromotionsTab from './components/tabs/PromotionsTab'; 
+import ProductsTab from './components/tabs/ProductsTab';
+import StockTab from './components/tabs/StockTab';
+import FiscalTab from './components/tabs/FiscalTab';
+import ConfigTab from './components/tabs/ConfigTab';
+import SuppliersTab from './components/tabs/SuppliersTab';
+import RhTab from './components/tabs/RhTab'; 
+import PdvTab from './components/tabs/PdvTab'; 
+import TurnosTab from './components/tabs/TurnosTab'; 
+import SalaoTab from './components/tabs/SalaoTab';
+import MinhaEmpresaTab from './components/tabs/MinhaEmpresaTab';
+import OrderDetailsModal from './components/modals/OrderDetailsModal';
 
-import Header from '../components/Header';
-import Footer from '../components/Footer';
-import FloatingCart from '../components/FloatingCart';
+function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
+  const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
+  const [groupForm, setGroupForm] = useState({ name: '', printerId: '', regraFiscalId: '' });
 
-import MenuView from '../components/views/MenuView';
-import AuthView from '../components/views/AuthView';
-import CheckoutView from '../components/views/CheckoutView';
-import OrdersView from '../components/views/OrdersView';
-import ProfileView from '../components/views/ProfileView';
-import LiveCamView from '../components/views/LiveCamView';
-
-import CarrosselAvaliacoes from '../components/CarrosselAvaliacoes';
-import ReviewModal from '../components/modals/ReviewModal';
-import CostelaModal from '../components/modals/CostelaModal';
-import UpsellModal from '../components/modals/UpsellModal';
-import ProductDetailsModal from '../components/modals/ProductDetailsModal';
-
-function HomeContent({ storeSlug }) {
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [selectedProductModal, setSelectedProductModal] = useState(null);
-
-  const [menu, setMenu] = useState([]);
-  const [highlights, setHighlights] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [upsells, setUpsells] = useState([]); 
-
-  const [cart, setCart] = useState([]);
-  const [clientOrders, setClientOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('menu');
-  const [user, setUser] = useState(null);
-
-  const [authMode, setAuthMode] = useState('login');
-  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', phone: '', cpf: '', birthDate: '', address: '', cep: '' });
-  const [recoveryEmail, setRecoveryEmail] = useState('');
-  const [recoveryCode, setRecoveryCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [profileForm, setProfileForm] = useState({ name: '', email: '', password: '', phone: '', cpf: '', birthDate: '', address: '', cep: '' });
-
-  const [cep, setCep] = useState('');
-  const [address, setAddress] = useState('');
-  const [observations, setObservations] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('PIX_ONLINE');
-  const [useCashback, setUseCashback] = useState(false);
-  const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState(null);
-  const [couponError, setCouponError] = useState('');
-  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
-  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
-  const [cpfNaNota, setCpfNaNota] = useState('');
-
-  const [deliveryFee, setDeliveryFee] = useState(5.00);
-  const [cashbackPercent, setCashbackPercent] = useState(5);
-  const [isStoreOpen, setIsStoreOpen] = useState(true);
-  const [storeSettings, setStoreSettings] = useState(null);
-
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [pixInfo, setPixInfo] = useState(null);
-  const [pixCopied, setPixCopied] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSendingCode, setIsSendingCode] = useState(false);
-  
-  const [reviewOrder, setReviewOrder] = useState(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState('');
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
-
-  const [showCostelaModal, setShowCostelaModal] = useState(false);
-  const [costelaProduct, setCostelaProduct] = useState(null);
-  const [costelaSize, setCostelaSize] = useState('500g'); 
-  const [costelaTime, setCostelaTime] = useState('12:00'); 
-
-  const [showUpsellModal, setShowUpsellModal] = useState(false);
-  const [upsellItem, setUpsellItem] = useState(null);
-  const [watchingOrder, setWatchingOrder] = useState(null);
-  const [currentDomain, setCurrentDomain] = useState('localhost');
-
-  const [isTotemMode, setIsTotemMode] = useState(false);
-  const [totemName, setTotemName] = useState('');
-
-  const API_URL = 'https://zenixfood-backend.onrender.com';
-  const searchParams = useSearchParams();
-
-  // Helper local atualizado com rota dinâmica de bloqueio
-  const fetchWithStore = async (url, options = {}) => {
-    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
-    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
-
-    const headers = {
-      ...(token && { 'Authorization': `Bearer ${token}` }),
-      ...(storeId && { 'x-loja-slug': storeId }),
-      ...options.headers,
-    };
-
-    const response = await fetch(url, { ...options, headers });
-
-    if (response.status === 402) {
-      if (typeof window !== 'undefined') {
-        window.location.href = `/${storeSlug}/bloqueado`; // Redireciona com o slug atual
-      }
-    }
-
-    return response;
-  };
-
-  useEffect(() => {
-    if (storeSettings?.mercadoPagoPublicKey) {
-      initMercadoPago(storeSettings.mercadoPagoPublicKey);
-    }
-  }, [storeSettings]);
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('@Zenix:clientTheme');
-    if (savedTheme === 'light') {
-      setIsDarkMode(false);
-      document.documentElement.classList.remove('dark');
-    } else {
-      setIsDarkMode(true);
-      document.documentElement.classList.add('dark');
-    }
-
-    const savedToken = localStorage.getItem('@Zenix:token') || localStorage.getItem('zenix_token');
-    const savedUser = localStorage.getItem('@Zenix:user') || localStorage.getItem('zenix_user');
-    if (savedToken && savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
-      
-      let extCep = '';
-      let extRua = parsedUser.address || '';
-      const match = extRua.match(/CEP:\s*(.*?)\s*-\s*(.*)/);
-      if (match) { extCep = match[1]; extRua = match[2]; }
-      
-      setProfileForm({ 
-        name: parsedUser.name, 
-        email: parsedUser.email, 
-        phone: parsedUser.phone || '', 
-        cpf: parsedUser.cpf || '', 
-        birthDate: parsedUser.birthDate || '', 
-        address: extRua, 
-        cep: extCep,
-        password: '' 
-      });
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = !isDarkMode;
-    setIsDarkMode(newTheme);
-    localStorage.setItem('@Zenix:clientTheme', newTheme ? 'dark' : 'light');
-    if (newTheme) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-  };
-
-  const handleFullscreen = () => {
-    if (typeof document !== 'undefined') {
-      const docEl = document.documentElement;
-      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-        if (docEl.requestFullscreen) docEl.requestFullscreen().catch(()=>{});
-        else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen().catch(()=>{});
-      }
-    }
-  };
-
-  useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [view]);
-
-  useEffect(() => {
-     setCurrentDomain(window.location.hostname);
-     if (searchParams.get('totem') === 'true') setIsTotemMode(true);
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (!isTotemMode) return;
-    let timeout;
-    const handleInteraction = () => {
-        handleFullscreen();
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-          setCart([]); setTotemName(''); setView('menu'); setShowUpsellModal(false); setPixInfo(null); setSelectedProductModal(null);
-        }, 120000); 
-    };
-    window.addEventListener('mousemove', handleInteraction);
-    window.addEventListener('touchstart', handleInteraction);
-    window.addEventListener('click', handleInteraction);
-    handleInteraction();
-    return () => {
-        clearTimeout(timeout);
-        window.removeEventListener('mousemove', handleInteraction);
-        window.removeEventListener('touchstart', handleInteraction);
-        window.removeEventListener('click', handleInteraction);
-    }
-  }, [isTotemMode]);
-
-  const fetchSystemSettings = () => {
-    fetchWithStore(`${API_URL}/api/settings`)
-      .then((res) => res.json())
-      .then((data) => {
-        setDeliveryFee(Number(data.deliveryFee));
-        setCashbackPercent(Number(data.cashbackPercent));
-        setIsStoreOpen(data.isOpen);
-        setStoreSettings(data);
-      })
-      .catch((err) => console.error(err));
-  };
-
-  useEffect(() => {
-    fetchSystemSettings();
-    const settingsInterval = setInterval(fetchSystemSettings, 20000);
-    return () => clearInterval(settingsInterval);
-  }, []);
-
-  useEffect(() => {
-    const registerVisit = async () => {
-      if (sessionStorage.getItem('@Zenix:visitLogged') || isTotemMode) return;
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      try {
-        await fetchWithStore(`${API_URL}/api/analytics/visit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user?.id || null, device: isMobile ? 'Celular' : 'Computador' }) });
-        sessionStorage.setItem('@Zenix:visitLogged', 'true');
-      } catch (e) {}
-    };
-    const timer = setTimeout(registerVisit, 2000);
-    return () => clearTimeout(timer);
-  }, [user, isTotemMode, API_URL]);
-
-  useEffect(() => {
-    if (view === 'payment_card' || view === 'payment_pix' || view === 'live_cam' || isTotemMode) return;
-    const handleScroll = () => setIsScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [view, isTotemMode]);
-
-  useEffect(() => {
-    let intervalId;
-    if (view === 'payment_pix' && pixInfo && pixInfo.orderId) {
-      intervalId = setInterval(async () => {
-        try {
-          const res = await fetchWithStore(`${API_URL}/api/orders/${pixInfo.orderId}/status`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.status === 'PREPARING' || data.status === 'PAID') {
-              clearInterval(intervalId);
-              if (isTotemMode) {
-                  alert('✅ Pagamento Aprovado! Seu pedido já está em preparação. Fique atento no balcão que vamos chamar o seu nome!');
-                  setCart([]); setTotemName(''); setPixInfo(null); setView('menu');
-              } else {
-                  alert('✅ Pagamento PIX Aprovado! O seu pedido já foi encaminhado para a operação.');
-                  setCart([]); setUseCashback(false); setObservations(''); setCouponCode(''); setAppliedCoupon(null); setView('orders');
-              }
-            }
-          }
-        } catch (error) {}
-      }, 5000);
-    }
-    return () => clearInterval(intervalId);
-  }, [view, pixInfo, isTotemMode, API_URL]);
-
-  useEffect(() => {
-    Promise.all([
-      fetchWithStore(`${API_URL}/api/menu`).then((res) => res.json()),
-      fetchWithStore(`${API_URL}/api/products/highlights`).then((res) => res.json()),
-      fetchWithStore(`${API_URL}/api/suppliers`).then((res) => res.ok ? res.json() : []).catch(() => []),
-      fetchWithStore(`${API_URL}/api/upsells`).then((res) => res.ok ? res.json() : []).catch(() => []) 
-    ]).then(([menuData, highlightsData, suppliersData, upsellsData]) => {
-      setMenu(menuData); 
-      setHighlights(highlightsData); 
-      setSuppliers(suppliersData); 
-      setUpsells(upsellsData || []);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (menu.length > 0) {
-      const imagesToPreload = [];
-      highlights.forEach(h => { if(h.imageUrl) imagesToPreload.push(h.imageUrl) });
-      menu.forEach(cat => cat.products.slice(0, 5).forEach(p => { if(p.imageUrl) imagesToPreload.push(p.imageUrl) }));
-      [...new Set(imagesToPreload)].forEach(url => { const img = new Image(); img.src = url; });
-    }
-  }, [menu, highlights]);
-
-  useEffect(() => {
-    if (highlights.length > 1 && view === 'menu') {
-      const timer = setInterval(() => setCurrentSlide((prev) => (prev + 1) % highlights.length), 5000);
-      return () => clearInterval(timer);
-    }
-  }, [highlights, view]);
-
-  useEffect(() => {
-    if (user && !isTotemMode && (view === 'orders' || view === 'live_cam')) {
-      fetchClientOrders();
-      const interval = setInterval(fetchClientOrders, 8000);
-      return () => clearInterval(interval);
-    }
-  }, [user, view, isTotemMode]);
-
-  const fetchClientOrders = async () => {
+  const fetchPrintersAndGroups = async () => {
     try {
-      const res = await fetchWithStore(`${API_URL}/api/orders/client/${user.id}`);
-      if (res.ok) setClientOrders(await res.json());
-    } catch (error) {}
+      const pRes = await fetchWithStore(`${API_URL}/api/printers`);
+      if (pRes.ok) setPrinters(await pRes.json());
+      const gRes = await fetchWithStore(`${API_URL}/api/product-groups`);
+      if (gRes.ok) setProductGroups(await gRes.json());
+    } catch (e) {}
   };
 
-  const handleOpenCostelaModal = (product) => {
-    setCostelaProduct(product); 
-    setCostelaSize('500g'); 
-    setCostelaTime('12:00'); 
-    setShowCostelaModal(true);
-    setSelectedProductModal(null);
-  };
-
-  const handleOpenProductModal = (product) => { setSelectedProductModal(product); };
-
-  const addToCart = (product, quantity = 1, observation = '') => {
-    if (product.name.toLowerCase().includes('costela')) {
-       handleOpenCostelaModal(product);
-       return;
-    }
-    if (!isStoreOpen && !isTotemMode) {
-      alert('A loja está fechada no momento! Confira nossos horários no rodapé.');
-      return;
-    }
-    setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product.id && item.observation === observation);
-      if (existing) return prev.map((item) => item === existing ? { ...item, quantity: item.quantity + quantity } : item);
-      return [...prev, { productId: product.id, name: product.name, price: Number(product.price), quantity, observation }];
-    });
-  };
-
-  const confirmCostelaOrder = () => {
-    const price500 = Number(costelaProduct.price);
-    const price700 = Number(costelaProduct.price700g) > 0 ? Number(costelaProduct.price700g) : price500 * 1.4;
-    const price1000 = Number(costelaProduct.price1kg) > 0 ? Number(costelaProduct.price1kg) : price500 * 1.9;
-    let finalPrice = price500;
-    if (costelaSize === '700g') finalPrice = price700;
-    if (costelaSize === '1kg') finalPrice = price1000;
-
-    setCart((prev) => {
-      const existing = prev.find((item) => item.productId === costelaProduct.id && item.size === costelaSize && item.time === costelaTime);
-      if (existing) { return prev.map(item => item === existing ? { ...item, quantity: item.quantity + 1 } : item); }
-      return [...prev, { productId: costelaProduct.id, name: `${costelaProduct.name} - ${costelaSize} (Agendado Dom: ${costelaTime})`, price: finalPrice, quantity: 1, isScheduled: true, size: costelaSize, time: costelaTime }];
-    });
-    setShowCostelaModal(false); setCostelaProduct(null);
-  };
-
-  const removeFromCart = (productId) => {
-    setCart((prev) => prev.filter(item => item.productId !== productId));
-    if (cart.length === 1) setView('menu');
-  };
-
-  const cartTotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
-
-  let couponDiscount = 0;
-  if (appliedCoupon && !isTotemMode) {
-      if (appliedCoupon.type === 'PERCENTAGE') couponDiscount = cartTotal * (appliedCoupon.value / 100);
-      else if (appliedCoupon.type === 'FIXED') couponDiscount = appliedCoupon.value;
-  }
-
-  const finalDeliveryFee = isTotemMode ? 0 : deliveryFee;
-  const baseTotal = cartTotal + finalDeliveryFee - couponDiscount;
-  const availableCashback = user?.cashback?.balance ? Number(user.cashback.balance) : 0;
-  let discount = 0; 
-  let finalTotal = baseTotal;
-
-  if (useCashback && availableCashback > 0 && !isTotemMode) {
-     discount = Math.min(availableCashback, Math.max(0, finalTotal));
-     finalTotal -= discount;
-  }
-  finalTotal = Math.max(0, finalTotal);
-
-  const mpInitialization = useMemo(() => ({ amount: finalTotal }), [finalTotal]);
-  const mpCustomization = useMemo(() => ({ paymentMethods: { creditCard: "all", debitCard: "all", maxInstallments: 3 } }), []);
-
-  const triggerCheckoutFlow = () => {
-    const currentChannel = isTotemMode ? 'TOTEM' : 'APP';
-    let matchedRule = null;
-    let triggerItemIndex = -1;
-
-    for (let i = 0; i < cart.length; i++) {
-      if (cart[i].upsold) continue; 
-      matchedRule = upsells.find(u => u.channels.includes(currentChannel) && u.triggerProductIds.includes(cart[i].productId));
-      if (matchedRule) { triggerItemIndex = i; break; }
-    }
-
-    if (matchedRule && triggerItemIndex !== -1) {
-      let offerProductFull = null;
-      for (const cat of menu) {
-        const found = cat.products.find(p => p.id === matchedRule.offerProductId);
-        if (found) { offerProductFull = found; break; }
-      }
-      setUpsellItem({ ...offerProductFull, id: matchedRule.offerProductId, name: matchedRule.offerProductName, offerPrice: Number(matchedRule.offerPrice), triggerCartIndex: triggerItemIndex });
-      setShowUpsellModal(true); return;
-    }
-    setView('checkout');
-  };
-
-  const handleVerSacola = () => {
-    if (!user && !isTotemMode) { setAuthMode('login'); setView('auth'); return; }
-    triggerCheckoutFlow();
-  };
-
-  const handleAcceptUpsell = () => {
-    setCart(prev => {
-      const newCart = [...prev];
-      if (upsellItem.triggerCartIndex !== undefined && newCart[upsellItem.triggerCartIndex]) newCart[upsellItem.triggerCartIndex].upsold = true;
-      newCart.push({ productId: upsellItem.id, name: `✨ Oferta: ${upsellItem.name}`, price: upsellItem.offerPrice, quantity: 1, observation: 'Adicional Automático' });
-      return newCart;
-    });
-    setShowUpsellModal(false); setUpsellItem(null); setView('checkout');
-  };
-
-  const handleDeclineUpsell = () => {
-    setCart(prev => {
-      const newCart = [...prev];
-      if (upsellItem.triggerCartIndex !== undefined && newCart[upsellItem.triggerCartIndex]) newCart[upsellItem.triggerCartIndex].upsold = true;
-      return newCart;
-    });
-    setShowUpsellModal(false); setUpsellItem(null); setView('checkout');
-  };
-
-  const handleApplyCoupon = async () => {
-    if (useCashback) { alert("⚠️ Desmarque o saldo de Cashback primeiro para poder aplicar o cupom."); return; }
-    if (!couponCode.trim()) return;
-    setIsValidatingCoupon(true); setCouponError('');
-    try {
-        const res = await fetchWithStore(`${API_URL}/api/coupons/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: couponCode, cartTotal, clientId: user.id }) });
-        const data = await res.json();
-        if (data.success) setAppliedCoupon(data.coupon);
-        else { setCouponError(data.error); setAppliedCoupon(null); }
-    } catch (error) { setCouponError('Erro ao validar cupom.'); setAppliedCoupon(null); } finally { setIsValidatingCoupon(false); }
-  };
-
-  const handleRemoveCoupon = () => { setAppliedCoupon(null); setCouponCode(''); setCouponError(''); };
-
-  const handleAuth = async (e) => {
+  const handleAddPrinter = async (e) => {
     e.preventDefault();
-    const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
-    
+    if (!printerForm.name || !printerForm.address) return alert("Preencha o Nome e o IP/Compartilhamento.");
     try {
-      const payload = { ...authForm };
-      if (authMode === 'register') {
-         payload.address = `CEP: ${authForm.cep || ''} - ${authForm.address || ''}`;
-      }
-
-      const res = await fetchWithStore(`${API_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      
-      if (data.success) {
-        setUser(data.user);
-        
-        let extCep = '';
-        let extRua = data.user.address || '';
-        const match = extRua.match(/CEP:\s*(.*?)\s*-\s*(.*)/);
-        if (match) { extCep = match[1]; extRua = match[2]; }
-
-        setProfileForm({ 
-          name: data.user.name, 
-          email: data.user.email, 
-          phone: data.user.phone || '', 
-          cpf: data.user.cpf || '', 
-          birthDate: data.user.birthDate || '', 
-          address: extRua, 
-          cep: extCep,
-          password: '' 
-        });
-        
-        localStorage.setItem('@Zenix:token', data.token);
-        localStorage.setItem('@Zenix:user', JSON.stringify(data.user));
-
-        if (data.user.lastAddress) {
-          let enderecoLimpo = data.user.lastAddress.split('| OBS:')[0].split('| CUPOM')[0].trim();
-          const matchCep = enderecoLimpo.match(/CEP:\s*(.*?)\s*-\s*(.*)/);
-          if (matchCep) { setCep(matchCep[1]); setAddress(matchCep[2]); } else { setAddress(enderecoLimpo); }
-        }
-        if (cart.length > 0) triggerCheckoutFlow(); else setView('menu');
-      } else alert(data.error);
-    } catch (error) { alert('Erro na conexão'); }
+      const res = await fetchWithStore(`${API_URL}/api/printers`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(printerForm) });
+      if ((await res.json()).success) { setPrinterForm({ name: '', type: 'USB', address: '' }); fetchPrintersAndGroups(); }
+    } catch (e) {}
   };
 
-  const handleForgotPassword = async (e) => {
-    e.preventDefault(); setIsSendingCode(true);
-    try {
-      const res = await fetchWithStore(`${API_URL}/api/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: recoveryEmail }) });
-      const data = JSON.parse(await res.text());
-      if (data.success) { alert('✅ E-mail enviado!'); setAuthMode('reset'); } else { alert(`⚠️ Erro: ${data.error}`); }
-    } catch (error) {} finally { setIsSendingCode(false); }
+  const handleDeletePrinter = async (id) => {
+    if(!confirm("Excluir impressora?")) return;
+    try { await fetchWithStore(`${API_URL}/api/printers/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) {}
   };
 
-  const handleResetPassword = async (e) => {
+  const handleAddGroup = async (e) => {
     e.preventDefault();
+    if (!groupForm.name) return alert("Dê um nome ao grupo.");
     try {
-      const res = await fetchWithStore(`${API_URL}/api/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: recoveryEmail, code: recoveryCode, newPassword }) });
-      const data = await res.json();
-      if (data.success) { alert('Senha alterada!'); setAuthMode('login'); setAuthForm({ ...authForm, email: recoveryEmail, password: '' }); } else alert(data.error);
-    } catch (error) {}
+      const res = await fetchWithStore(`${API_URL}/api/product-groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: groupForm.name, printerId: groupForm.printerId || null, regraFiscalId: groupForm.regraFiscalId || null }) });
+      if ((await res.json()).success) { setGroupForm({ name: '', printerId: '', regraFiscalId: '' }); fetchPrintersAndGroups(); }
+    } catch (e) {}
   };
 
-  const handleUpdateProfile = async (e) => {
-    e.preventDefault();
-    try {
-      const payload = { ...profileForm, address: `CEP: ${profileForm.cep || ''} - ${profileForm.address || ''}` };
-      const res = await fetchWithStore(`${API_URL}/api/users/${user.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (data.success) { 
-        setUser(data.user); 
-        localStorage.setItem('@Zenix:user', JSON.stringify(data.user));
-        alert('Atualizado com sucesso!'); 
-        setProfileForm(prev => ({ ...prev, password: '' })); 
-      } else alert('Erro ao atualizar os dados.');
-    } catch (error) {}
+  const handleDeleteGroup = async (id) => {
+    if(!confirm("Excluir grupo?")) return;
+    try { await fetchWithStore(`${API_URL}/api/product-groups/${id}`, { method: 'DELETE' }); fetchPrintersAndGroups(); } catch (e) {}
   };
-
-  const handleCheckoutBtnClick = async (e, customFullAddress) => {
-    if (e) e.preventDefault();
-    if (isSubmittingOrder) return;
-    if (isTotemMode && !totemName.trim()) { alert('⚠️ Informe o seu NOME para te chamarmos no balcão!'); return; }
-    if (!user && !isTotemMode) { setAuthMode('login'); setView('auth'); return; }
-
-    const hasScheduledItem = cart.some(i => i.isScheduled);
-    if (!isStoreOpen && !hasScheduledItem && !isTotemMode) { alert('A loja está fechada agora.'); return; }
-    if (paymentMethod === 'CREDIT_CARD_ONLINE') { setView('payment_card'); return; }
-
-    setIsSubmittingOrder(true);
-    try {
-      const res = await fetchWithStore(`${API_URL}/api/orders`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: isTotemMode ? 'TOTEM_MODE' : user.id, items: cart, address: customFullAddress, paymentMethod, total: cartTotal, useCashback, couponCode: appliedCoupon?.code || null, client: { name: isTotemMode ? totemName : user?.name, cpf: cpfNaNota } })
-      });
-      const data = await res.json();
-      if (data.success) {
-        if (!isTotemMode) setUser({ ...user, cashback: { balance: data.newBalance } });
-        if (data.pix) { setPixInfo(data.pix); setView('payment_pix'); } 
-        else {
-          if (isTotemMode) { alert(`✅ Pedido realizado!\nDirija-se ao caixa para pagamento.`); setCart([]); setTotemName(''); setView('menu'); } 
-          else { alert(`Pedido realizado!`); setCart([]); setUseCashback(false); setObservations(''); setCouponCode(''); setAppliedCoupon(null); setView('orders'); }
-        }
-      } else alert(data.error);
-    } catch (error) {} finally { setIsSubmittingOrder(false); }
-  };
-
-  const copyPixToClipboard = () => {
-    if (pixInfo && pixInfo.qr_code) {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(pixInfo.qr_code);
-        setPixCopied(true);
-        setTimeout(() => setPixCopied(false), 3000);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = pixInfo.qr_code;
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {
-          document.execCommand('copy');
-          setPixCopied(true);
-          setTimeout(() => setPixCopied(false), 3000);
-        } catch (err) {
-          alert('Por favor, selecione e copie o texto manualmente.');
-        }
-        document.body.removeChild(textArea);
-      }
-    }
-  };
-
-  const onSubmitCard = async ({ selectedPaymentMethod, formData }) => {
-    const hasScheduledItem = cart.some(i => i.isScheduled);
-    const obsTratada = hasScheduledItem ? `[AGENDADO DOM: ${cart.find(i => i.isScheduled)?.time || ''}] ${observations}`.trim() : observations;
-    const fullAddress = `CEP: ${cep} - ${address}${obsTratada ? ` | OBS: ${obsTratada}` : ''}`;
-
-    return new Promise(async (resolve, reject) => {
-      try {
-        const res = await fetchWithStore(`${API_URL}/api/orders`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId: user.id, items: cart, address: fullAddress, paymentMethod: 'CREDIT_CARD_ONLINE', total: cartTotal, useCashback, mpData: formData, couponCode: appliedCoupon?.code || null, client: { name: user?.name, cpf: cpfNaNota } })
-        });
-        const data = await res.json();
-        if (data.success) {
-          setUser({ ...user, cashback: { balance: data.newBalance } });
-          setCart([]); setUseCashback(false); setObservations(''); setCouponCode(''); setAppliedCoupon(null);
-          alert(`Pagamento Aprovado! O seu pedido já foi enviado para a cozinha.`);
-          setView('orders'); resolve();
-        } else { alert(`Pagamento Recusado: ${data.error}`); reject(); }
-      } catch (error) { reject(); }
-    });
-  };
-
-  const handleSubmitReview = async (e) => {
-    e.preventDefault();
-    setIsSubmittingReview(true);
-    try {
-      const res = await fetchWithStore(`${API_URL}/api/avaliacoes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clienteNome: user.name, nota: reviewRating, comentario: reviewComment }) });
-      const data = await res.json();
-      if (data.success) { 
-          alert('Obrigado pela sua avaliação!'); 
-          setReviewOrder(null); 
-          setReviewComment(''); 
-          setReviewRating(5); 
-      } else { alert(data.error || 'Erro ao enviar avaliação.'); }
-    } catch (error) { alert('Erro de conexão ao enviar avaliação.'); } finally { setIsSubmittingReview(false); }
-  };
-
-  const translateStatus = (status) => {
-    const mapping = {
-      'PENDING': { label: 'Aguardando Pagamento ⏳', color: 'text-zinc-500 bg-zinc-100 border-zinc-200 dark:text-zinc-400 dark:bg-zinc-500/10 dark:border-zinc-500/20' },
-      'PREPARING': { label: 'Em Preparação 🔥', color: 'text-amber-600 bg-amber-100 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20' },
-      'READY': { label: 'Pedido Pronto 🛎️', color: 'text-emerald-600 bg-emerald-100 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20' },
-      'IN_TRANSIT': { label: 'Saiu para entrega 🛵', color: 'text-blue-600 bg-blue-100 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/20' },
-      'DELIVERED': { label: 'Pedido Entregue ✅', color: 'text-slate-700 bg-slate-200 border-slate-300 dark:text-zinc-300 dark:bg-zinc-800 dark:border-zinc-700' },
-      'CANCELED': { label: 'Cancelado ❌', color: 'text-red-600 bg-red-100 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20' }
-    };
-    return mapping[status] || { label: status, color: 'text-slate-800 dark:text-white' };
-  };
-
-  const renderProductBadges = (name) => {
-    const badges = [];
-    if (name.toLowerCase().includes('vegano') || name.toLowerCase().includes('aveia')) badges.push(<span key="veg" className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider border border-emerald-200 dark:border-transparent">🌱 Vegano</span>);
-    if (name.toLowerCase().includes('pimenta') || name.toLowerCase().includes('jalapeño')) badges.push(<span key="spi" className="bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider border border-red-200 dark:border-transparent">🌶️ Picante</span>);
-    return badges;
-  };
-
-  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-[#0a0a0a] text-amber-500 font-bold"><div className="animate-pulse flex flex-col items-center"><span className="text-4xl mb-4">⚡</span><p>Carregando sistema...</p></div></div>;
 
   return (
-    <div className={isDarkMode ? 'dark' : ''}>
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 font-sans pb-28 selection:bg-amber-500 selection:text-zinc-950 transition-colors duration-500 flex flex-col justify-between">
-        
-        {!isTotemMode && <Header view={view} setView={setView} isScrolled={isScrolled} user={user} availableCashback={availableCashback} setAuthMode={setAuthMode} isDarkMode={isDarkMode} toggleTheme={toggleTheme} />}
-        
-        {isTotemMode && (
-          <div className="bg-white dark:bg-gradient-to-b dark:from-black dark:to-[#0a0a0a] border-b border-slate-200 dark:border-white/5 p-6 md:p-8 flex justify-between items-center sticky top-0 z-40 shadow-xl cursor-pointer transition-colors" onClick={handleFullscreen}>
-              <div className="flex items-center gap-4">
-                  <span className="text-4xl animate-bounce">⚡</span>
-                  <div>
-                    <h1 className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tight">Zenix</h1>
-                    <span className="text-amber-600 dark:text-amber-500 font-bold text-sm tracking-widest uppercase">Autoatendimento</span>
-                  </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <button onClick={(e) => { e.stopPropagation(); toggleTheme(); }} className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/10 text-xl flex items-center justify-center z-50 transition-colors cursor-pointer">
-                  {isDarkMode ? '☀️' : '🌙'}
-                </button>
-                {cart.length > 0 && (
-                    <button onClick={(e) => { e.stopPropagation(); setCart([]); setTotemName(''); setView('menu'); }} className="bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 text-red-600 dark:text-red-500 border border-red-200 dark:border-red-500/30 px-6 py-3 rounded-2xl font-bold transition-all text-sm shadow-md z-50 cursor-pointer">
-                      Cancelar Pedido
-                    </button>
-                )}
-              </div>
-          </div>
-        )}
-
-        <div className={`transition-all duration-300 flex-1 ${(view === 'payment_card' || view === 'payment_pix' || view === 'live_cam') ? 'pt-4' : (isTotemMode ? 'pt-6' : (isScrolled ? 'pt-20' : 'pt-32 md:pt-40'))}`}>
-          <main className={`mx-auto p-4 ${isTotemMode ? 'max-w-5xl' : 'max-w-4xl'}`}>
-            
-            {view === 'menu' && (
-              <div className="flex flex-col gap-6">
-                
-                {storeSettings?.aboutUsText && (
-                  <section className="w-full animate-fade-in-up mt-2">
-                    <div className="bg-white dark:bg-[#121212] border border-slate-200 dark:border-amber-500/20 rounded-[2rem] p-6 md:p-10 text-center shadow-lg dark:shadow-[0_10px_40px_rgba(245,158,11,0.06)] relative overflow-hidden transition-colors">
-                      <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-70"></div>
-                      <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-40 h-40 bg-amber-500/10 blur-3xl rounded-full pointer-events-none"></div>
-                      
-                      <h2 className="text-2xl md:text-3xl font-black text-amber-600 dark:text-amber-500 mb-6 uppercase tracking-[0.2em] drop-shadow-sm dark:drop-shadow-md">
-                        ✨ Sobre o Estabelecimento
-                      </h2>
-                      <p className="text-slate-600 dark:text-zinc-300 text-sm md:text-base leading-loose italic relative z-10 font-medium md:px-8">
-                        "{storeSettings.aboutUsText}"
-                      </p>
-                    </div>
-                  </section>
-                )}
-
-                <MenuView 
-                  isStoreOpen={isStoreOpen} storeSettings={isTotemMode ? { ...storeSettings, cashbackPercent: 0, promoBannerUrl: null } : storeSettings} 
-                  highlights={isTotemMode ? highlights.filter(p => !p.name.toLowerCase().includes('costela') && !p.name.toLowerCase().includes('agendado')) : highlights}
-                  currentSlide={currentSlide} setCurrentSlide={setCurrentSlide}
-                  handleOpenProductModal={handleOpenProductModal} 
-                  menu={isTotemMode ? menu.map(cat => ({ ...cat, products: cat.products.filter(p => !p.name.toLowerCase().includes('costela') && !p.name.toLowerCase().includes('agendado'))})).filter(cat => cat.products.length > 0) : menu} 
-                  renderProductBadges={renderProductBadges} isTotemMode={isTotemMode}
-                />
-              </div>
-            )}
-
-            {view === 'checkout' && (
-              <CheckoutView isStoreOpen={isStoreOpen} cart={cart} setView={setView} removeFromCart={removeFromCart} cep={cep} setCep={setCep} address={address} setAddress={setAddress} observations={observations} setObservations={setObservations} cpfNaNota={cpfNaNota} setCpfNaNota={setCpfNaNota} couponCode={couponCode} setCouponCode={setCouponCode} appliedCoupon={appliedCoupon} handleApplyCoupon={handleApplyCoupon} isValidatingCoupon={isValidatingCoupon} handleRemoveCoupon={handleRemoveCoupon} couponError={couponError} couponDiscount={couponDiscount} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} user={user} availableCashback={availableCashback} useCashback={useCashback} setUseCashback={setUseCashback} cartTotal={cartTotal} deliveryFee={finalDeliveryFee} discount={discount} finalTotal={finalTotal} isSubmittingOrder={isSubmittingOrder} handleCheckoutBtnClick={handleCheckoutBtnClick} isTotemMode={isTotemMode} totemName={totemName} setTotemName={setTotemName} />
-            )}
-
-            {view === 'payment_pix' && pixInfo && (
-              <div className="animate-fade-in-up max-w-md mx-auto text-center py-10">
-                <div className="bg-white dark:bg-[#121212] p-8 rounded-3xl border border-slate-200 dark:border-amber-500/30 shadow-xl dark:shadow-[0_0_30px_rgba(245,158,11,0.15)] relative overflow-hidden transition-colors">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-emerald-400"></div>
-                  <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2 transition-colors">{isTotemMode ? 'Escaneie para Pagar' : 'Pague seu PIX'}</h2>
-                  <p className="text-slate-500 dark:text-zinc-400 text-sm mb-6 transition-colors">Aponte a câmera do celular para finalizar.</p>
-                  
-                  <div className="bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-4 sm:p-6 rounded-2xl mb-6">
-                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Leia o QR Code abaixo</p>
-                    <div className="bg-white p-3 rounded-2xl border-4 border-amber-500 inline-block shadow-lg mx-auto w-48 h-48 mb-4">
-                       <img src={`data:image/jpeg;base64,${pixInfo.qr_code_base64}`} alt="QR Code PIX" className="w-full h-full object-contain" />
-                    </div>
-
-                    <div className="border-t border-slate-200 dark:border-white/10 pt-4 mt-2">
-                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Ou use o código Pix Copia e Cola</p>
-                       <div className="flex flex-col gap-3">
-                          <textarea 
-                            readOnly 
-                            value={pixInfo.qr_code || ''} 
-                            className="w-full text-[10px] font-mono text-slate-500 bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/10 rounded-xl p-3 resize-none focus:outline-none shadow-inner"
-                            rows="3"
-                            onClick={(e) => e.target.select()}
-                          />
-                          <button 
-                             onClick={copyPixToClipboard} 
-                             className={`w-full py-3.5 rounded-xl font-black transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 cursor-pointer ${pixCopied ? 'bg-emerald-500 text-slate-900' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'}`}
-                          >
-                             <span>{pixCopied ? '✅' : '📋'}</span>
-                             {pixCopied ? 'Código Copiado!' : 'Copiar Código PIX'}
-                          </button>
-                       </div>
-                    </div>
-                  </div>
-
-                  <p className="text-emerald-600 dark:text-emerald-400 text-sm font-bold flex items-center justify-center gap-2 mb-6"><span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse"></span> Aguardando banco confirmar...</p>
-                  <button onClick={() => setView('checkout')} className="w-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white font-bold py-3.5 rounded-xl transition-all text-sm border border-slate-200 dark:border-white/10 cursor-pointer">⬅ Cancelar</button>
-                </div>
-              </div>
-            )}
-
-            {view === 'payment_card' && !isTotemMode && (
-              <div className="animate-fade-in-up w-full max-w-2xl mx-auto py-4">
-                <div className="bg-white dark:bg-[#121212] p-4 md:p-8 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/5 transition-colors">
-                  <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2 text-center transition-colors">💳 Pagamento Seguro</h2>
-                  <p className="text-slate-500 dark:text-zinc-400 text-sm text-center mb-6 transition-colors">Processado pelo Mercado Pago</p>
-                  <Payment initialization={mpInitialization} customization={mpCustomization} onSubmit={onSubmitCard} />
-                  <button onClick={() => setView('checkout')} className="w-full text-center mt-8 text-slate-500 dark:text-zinc-400 font-bold hover:text-slate-900 dark:hover:text-white underline text-sm cursor-pointer">⬅ Cancelar e voltar para a sacola</button>
-                </div>
-              </div>
-            )}
-
-            {view === 'auth' && !isTotemMode && (
-              <AuthView authMode={authMode} setAuthMode={setAuthMode} authForm={authForm} setAuthForm={setAuthForm} handleAuth={handleAuth} showPassword={showPassword} setShowPassword={setShowPassword} recoveryEmail={recoveryEmail} setRecoveryEmail={setRecoveryEmail} handleForgotPassword={handleForgotPassword} isSendingCode={isSendingCode} recoveryCode={recoveryCode} setRecoveryCode={setRecoveryCode} newPassword={newPassword} setNewPassword={setNewPassword} handleResetPassword={handleResetPassword} />
-            )}
-
-            {view === 'orders' && !isTotemMode && (
-              <OrdersView clientOrders={clientOrders} setWatchingOrder={setWatchingOrder} setView={setView} translateStatus={translateStatus} setReviewOrder={setReviewOrder} availableCashback={availableCashback} storeSettings={storeSettings} user={user} fetchClientOrders={fetchClientOrders} />
-            )}
-
-            {view === 'profile' && user && !isTotemMode && (
-              <ProfileView profileForm={profileForm} setProfileForm={setProfileForm} handleUpdateProfile={handleUpdateProfile} />
-            )}
-
-            {view === 'live_cam' && watchingOrder && !isTotemMode && (
-              <LiveCamView watchingOrder={watchingOrder} setView={setView} setWatchingOrder={setWatchingOrder} storeSettings={storeSettings} />
-            )}
-          </main>
+    <div className="space-y-6 animate-fade-in-up">
+      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
+        <h3 className="text-xl font-black text-slate-800 mb-2">🖨️ Cadastro de Impressoras</h3>
+        <form onSubmit={handleAddPrinter} className="flex flex-col md:flex-row gap-4 mb-8 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+          <input type="text" name="printerName" placeholder="Nome" value={printerForm.name} onChange={e => setPrinterForm({...printerForm, name: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 font-bold text-slate-700" />
+          <select name="printerType" value={printerForm.type} onChange={e => setPrinterForm({...printerForm, type: e.target.value})} className="border border-slate-300 p-3 rounded-xl focus:outline-amber-500 text-slate-700 font-bold">
+            <option value="USB">USB (Compartilhada)</option>
+            <option value="IP">Rede (IP Local)</option>
+          </select>
+          <input type="text" name="printerAddress" placeholder={printerForm.type === 'IP' ? "Ex: 192.168.0.100" : "Ex: IMPCOZINHA"} value={printerForm.address} onChange={e => setPrinterForm({...printerForm, address: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 font-bold text-slate-700" />
+          <button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-bold">Salvar</button>
+        </form>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {printers.map(p => (
+            <div key={p.id} className="flex justify-between items-center bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
+              <div><p className="font-black text-slate-800 text-lg">{p.name}</p><p className="text-slate-500 text-sm font-medium">{p.type === 'IP' ? '🌐 IP:' : '🔌 USB:'} {p.address}</p></div>
+              <button onClick={() => handleDeletePrinter(p.id)} className="text-red-500 font-bold bg-red-50 px-3 py-2 rounded-xl">Excluir</button>
+            </div>
+          ))}
         </div>
-
-        {!isTotemMode && view === 'menu' && (
-          <div className="w-full pb-10 flex flex-col">
-            <CarrosselAvaliacoes />
-            {suppliers?.filter(s => s.active).length > 0 && (
-              <section className="mt-16 mb-14 w-full max-w-4xl mx-auto px-4 animate-fade-in-up">
-                <h3 className="text-[10px] md:text-xs font-black text-slate-400 dark:text-zinc-500 uppercase tracking-[0.3em] mb-8 flex items-center gap-4">
-                  <span className="w-8 md:w-16 h-[1px] bg-slate-300 dark:bg-zinc-800 rounded-full"></span>
-                  Nossos Parceiros Oficiais
-                  <span className="flex-1 h-[1px] bg-slate-300 dark:bg-zinc-800 rounded-full"></span>
-                </h3>
-                <div className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar snap-x px-2">
-                  {suppliers.filter(s => s.active).map(supplier => (
-                    <div key={supplier.id} className="snap-start shrink-0 w-32 md:w-40 bg-white dark:bg-[#151515] border border-slate-200 dark:border-white/5 rounded-3xl p-5 flex flex-col items-center justify-center gap-4 hover:border-amber-500 dark:hover:border-amber-500/30 transition-all duration-300 shadow-sm dark:shadow-lg">
-                      <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-slate-50 dark:bg-white/5 p-3 flex items-center justify-center overflow-hidden shadow-inner">
-                        {supplier.logoUrl ? <img src={supplier.logoUrl} alt={supplier.name} className="w-full h-full object-contain" loading="lazy" decoding="async" /> : <span className="text-2xl">🤝</span>}
-                      </div>
-                      <div className="text-center w-full">
-                        <span className="text-[11px] md:text-xs font-black text-slate-800 dark:text-zinc-300 uppercase tracking-wider truncate block w-full">{supplier.name}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-
-        {!isTotemMode && <Footer view={view} getTodayScheduleText={() => storeSettings?.schedule ? `${storeSettings.schedule[new Date().getDay()].open} às ${storeSettings.schedule[new Date().getDay()].close}` : "Carregando..."} storeSettings={storeSettings} />}
-        
-        <FloatingCart cart={cart} view={view} cartTotal={cartTotal} handleVerSacola={handleVerSacola} />
-        
-        <ProductDetailsModal 
-            product={selectedProductModal} 
-            onClose={() => setSelectedProductModal(null)} 
-            onAddToCart={addToCart} 
-            renderProductBadges={renderProductBadges} 
-            menu={menu}
-            user={user}
-            availableCashback={availableCashback}
-        />
-
-        <ReviewModal reviewOrder={reviewOrder} setReviewOrder={setReviewOrder} reviewRating={reviewRating} setReviewRating={setReviewRating} reviewComment={reviewComment} setReviewComment={setReviewComment} isSubmittingReview={isSubmittingReview} handleSubmitReview={handleSubmitReview} />
-        <CostelaModal showCostelaModal={showCostelaModal} setShowCostelaModal={setShowCostelaModal} costelaProduct={costelaProduct} costelaSize={costelaSize} setCostelaSize={setCostelaSize} costelaTime={costelaTime} setCostelaTime={setCostelaTime} confirmCostelaOrder={confirmCostelaOrder} />
-        <UpsellModal showUpsellModal={showUpsellModal} upsellItem={upsellItem} handleAcceptUpsell={handleAcceptUpsell} handleDeclineUpsell={handleDeclineUpsell} />
+      </div>
+      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
+        <h3 className="text-xl font-black text-slate-800 mb-2">⚙️ Grupos de Produção</h3>
+        <form onSubmit={handleAddGroup} className="flex flex-col md:flex-row gap-4 mb-8 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+          <input type="text" name="groupName" placeholder="Nome do Grupo" value={groupForm.name} onChange={e => setGroupForm({...groupForm, name: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 font-bold text-slate-700" />
+          <select name="groupPrinterId" value={groupForm.printerId} onChange={e => setGroupForm({...groupForm, printerId: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 text-slate-700 font-bold">
+            <option value="">Sem Impressora</option>
+            {printers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select name="groupRegraFiscalId" value={groupForm.regraFiscalId} onChange={e => setGroupForm({...groupForm, regraFiscalId: e.target.value})} className="border border-slate-300 p-3 rounded-xl flex-1 focus:outline-amber-500 text-slate-700 font-bold">
+            <option value="">Regra Fiscal Padrão</option>
+            {fiscalData?.regras && fiscalData.regras.map(r => <option key={r.id} value={r.id}>{r.descricao}</option>)}
+          </select>
+          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-black px-6 py-3 rounded-xl font-black shadow-md">Criar</button>
+        </form>
+        <div className="grid grid-cols-1 gap-3">
+          {productGroups.map(g => (
+            <div key={g.id} className="flex justify-between items-center bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
+              <div className="flex gap-6 items-center">
+                <p className="font-black text-slate-800 text-lg">{g.name}</p>
+                <span className="text-slate-600 bg-slate-100 px-3 py-1 rounded-lg text-xs font-bold">🖨️ {g.printer?.name || 'Nenhuma'}</span>
+              </div>
+              <button onClick={() => handleDeleteGroup(g.id)} className="text-red-500 font-bold bg-red-50 px-3 py-2 rounded-xl">Excluir</button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-import { useParams } from 'next/navigation';
-
-export default function StorePage() {
+export default function AdminDashboard() {
   const params = useParams();
-  const storeSlug = params.storeSlug; 
-  
-  const [storeStatus, setStoreStatus] = useState('LOADING'); // LOADING, FOUND, NOT_FOUND
+  const storeSlug = params?.storeSlug || ''; 
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [loggedEmployee, setLoggedEmployee] = useState(null);
+  const [adminLoginForm, setAdminLoginForm] = useState({ storeId: '', email: '', password: '' });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState('pdv'); 
+  const [isKdsMenuOpen, setIsKdsMenuOpen] = useState(false); 
+  const [orders, setOrders] = useState([]);
+  const [menu, setMenu] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchCustomer, setSearchCustomer] = useState('');
+  const [searchProduct, setSearchProduct] = useState('');
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryIsDrink, setNewCategoryIsDrink] = useState(false);
+  const [newProduct, setNewProduct] = useState({ name: '', description: '', price: '', price700g: '', price1kg: '', costPrice: '', categoryId: '', imageUrl: '', regraFiscalId: '', ncm: '', ean: '', groupId: '' });
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+  const [visitsData, setVisitsData] = useState({ visits: [], totalVisits: 0 });
+  const [adminConfig, setAdminConfig] = useState({ name: '', email: '', password: '' });
+  const [settingsForm, setSettingsForm] = useState({
+    logoUrl: '', coverImageUrl: '', totemCoverImageUrl: '', ifoodLink: '', ninetyNineFoodLink: '',
+    isManualFechado: false, deliveryFee: 5.00, cashbackPercent: 5, promoBannerUrl: '', promoBannerLink: '', youtubeLiveId: '', printerName: '', aboutUsText: '', 
+    schedule: { "0": { isOpen: true, open: "18:00", close: "23:30" }, "1": { isOpen: false, open: "18:00", close: "23:30" }, "2": { isOpen: true, open: "18:00", close: "23:30" }, "3": { isOpen: true, open: "18:00", close: "23:30" }, "4": { isOpen: true, open: "18:00", close: "23:30" }, "5": { isOpen: true, open: "18:00", close: "23:30" }, "6": { isOpen: true, open: "18:00", close: "23:30" } }
+  });
+  const [fiscalData, setFiscalData] = useState({ icms: [], pisCofins: [], ibsCbs: [], regras: [], cnpjLoja: '' });
+  const [formIcms, setFormIcms] = useState({ id: '', descricao: '', regime: 'Simples Nacional', cfop: '', cst: '', aliquota: '' });
+  const [formPis, setFormPis] = useState({ id: '', descricao: '', cstPis: '', aliqPis: '', cstCofins: '', aliqCofins: '' });
+  const [formIbsCbs, setFormIbsCbs] = useState({ id: '', descricao: '', cst: '000', classificacao: '000001', aliqIbsUf: '0.1', aliqCbs: '0.9' });
+  const [formRegra, setFormRegra] = useState({ id: '', ordenar: '', descricao: '', icmsId: '', pisCofinsId: '', ibsCbsId: '', ipi: '' });
+  const [fiscalSubTab, setFiscalSubTab] = useState('fila');
+  const [loadingNfceId, setLoadingNfceId] = useState(null);
+  const [isAutoPrintEnabled, setIsAutoPrintEnabled] = useState(true);
+  const [printedOrderIds, setPrintedOrderIds] = useState([]);
+  const [printingOrder, setPrintingOrder] = useState(null);
+  const [printers, setPrinters] = useState([]);
+  const [productGroups, setProductGroups] = useState([]);
+  const [deliveryPersons, setDeliveryPersons] = useState([]);
+  const [insumos, setInsumos] = useState([]);
+  const [movimentacoes, setMovimentacoes] = useState([]);
+  const [fichasVisiveis, setFichasVisiveis] = useState({});
+  const [novoInsumo, setNovoInsumo] = useState({ name: '', unit: 'UN', cost: '', stock: '' });
+  const [xmlFile, setXmlFile] = useState(null);
+  const [estoqueSubTab, setEstoqueSubTab] = useState('insumos');
+  const [novaMovimentacao, setNovaMovimentacao] = useState({ insumoId: '', type: 'IN', quantity: '', reason: '' });
+  const [editingInsumo, setEditingInsumo] = useState(null);
+  const [showXmlModal, setShowXmlModal] = useState(false);
+  const [xmlPreviewData, setXmlPreviewData] = useState({ chaveNfe: '', items: [] });
+  const [xmlMappings, setXmlMappings] = useState({});
+  const [promoSubTab, setPromoSubTab] = useState('destaques');
+  const [coupons, setCoupons] = useState([]);
+  const [couponForm, setCouponForm] = useState({ code: '', type: 'FIXED', value: '', minOrderValue: '0', maxUses: '0' });
+  const [nfcesEmitidas, setNfcesEmitidas] = useState({}); 
+
+  const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
+    ? 'http://localhost:3333' 
+    : 'https://zenixfood-backend.onrender.com';
+
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
+    const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-loja-slug': storeId }), ...options.headers };
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 402 && typeof window !== 'undefined') window.location.href = `/${storeSlug}/bloqueado`;
+    return response;
+  };
 
   useEffect(() => {
-    if (!storeSlug) return;
-
-    const identifyStore = async () => {
-      try {
-        const res = await fetch(`${API_URL || 'https://zenixfood-backend.onrender.com'}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
-        const data = await res.json();
-
-        if (data.success) {
-          // Salva o ID da loja para que o `fetchWithStore` consiga usar nas requisições
-          localStorage.setItem('zenix_store_id', data.store.id);
-          setStoreStatus('FOUND');
-        } else {
-          setStoreStatus('NOT_FOUND');
-        }
-      } catch (error) {
-        setStoreStatus('NOT_FOUND');
+    const savedToken = localStorage.getItem('zenix_token');
+    const savedEmployee = localStorage.getItem('zenix_loggedEmployee');
+    if (savedToken) {
+      setIsAdminAuthenticated(true);
+      if (savedEmployee) {
+        setLoggedEmployee(JSON.parse(savedEmployee));
+      } else {
+        const fallbackAdmin = { id: 'ADMIN_MASTER', name: 'Administrador', role: 'ADMIN' };
+        setLoggedEmployee(fallbackAdmin);
+        localStorage.setItem('zenix_loggedEmployee', JSON.stringify(fallbackAdmin));
       }
-    };
+    }
+    const cachedPrints = sessionStorage.getItem('zenix_printedIds');
+    if (cachedPrints) setPrintedOrderIds(JSON.parse(cachedPrints));
+    const autoPrintSetting = localStorage.getItem('zenix_autoPrint');
+    if (autoPrintSetting !== null) setIsAutoPrintEnabled(autoPrintSetting === 'true');
+    const savedNfces = localStorage.getItem('zenix_nfcesEmitidas');
+    if (savedNfces) setNfcesEmitidas(JSON.parse(savedNfces));
+  }, []);
 
-    identifyStore();
-  }, [storeSlug]);
+  useEffect(() => {
+    if (isAdminAuthenticated && (!loggedEmployee || !loggedEmployee.role?.toLowerCase().includes('entregador'))) {
+      fetchAllData();
+      const interval = setInterval(fetchOrders, 7000);
+      return () => clearInterval(interval);
+    } else if (!isAdminAuthenticated) {
+      setLoading(false);
+    }
+  }, [isAdminAuthenticated, loggedEmployee]);
 
-  if (storeStatus === 'LOADING') return <div className="min-h-screen bg-black flex items-center justify-center text-amber-500 font-black text-xl animate-pulse">Carregando loja...</div>;
-  
-  if (storeStatus === 'NOT_FOUND') return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6">
-        <span className="text-6xl mb-4">🔍</span>
-        <h1 className="text-3xl font-black text-white mb-2">Loja não encontrada</h1>
-        <p className="text-slate-400">Verifique se o endereço da URL foi digitado corretamente.</p>
-      </div>
-  );
+  useEffect(() => {
+    if (newProduct.groupId) {
+      const grp = productGroups.find(g => g.id === newProduct.groupId);
+      if (grp && grp.regraFiscalId) setNewProduct(p => ({ ...p, regraFiscalId: grp.regraFiscalId }));
+    }
+  }, [newProduct.groupId, productGroups]);
+
+  useEffect(() => {
+    if (editingProduct?.groupId) {
+      const grp = productGroups.find(g => g.id === editingProduct.groupId);
+      if (grp && grp.regraFiscalId) setEditingProduct(p => ({ ...p, regraFiscalId: grp.regraFiscalId }));
+    }
+  }, [editingProduct?.groupId, productGroups]);
+
+  useEffect(() => {
+    if (printingOrder) {
+      const mandarParaImpressorasLocais = async () => {
+        try {
+          const jobs = {}; 
+          for (const item of printingOrder.items) {
+             const product = allProducts.find(p => p.id === item.productId);
+             let pId = 'DEFAULT'; 
+             if (product && product.groupId) {
+                const grp = productGroups.find(g => g.id === product.groupId);
+                if (grp && grp.printerId) pId = grp.printerId;
+             }
+             if (!jobs[pId]) jobs[pId] = [];
+             jobs[pId].push(item);
+          }
+          for (const [pId, items] of Object.entries(jobs)) {
+             const printerObj = printers.find(p => p.id === pId);
+             const printerConfig = printerObj ? { type: printerObj.type, address: printerObj.address } : null;
+             const isPartial = pId !== 'DEFAULT'; 
+             const partialOrder = { ...printingOrder, items };
+             await fetch('http://localhost:8080/imprimir', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({ pedido: partialOrder, printerName: settingsForm.printerName, printerConfig, isPartial })
+             });
+          }
+        } catch (error) {} finally { setPrintingOrder(null); }
+      };
+      mandarParaImpressorasLocais();
+    }
+  }, [printingOrder, settingsForm.printerName, allProducts, printers, productGroups]);
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    if (!adminLoginForm.storeId) return alert("Informe o ID ou Slug da Loja!");
+    try {
+      const response = await fetch(`${API_URL}/api/auth/admin/login`, {
+        method: "POST", headers: { "Content-Type": "application/json", "x-store-id": adminLoginForm.storeId },
+        body: JSON.stringify({ email: adminLoginForm.email, password: adminLoginForm.password })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        localStorage.setItem("zenix_token", data.token);
+        localStorage.setItem("zenix_store_id", adminLoginForm.storeId);
+        setIsAdminAuthenticated(true);
+      } else { alert(data.error || "Erro ao logar"); }
+    } catch (err) { alert("Erro de conexão."); }
+  };
+
+  const handleAdminLogout = () => {
+    localStorage.removeItem('zenix_token');
+    localStorage.removeItem('zenix_store_id');
+    localStorage.removeItem('zenix_loggedEmployee');
+    setIsAdminAuthenticated(false);
+    setLoggedEmployee(null);
+    window.location.href = `/${storeSlug}/admin`;
+  };
+
+  const fetchVisits = async () => {
+    try { const res = await fetchWithStore(`${API_URL}/api/admin/analytics?_=${Date.now()}`); if (res.ok) setVisitsData(await res.json()); } catch (e) {}
+  };
+
+  const fetchAllData = async () => {
+    await Promise.all([
+      fetchOrders(), fetchMenu(), fetchProducts(), fetchCustomers(), fetchInsumos(), 
+      fetchCoupons(), fetchSystemSettings(), fetchFiscalData(), fetchVisits(), fetchPrintersAndGroups(), fetchDeliveryPersons()
+    ]);
+    setLoading(false);
+  };
+
+  const fetchDeliveryPersons = async () => {
+    try { const res = await fetchWithStore(`${API_URL}/api/rh/delivery-persons`); if (res.ok) setDeliveryPersons(await res.json()); } catch (e) {}
+  };
+
+  const assignDelivery = async (orderIds, deliveryPersonId) => {
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/orders/dispatch`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderIds, deliveryPersonId }) });
+      if ((await res.json()).success) { alert('Pedidos despachados com sucesso!'); fetchOrders(); } else alert('Erro ao despachar.');
+    } catch (e) {}
+  };
+
+  const fetchPrintersAndGroups = async () => {
+    try {
+      const pRes = await fetchWithStore(`${API_URL}/api/printers?_=${Date.now()}`);
+      if (pRes.ok) setPrinters(await pRes.json());
+      const gRes = await fetchWithStore(`${API_URL}/api/product-groups?_=${Date.now()}`);
+      if (gRes.ok) setProductGroups(await gRes.json());
+    } catch (e) {}
+  };
+
+  const fetchCoupons = async () => {
+    try { const res = await fetchWithStore(`${API_URL}/api/admin/coupons?_=${Date.now()}`); if (res.ok) setCoupons(await res.json()); } catch (e) {}
+  };
+
+  const handleAddCoupon = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...couponForm, active: true }) });
+      const data = await res.json();
+      if (data.success) { setCouponForm({ code: '', type: 'FIXED', value: '', minOrderValue: '0', maxUses: '0' }); fetchCoupons(); } else { alert(data.error || "Erro ao criar cupom."); }
+    } catch (e) {}
+  };
+
+  const toggleCouponStatus = async (coupon) => {
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/admin/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...coupon, active: !coupon.active }) });
+      if ((await res.json()).success) fetchCoupons();
+    } catch (e) {}
+  };
+
+  const fetchOrders = async () => {
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/orders?_=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(data);
+        const autoPrintSetting = localStorage.getItem('zenix_autoPrint') !== 'false';
+        if (autoPrintSetting) {
+          const activePreparing = data.filter(o => o.status === 'PREPARING');
+          if (activePreparing.length > 0) {
+            const latestOrder = activePreparing[0];
+            const currentPrintedIds = JSON.parse(sessionStorage.getItem('zenix_printedIds') || '[]');
+            if (!currentPrintedIds.includes(latestOrder.id)) {
+              const updatedIds = [...currentPrintedIds, latestOrder.id];
+              setPrintedOrderIds(updatedIds);
+              sessionStorage.setItem('zenix_printedIds', JSON.stringify(updatedIds));
+              setPrintingOrder(latestOrder);
+            }
+          }
+        }
+      }
+    } catch (error) {}
+  };
+
+  const triggerManualPrint = async (order) => { 
+    try {
+      const res = await fetch('http://localhost:8080/imprimir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pedido: order, isPartial: false }) });
+      if (!res.ok) throw new Error('Falha na impressora');
+      alert('Pedido enviado para a impressora!');
+    } catch (error) { alert("Erro de Impressão!"); }
+  };
+
+  const fetchMenu = async () => {
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/menu?_=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setMenu(data);
+        if (data.length > 0 && !newProduct.categoryId) setNewProduct(prev => ({ ...prev, categoryId: data[0].id }));
+      }
+    } catch (error) {}
+  };
+
+  const fetchProducts = async () => {
+    try { const res = await fetchWithStore(`${API_URL}/api/products?_=${Date.now()}`); if (res.ok) setAllProducts(await res.json()); } catch (error) {}
+  };
+
+  const fetchCustomers = async () => {
+    try { const res = await fetchWithStore(`${API_URL}/api/customers?_=${Date.now()}`); if (res.ok) setCustomers(await res.json()); } catch (error) {}
+  };
+
+  const fetchSystemSettings = async () => {
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/settings?_=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSettingsForm({
+          isManualFechado: data.isManualFechado, deliveryFee: Number(data.deliveryFee), cashbackPercent: Number(data.cashbackPercent),
+          promoBannerUrl: data.promoBannerUrl || '', promoBannerLink: data.promoBannerLink || '',
+          youtubeLiveId: data.youtubeLiveId || '', printerName: data.printerName || '', aboutUsText: data.aboutUsText || '', 
+          schedule: data.schedule || settingsForm.schedule, storeCnpj: data.storeCnpj || '',
+          logoUrl: data.logoUrl || '', coverImageUrl: data.coverImageUrl || '', totemCoverImageUrl: data.totemCoverImageUrl || '',
+          ifoodLink: data.ifoodLink || '', ninetyNineFoodLink: data.ninetyNineFoodLink || ''
+        });
+      }
+    } catch (error) {}
+  };
+
+  const fetchFiscalData = async () => {
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/fiscal?_=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data) setFiscalData({ icms: data.icms || [], pisCofins: data.pisCofins || [], ibsCbs: data.ibsCbs || [], regras: data.regras || [], cnpjLoja: data.cnpjLoja || '' });
+      }
+    } catch (error) {}
+  };
+
+  const fetchInsumos = async () => {
+    try { const res = await fetchWithStore(`${API_URL}/api/insumos?_=${Date.now()}`); if (res.ok) setInsumos(await res.json()); } catch (e) {}
+  };
+
+  const fetchMovimentacoes = async () => {
+    try { const res = await fetchWithStore(`${API_URL}/api/estoque/movimentacoes?_=${Date.now()}`); if (res.ok) setMovimentacoes(await res.json()); } catch (e) {}
+  };
+
+  const saveFiscalData = async (newData) => {
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) });
+      if ((await res.json()).success) { setFiscalData(newData); }
+    } catch (error) {}
+  };
+
+  const handleSaveCnpj = async (cnpj) => {
+    if(!cnpj) return alert("Digite o CNPJ!");
+    try {
+      const newData = { ...fiscalData, cnpjLoja: cnpj };
+      const res = await fetchWithStore(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) });
+      const data = await res.json();
+      if (data.success) { setFiscalData(newData); alert('CNPJ Salvo com sucesso!'); } else { alert('Erro ao salvar CNPJ.'); }
+    } catch (error) {}
+  };
+
+  const emitirEImprimirNfceLocal = async (orderId) => {
+    const pedidoAtual = orders.find(o => o.id === orderId);
+    setLoadingNfceId(orderId);
+    try {
+      const resBackend = await fetchWithStore(`${API_URL}/api/admin/orders/${orderId}/fiscal`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const dataBackend = await resBackend.json();
+      if (dataBackend.success) {
+        setNfcesEmitidas(prev => { const newState = { ...prev, [orderId]: dataBackend.fiscalData }; localStorage.setItem('zenix_nfcesEmitidas', JSON.stringify(newState)); return newState; });
+        fetchOrders(); 
+        const resImpressora = await fetch('http://localhost:8080/imprimir-nfce', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pedido: pedidoAtual, dadosNota: dataBackend.fiscalData, printerName: settingsForm.printerName }) });
+        if (resImpressora.ok) alert("NFC-e emitida!"); else alert("A nota foi emitida na SEFAZ, mas ocorreu erro na impressora local.");
+      } else { alert(`NF-e Recusada:\n${dataBackend.error}`); }
+    } catch (error) { alert('Erro de comunicação.'); } finally { setLoadingNfceId(null); }
+  };
+
+  const carregarFicha = async (productId) => {
+    try { const res = await fetchWithStore(`${API_URL}/api/products/${productId}/fichas`); if (res.ok) { const data = await res.json(); setFichasVisiveis(prev => ({ ...prev, [productId]: data })); } } catch (e) {}
+  };
+
+  const handleUploadXMLPreview = async (e) => {
+    e.preventDefault();
+    if (!xmlFile) return alert('Selecione um arquivo XML.');
+    const formData = new FormData();
+    formData.append('xml', xmlFile);
+    setLoading(true);
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/estoque/xml/preview`, { method: 'POST', body: formData });
+      let data = await res.json();
+      if (res.ok && data.success) {
+        setXmlPreviewData({ chaveNfe: data.chaveNfe, items: data.items });
+        const initialMappings = {};
+        data.items.forEach(item => {
+          const autoMatch = insumos.find(i => i.name.toLowerCase() === item.name.toLowerCase());
+          if (autoMatch) initialMappings[item.id] = { action: 'LINK', mappedInsumoId: autoMatch.id };
+          else initialMappings[item.id] = { action: 'NEW', mappedInsumoId: '' };
+        });
+        setXmlMappings(initialMappings); setShowXmlModal(true); setXmlFile(null);
+      } else { alert(data.error || 'Erro ao processar o XML.'); }
+    } catch (e) {}
+    setLoading(false);
+  };
+
+  const updateMapping = (itemId, value) => {
+    if (value === 'IGNORE') setXmlMappings(prev => ({...prev, [itemId]: { action: 'IGNORE', mappedInsumoId: '' }}));
+    else if (value === 'NEW') setXmlMappings(prev => ({...prev, [itemId]: { action: 'NEW', mappedInsumoId: '' }}));
+    else setXmlMappings(prev => ({...prev, [itemId]: { action: 'LINK', mappedInsumoId: value }}));
+  };
+
+  const handleConfirmXmlImport = async () => {
+    const payloadItems = xmlPreviewData.items.map(item => {
+      const mapping = xmlMappings[item.id];
+      return { ...item, action: mapping.action, mappedInsumoId: mapping.mappedInsumoId };
+    });
+    setLoading(true);
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/estoque/xml/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chaveNfe: xmlPreviewData.chaveNfe, items: payloadItems }) });
+      const data = await res.json();
+      if (data.success) { alert(data.message); setShowXmlModal(false); fetchInsumos(); fetchMovimentacoes(); fetchProducts(); } else alert(data.error);
+    } catch(e) {}
+    setLoading(false);
+  };
+
+  const handleSalvarInsumo = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/insumos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novoInsumo) });
+      if ((await res.json()).success) { setNovoInsumo({ name: '', unit: 'UN', cost: '', stock: '' }); fetchInsumos(); }
+    } catch (e) {}
+  };
+
+  const handleEditInsumoSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/insumos/${editingInsumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingInsumo) });
+      if ((await res.json()).success) { setEditingInsumo(null); fetchInsumos(); fetchProducts(); }
+    } catch (e) {}
+  };
+
+  const toggleInsumoStatus = async (insumo) => {
+    try {
+      const novoStatus = insumo.isActive === false ? true : false;
+      const res = await fetchWithStore(`${API_URL}/api/insumos/${insumo.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...insumo, isActive: novoStatus }) });
+      if ((await res.json()).success) fetchInsumos();
+    } catch (e) {}
+  };
+
+  const handleAddFicha = async (e, productId) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const insumoId = formData.get('insumoId');
+    const quantity = formData.get('quantity');
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/products/${productId}/fichas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ insumoId, quantity }) });
+      const data = await res.json();
+      if (data.success) { carregarFicha(productId); fetchProducts(); } else alert(data.error);
+    } catch (e) {}
+  };
+
+  const handleRemoveFicha = async (fichaId, productId) => {
+    if(!confirm('Remover este item da ficha?')) return;
+    try { await fetchWithStore(`${API_URL}/api/fichas/${fichaId}`, { method: 'DELETE' }); carregarFicha(productId); fetchProducts(); } catch(e) {}
+  };
+
+  const handleMovimentacaoManual = async (e) => {
+    e.preventDefault();
+    if (!novaMovimentacao.insumoId) return alert('Selecione o insumo');
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/estoque/manual`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaMovimentacao) });
+      if ((await res.json()).success) { alert('Movimentação registrada com sucesso!'); setNovaMovimentacao({ insumoId: '', type: 'IN', quantity: '', reason: '' }); fetchInsumos(); if (estoqueSubTab === 'movimentacoes') fetchMovimentacoes(); } else alert('Erro ao registrar.');
+    } catch (error) {}
+  };
+
+  const handleAddIcms = (e) => { e.preventDefault(); const updatedIcms = [...(fiscalData.icms || []), { ...formIcms, id: formIcms.id || Date.now().toString() }]; saveFiscalData({ ...fiscalData, icms: updatedIcms }); setFormIcms({ id: '', descricao: '', regime: 'Simples Nacional', cfop: '', cst: '', aliquota: '' }); };
+  const handleDeleteIcms = (id) => { if(!confirm("Excluir Categoria ICMS?")) return; saveFiscalData({ ...fiscalData, icms: (fiscalData.icms || []).filter(x => x.id !== id) }); };
+  const handleAddPis = (e) => { e.preventDefault(); const updatedPis = [...(fiscalData.pisCofins || []), { ...formPis, id: formPis.id || Date.now().toString() }]; saveFiscalData({ ...fiscalData, pisCofins: updatedPis }); setFormPis({ id: '', descricao: '', cstPis: '', aliqPis: '', cstCofins: '', aliqCofins: '' }); };
+  const handleDeletePis = (id) => { if(!confirm("Excluir Categoria PIS/Cofins?")) return; saveFiscalData({ ...fiscalData, pisCofins: (fiscalData.pisCofins || []).filter(x => x.id !== id) }); };
+  const handleAddIbsCbs = (e) => { e.preventDefault(); const updated = [...(fiscalData.ibsCbs || []), { ...formIbsCbs, id: formIbsCbs.id || Date.now().toString() }]; saveFiscalData({ ...fiscalData, ibsCbs: updated }); setFormIbsCbs({ id: '', descricao: '', cst: '000', classificacao: '000001', aliqIbsUf: '0.1', aliqCbs: '0.9' }); };
+  const handleDeleteIbsCbs = (id) => { if(!confirm("Excluir Categoria IBS/CBS?")) return; saveFiscalData({ ...fiscalData, ibsCbs: (fiscalData.ibsCbs || []).filter(x => x.id !== id) }); };
+  const handleAddRegra = (e) => { e.preventDefault(); const updatedRegras = [...(fiscalData.regras || []), { ...formRegra, id: formRegra.id || Date.now().toString() }]; saveFiscalData({ ...fiscalData, regras: updatedRegras }); setFormRegra({ id: '', ordenar: '', descricao: '', icmsId: '', pisCofinsId: '', ibsCbsId: '', ipi: '' }); };
+  const handleDeleteRegra = (id) => { if(!confirm("Excluir Regra Fiscal?")) return; saveFiscalData({ ...fiscalData, regras: (fiscalData.regras || []).filter(x => x.id !== id) }); };
+
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/orders/${orderId}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) });
+      if ((await res.json()).success) fetchOrders();
+    } catch (error) {}
+  };
+
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/categories`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newCategoryName, isDrink: newCategoryIsDrink }) });
+      if ((await res.json()).success) { setNewCategoryName(''); setNewCategoryIsDrink(false); fetchMenu(); }
+    } catch (error) {}
+  };
+
+  const handleEditCategory = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/categories/${editingCategory.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editingCategory.name, isDrink: editingCategory.isDrink }) });
+      if ((await res.json()).success) { setEditingCategory(null); fetchMenu(); }
+    } catch (error) {}
+  };
+
+  const handleDeleteCategory = async (categoryId) => {
+    if (!confirm('Excluir esta categoria?')) return;
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/categories/${categoryId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) fetchMenu(); else alert(data.error);
+    } catch (error) {}
+  };
+
+  const moveCategory = async (index, direction) => {
+    const newMenu = [...menu];
+    if (direction === 'up' && index > 0) { const temp = newMenu[index]; newMenu[index] = newMenu[index - 1]; newMenu[index - 1] = temp; } 
+    else if (direction === 'down' && index < newMenu.length - 1) { const temp = newMenu[index]; newMenu[index] = newMenu[index + 1]; newMenu[index + 1] = temp; } 
+    else return;
+    setMenu(newMenu);
+    try {
+      const reordered = newMenu.map((cat, i) => ({ id: cat.id, order: i }));
+      await fetchWithStore(`${API_URL}/api/categories/reorder`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categories: reordered }) });
+    } catch (error) {}
+  };
+
+  const moveProduct = async (categoryId, productIndex, direction) => {
+    const newMenu = [...menu];
+    const catIndex = newMenu.findIndex(c => c.id === categoryId);
+    if (catIndex === -1) return;
+    const catProducts = [...newMenu[catIndex].products];
+    if (direction === 'up' && productIndex > 0) {
+      const temp = catProducts[productIndex];
+      catProducts[productIndex] = catProducts[productIndex - 1];
+      catProducts[productIndex - 1] = temp;
+    } else if (direction === 'down' && productIndex < catProducts.length - 1) {
+      const temp = catProducts[productIndex];
+      catProducts[productIndex] = catProducts[productIndex + 1];
+      catProducts[productIndex + 1] = temp;
+    } else return;
+    newMenu[catIndex].products = catProducts;
+    setMenu(newMenu); 
+    try {
+      const reordered = catProducts.map((prod, i) => ({ id: prod.id, order: i }));
+      await fetchWithStore(`${API_URL}/api/products/reorder`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ products: reordered }) });
+    } catch (error) {}
+  };
+
+  const handleAddProduct = async (e) => {
+    e.preventDefault();
+    if (!newProduct.categoryId) return alert("Crie uma categoria primeiro!");
+    try {
+      const payload = { ...newProduct, costPrice: newProduct.costPrice ? Number(newProduct.costPrice) : 0, groupId: newProduct.groupId || null };
+      const res = await fetchWithStore(`${API_URL}/api/products`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if ((await res.json()).success) {
+        setNewProduct({ name: '', description: '', price: '', price700g: '', price1kg: '', costPrice: '', categoryId: menu[0]?.id || '', imageUrl: '', regraFiscalId: '', ncm: '', ean: '', groupId: '' });
+        setIsCreatingProduct(false); fetchProducts(); fetchMenu(); 
+      }
+    } catch (error) {}
+  };
+
+  const handleEditProduct = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = { ...editingProduct, costPrice: editingProduct.costPrice ? Number(editingProduct.costPrice) : 0, groupId: editingProduct.groupId || null };
+      const res = await fetchWithStore(`${API_URL}/api/products/${editingProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if ((await res.json()).success) { setEditingProduct(null); fetchProducts(); fetchMenu(); }
+    } catch (error) {}
+  };
+
+  const toggleProductStatus = async (product) => {
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/products/${product.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...product, isActive: !product.isActive }) });
+      if ((await res.json()).success) { fetchProducts(); fetchMenu(); }
+    } catch (error) {}
+  };
+
+  const toggleFeatureProduct = async (product) => {
+    const isCurrentlyFeatured = product.isFeatured;
+    const currentHighlightsCount = allProducts.filter(p => p.isFeatured).length;
+    if (!isCurrentlyFeatured && currentHighlightsCount >= 5) { alert("Limite de destaques atingido."); return; }
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/products/${product.id}/feature`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isFeatured: !isCurrentlyFeatured }) });
+      if ((await res.json()).success) fetchProducts(); 
+    } catch (error) {}
+  };
+
+  const handleEditCustomer = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/admin/customers/${editingCustomer.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingCustomer) });
+      const data = await res.json();
+      if (data.success) { alert('Dados atualizados!'); setEditingCustomer(null); fetchCustomers(); } else { alert('Erro ao editar cliente.'); }
+    } catch (error) {}
+  };
+
+  const handleUpdateAdminConfig = async (e) => { 
+    e.preventDefault(); 
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminConfig) });
+      if ((await res.json()).success) alert("Perfil atualizado!"); else alert("Erro ao atualizar.");
+    } catch(e) {}
+  };
+
+  const handleSaveSystemSettings = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsForm) });
+      if ((await res.json()).success) alert('Configurações salvas!'); else alert('Erro.');
+    } catch (error) {}
+  };
+
+  const toggleAutoPrintState = (checked) => { setIsAutoPrintEnabled(checked); localStorage.setItem('zenix_autoPrint', checked ? 'true' : 'false'); };
+
+  const calculateCmv = (cost, price) => { if (!price || price <= 0) return 0; return ((Number(cost) / Number(price)) * 100).toFixed(1); };
+  const getCmvColor = (cmv) => { if (cmv <= 0) return 'text-slate-500'; if (cmv <= 30) return 'text-emerald-700 bg-emerald-100'; if (cmv <= 40) return 'text-amber-700 bg-amber-100'; return 'text-red-700 bg-red-100'; };
+
+  const getProductSizeLabel = (item) => {
+    if (!item.product) return "";
+    if (item.product.price1kg && Number(item.price) === Number(item.product.price1kg)) return " (1kg)";
+    if (item.product.price700g && Number(item.price) === Number(item.product.price700g)) return " (700g)";
+    if (item.product.name.toLowerCase().includes('costela') && item.product.price700g) return " (500g)";
+    return "";
+  };
+
+  const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(searchCustomer.toLowerCase()) || c.email.toLowerCase().includes(searchCustomer.toLowerCase()) || (c.phone && c.phone.includes(searchCustomer)) || (c.cpf && c.cpf.includes(searchCustomer)));
+  const filteredProducts = allProducts.filter(p => p.name.toLowerCase().includes(searchProduct.toLowerCase()));
+
+  const getMetodoPagamentoLabel = (method) => ({'PIX_ONLINE':'Pix','CREDIT_CARD_ONLINE':'Cartão Online','CREDIT_CARD_DELIVERY':'Cartão Entrega','CASH':'Dinheiro'}[method] || method);
+
+  const isAdmin = loggedEmployee?.role === 'ADMIN' || loggedEmployee?.role === 'OWNER' || loggedEmployee?.role === 'Gerente Geral' || loggedEmployee?.id === 'ADMIN_MASTER';
+  const canViewCompany = isAdmin || loggedEmployee?.canViewCompanyData === true;
+
+  const menuItems = [
+    { id: 'pdv', label: 'PDV / Frente de Caixa', icon: '💻' },
+    { id: 'salao', label: 'Salão & Mesas', icon: '🪑' },
+    { id: 'kds', label: 'Telas KDS (Produção)', icon: '🖥️', isDropdown: true },
+    { id: 'expedicao', label: 'Expedição & Rotas', icon: '🛵' },
+    { id: 'historico', label: 'Relatórios Analíticos', icon: '📊' },
+    { id: 'turnos', label: 'Turnos & Faturamento', icon: '💰' },
+    { id: 'analytics', label: 'Acessos', icon: '📈' },
+    { id: 'produtos', label: 'Produtos', icon: '🍟' },
+    { id: 'categorias', label: 'Categorias', icon: '📑' },
+    { id: 'promocoes', label: 'Promoções & Cupons', icon: '🎟️' },
+    { id: 'crm', label: 'Clientes', icon: '👥' },
+    { id: 'fornecedores', label: 'Parceiros/Fornecedores', icon: '🤝' },
+    { id: 'rh', label: 'RH & Funcionários', icon: '👔' }, 
+    { id: 'estoque', label: 'Estoque & Fichas', icon: '📦' },
+    { id: 'impressoes', label: 'Impressoras & Praças', icon: '🖨️' }, 
+    { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: '🧾' },
+    { id: 'config', label: 'Configurações', icon: '⚙️' }
+  ];
+
+  if (!isAdminAuthenticated) {
+    return <AdminLogin adminLoginForm={adminLoginForm} setAdminLoginForm={setAdminLoginForm} handleAdminLogin={handleAdminLogin} />;
+  }
+
+  if (loggedEmployee?.role?.toLowerCase().includes('entregador')) {
+    if (typeof window !== 'undefined') window.location.href = `/${storeSlug}/entregadores`;
+    return <div className="flex h-screen items-center justify-center bg-slate-900 text-amber-500 font-bold">Redirecionando...</div>;
+  }
+
+  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 text-amber-600 font-bold">Carregando painel administrativo...</div>;
 
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-amber-500">Iniciando...</div>}>
-      <HomeContent storeSlug={storeSlug} />
-    </Suspense>
+    <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
+      <aside className={`relative flex flex-col bg-white border-r border-slate-200 transition-all duration-300 ease-in-out z-30 shadow-sm ${isSidebarOpen ? 'w-72' : 'w-20'}`}>
+        <div className="h-20 flex items-center justify-between px-4 border-b border-slate-100">
+          {isSidebarOpen && <span className="font-black text-slate-900 text-xl px-2">Zenix<span className="text-amber-500">Food</span></span>}
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors mx-auto">
+            {isSidebarOpen ? '◀' : '☰'}
+          </button>
+        </div>
+        <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto hide-scrollbar">
+          {menuItems.map((item) => {
+            if (item.isDropdown) {
+              return (
+                <div key={item.id} className="flex flex-col">
+                  <button onClick={() => { if (!isSidebarOpen) setIsSidebarOpen(true); setIsKdsMenuOpen(!isKdsMenuOpen); }} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isKdsMenuOpen ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
+                    <span className="text-xl shrink-0 flex items-center justify-center w-8">{item.icon}</span>
+                    {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm flex-1 text-left">{item.label}</span>}
+                    {isSidebarOpen && <span className="text-[10px] font-black">{isKdsMenuOpen ? '▼' : '▶'}</span>}
+                  </button>
+                  {isKdsMenuOpen && isSidebarOpen && (
+                    <div className="ml-4 mt-2 space-y-1 pl-4 border-l border-slate-200 animate-fade-in-up">
+                      <a href={`/${storeSlug}/kds-cozinha`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 py-2">👨‍🍳 Cozinha Principal</a>
+                      <a href={`/${storeSlug}/kds-delivery`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 py-2">🛵 Expedição</a>
+                      <a href={`/${storeSlug}/kds-bebidas`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 py-2">🍹 Bar & Bebidas</a>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            const isActive = activeTab === item.id;
+            return (
+              <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isActive ? 'bg-amber-500 text-black shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
+                <span className="text-xl shrink-0 flex items-center justify-center w-8">{item.icon}</span>
+                {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm">{item.label}</span>}
+              </button>
+            );
+          })}
+          {canViewCompany && (
+            <button onClick={() => setActiveTab('minha-empresa')} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer mt-4 border-t border-slate-200 pt-6 ${activeTab === 'minha-empresa' ? 'bg-amber-500 text-black shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
+              <span className="text-xl shrink-0 flex items-center justify-center w-8">🏢</span>
+              {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm text-left">Minha Empresa</span>}
+            </button>
+          )}
+        </nav>
+        <div className="p-4 border-t border-slate-100">
+          <button onClick={handleAdminLogout} className="w-full flex items-center gap-4 px-3 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all cursor-pointer justify-center">🚪 {isSidebarOpen && "Sair"}</button>
+        </div>
+      </aside>
+      <main className="flex-1 flex flex-col h-screen relative overflow-hidden bg-slate-50">
+        <header className="h-20 flex items-center justify-between px-8 bg-white border-b border-slate-200 shadow-sm z-20">
+           <h1 className="text-2xl font-black text-slate-800">{activeTab === 'minha-empresa' ? 'Minha Empresa' : menuItems.find(m => m.id === activeTab)?.label || 'Acesso Restrito'}</h1>
+        </header>
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 pb-32">
+           {activeTab === 'pdv' && <PdvTab employeeUser={{ id: 'ADMIN_MASTER', name: 'Administrador Master', role: 'Gerente Geral' }} allProducts={allProducts} menu={menu} />}
+           {activeTab === 'salao' && <SalaoTab employeeUser={{ id: 'ADMIN_MASTER', name: 'Administrador Master', role: 'Gerente Geral' }} />}
+           {activeTab === 'expedicao' && <ExpeditionTab orders={orders} updateOrderStatus={updateOrderStatus} deliveryPersons={deliveryPersons} assignDelivery={assignDelivery} />}
+           {activeTab === 'historico' && <OrderHistoryTab orders={orders} setSelectedOrderDetails={setSelectedOrderDetails} getMetodoPagamentoLabel={getMetodoPagamentoLabel} getProductSizeLabel={getProductSizeLabel} />}
+           {activeTab === 'turnos' && <TurnosTab />}
+           {activeTab === 'analytics' && <AnalyticsTab visitsData={visitsData} />}
+           {activeTab === 'produtos' && <ProductsTab allProducts={allProducts} searchProduct={searchProduct} setSearchProduct={setSearchProduct} filteredProducts={filteredProducts} setIsCreatingProduct={setIsCreatingProduct} isCreatingProduct={isCreatingProduct} newProduct={newProduct} setNewProduct={setNewProduct} handleAddProduct={handleAddProduct} menu={menu} fiscalData={fiscalData} editingProduct={editingProduct} setEditingProduct={setEditingProduct} handleEditProduct={handleEditProduct} toggleProductStatus={toggleProductStatus} toggleFeatureProduct={toggleFeatureProduct} calculateCmv={calculateCmv} getCmvColor={getCmvColor} productGroups={productGroups} />}
+           {activeTab === 'categorias' && <CategoriesTab menu={menu} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryIsDrink={newCategoryIsDrink} setNewCategoryIsDrink={setNewCategoryIsDrink} handleAddCategory={handleAddCategory} moveCategory={moveCategory} moveProduct={moveProduct} setEditingCategory={setEditingCategory} handleEditCategory={handleEditCategory} handleDeleteCategory={handleDeleteCategory} />}
+           {activeTab === 'promocoes' && <PromotionsTab promoSubTab={promoSubTab} setPromoSubTab={setPromoSubTab} allProducts={allProducts} toggleFeatureProduct={toggleFeatureProduct} coupons={coupons} couponForm={couponForm} setCouponForm={setCouponForm} handleAddCoupon={handleAddCoupon} toggleCouponStatus={toggleCouponStatus} />}
+           {activeTab === 'crm' && <CrmTab customers={customers} searchCustomer={searchCustomer} setSearchCustomer={setSearchCustomer} filteredCustomers={filteredCustomers} setEditingCustomer={setEditingCustomer} />}
+           {activeTab === 'fornecedores' && <SuppliersTab />}
+           {activeTab === 'rh' && <RhTab />} 
+           {activeTab === 'estoque' && <StockTab estoqueSubTab={estoqueSubTab} setEstoqueSubTab={setEstoqueSubTab} fetchMovimentacoes={fetchMovimentacoes} handleUploadXMLPreview={handleUploadXMLPreview} setXmlFile={setXmlFile} novaMovimentacao={novaMovimentacao} setNovaMovimentacao={setNovaMovimentacao} insumos={insumos} handleMovimentacaoManual={handleMovimentacaoManual} novoInsumo={novoInsumo} setNovoInsumo={setNovoInsumo} handleSalvarInsumo={handleSalvarInsumo} toggleInsumoStatus={toggleInsumoStatus} setEditingInsumo={setEditingInsumo} editingInsumo={editingInsumo} handleEditInsumoSubmit={handleEditInsumoSubmit} allProducts={allProducts} fichasVisiveis={fichasVisiveis} carregarFicha={carregarFicha} setFichasVisiveis={setFichasVisiveis} calculateCmv={calculateCmv} getCmvColor={getCmvColor} handleRemoveFicha={handleRemoveFicha} handleAddFicha={handleAddFicha} movimentacoes={movimentacoes} showXmlModal={showXmlModal} setShowXmlModal={setShowXmlModal} xmlPreviewData={xmlPreviewData} xmlMappings={xmlMappings} updateMapping={updateMapping} handleConfirmXmlImport={handleConfirmXmlImport} />}
+           {activeTab === 'impressoes' && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
+           {activeTab === 'fiscal' && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
+           {activeTab === 'config' && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={handleUpdateAdminConfig} />}
+           {activeTab === 'minha-empresa' && canViewCompany && <MinhaEmpresaTab />}
+        </div>
+      </main>
+      {editingCategory && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 p-6 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up">
+            <h3 className="text-xl font-black text-amber-600 mb-4">Editar Categoria</h3>
+            <form onSubmit={handleEditCategory} className="space-y-4">
+              <input type="text" required value={editingCategory.name} onChange={(e) => setEditingCategory({...editingCategory, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500 mb-4" />
+              <label className="flex items-center gap-3 cursor-pointer bg-slate-50 p-3 rounded-xl border border-slate-200 hover:border-blue-300 transition-colors">
+                <input type="checkbox" checked={editingCategory.isDrink || false} onChange={e => setEditingCategory({...editingCategory, isDrink: e.target.checked})} className="w-5 h-5 accent-blue-600 cursor-pointer shrink-0" />
+                <span className="text-xs font-black text-slate-800">KDS Bar</span>
+              </label>
+              <div className="flex gap-4 pt-4 border-t border-slate-100 mt-2">
+                <button type="button" onClick={() => setEditingCategory(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all cursor-pointer">Cancelar</button>
+                <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-black py-3 rounded-xl transition-all shadow-md cursor-pointer">Salvar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {editingCustomer && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 p-6 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up">
+            <h3 className="text-xl font-black text-slate-900 mb-4">Editar Cliente</h3>
+            <form onSubmit={handleEditCustomer} className="space-y-4">
+              <input type="text" required value={editingCustomer.name || ''} onChange={(e) => setEditingCustomer({...editingCustomer, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
+              <input type="email" required value={editingCustomer.email || ''} onChange={(e) => setEditingCustomer({...editingCustomer, email: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-blue-500" />
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => setEditingCustomer(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all cursor-pointer">Cancelar</button>
+                <button type="submit" className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-xl transition-all shadow-md cursor-pointer">Salvar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      <OrderDetailsModal order={selectedOrderDetails} onClose={() => setSelectedOrderDetails(null)} triggerManualPrint={triggerManualPrint} getMetodoPagamentoLabel={getMetodoPagamentoLabel} getProductSizeLabel={getProductSizeLabel} />
+    </div>
   );
 }
