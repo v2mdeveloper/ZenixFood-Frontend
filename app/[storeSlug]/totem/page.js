@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect, useRef } from "react";
 import { ShoppingBag, ChevronRight, X, Sun, Moon, CreditCard, Banknote, QrCode, MonitorDown, Loader2, Check, Maximize, Plus, Minus } from "lucide-react";
 
