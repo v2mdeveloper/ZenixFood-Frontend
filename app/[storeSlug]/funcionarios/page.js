@@ -186,8 +186,8 @@ function FuncionariosPortal({ storeSlug }) {
 
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
-    const storeId = localStorage.getItem('zenix_store_id');
-    const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-store-id': storeId }), ...options.headers };
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
+    const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-loja-slug': storeId }), ...options.headers };
     const response = await fetch(url, { ...options, headers });
     if (response.status === 402 && typeof window !== 'undefined') window.location.href = `/${storeSlug}/bloqueado`; 
     return response;
@@ -318,11 +318,11 @@ function FuncionariosPortal({ storeSlug }) {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    const currentStoreId = localStorage.getItem('zenix_store_id');
+    const currentStoreId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
     if (!currentStoreId) return alert("Erro: Não foi possível identificar a loja atual.");
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/auth/employee/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-store-id': currentStoreId }, body: JSON.stringify({ email: loginForm.email, password: loginForm.password }) });
+      const res = await fetch(`${API_URL}/api/auth/employee/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-loja-slug': currentStoreId }, body: JSON.stringify({ email: loginForm.email, password: loginForm.password }) });
       const data = await res.json();
       if (res.ok && data.success) {
         localStorage.setItem('zenix_employeeToken', data.token);
@@ -845,7 +845,7 @@ export default function FuncionariosWrapper() {
     if (!storeSlug) return;
     const identifyStore = async () => {
       try {
-        const res = await fetch(`https://zenixfood-backend.onrender.com/api/stores/slug/${storeSlug}`);
+        const res = await fetch(`${API_URL || 'https://zenixfood-backend.onrender.com'}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
         const data = await res.json();
         if (data.success) {
           localStorage.setItem('zenix_store_id', data.store.id);

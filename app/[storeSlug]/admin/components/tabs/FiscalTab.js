@@ -22,11 +22,11 @@ export default function FiscalTab({
   //Helper local para garantir o envio do x-store-id e Token JWT
  const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
-    const storeId = localStorage.getItem('zenix_store_id');
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
 
     const headers = {
       ...(token && { 'Authorization': `Bearer ${token}` }),
-      ...(storeId && { 'x-store-id': storeId }),
+      ...(storeId && { 'x-loja-slug': storeId }),
       ...options.headers,
     };
 

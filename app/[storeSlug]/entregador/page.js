@@ -32,7 +32,7 @@ export default function DeliveryApp() {
 
     const identifyStore = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/stores/slug/${storeSlug}`);
+        const res = await fetch(`${API_URL || 'https://zenixfood-backend.onrender.com'}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
         const data = await res.json();
 
         if (data.success) {
@@ -103,14 +103,14 @@ export default function DeliveryApp() {
     }
 
     setIsProcessing(true);
-    const storeId = localStorage.getItem('zenix_store_id');
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
     try {
       const payload = { ...registerForm, facePhoto: capturedFace };
       const res = await fetch(`${API_URL}/api/rh/delivery-persons/register`, {
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'x-store-id': storeId 
+          'x-loja-slug': storeId 
         }, 
         body: JSON.stringify(payload)
       });
@@ -133,13 +133,13 @@ export default function DeliveryApp() {
   const handleLogin = async (e) => {
     if (e) e.preventDefault();
     setIsProcessing(true);
-    const storeId = localStorage.getItem('zenix_store_id');
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
     try {
       const res = await fetch(`${API_URL}/api/auth/employee/login`, {
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'x-store-id': storeId 
+          'x-loja-slug': storeId 
         }, 
         body: JSON.stringify(loginForm)
       });
@@ -164,13 +164,13 @@ export default function DeliveryApp() {
   const handleFaceVerify = async () => {
     if (!capturedFace) return;
     setIsProcessing(true);
-    const storeId = localStorage.getItem('zenix_store_id');
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
     try {
       const res = await fetch(`${API_URL}/api/auth/employee/face-login-verify`, {
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'x-store-id': storeId 
+          'x-loja-slug': storeId 
         }, 
         body: JSON.stringify({ employeeId: pendingFaceVerifyId, currentFacePhoto: capturedFace })
       });
@@ -210,13 +210,13 @@ export default function DeliveryApp() {
   };
 
   const fetchMyOrders = async () => {
-    const storeId = localStorage.getItem('zenix_store_id');
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
     const token = localStorage.getItem('@Canone:deliveryToken');
     try {
       const res = await fetch(`${API_URL}/api/delivery/my-orders/${loggedEmployee.id}`, {
         headers: {
           ...(token && { 'Authorization': `Bearer ${token}` }),
-          ...(storeId && { 'x-store-id': storeId })
+          ...(storeId && { 'x-loja-slug': storeId })
         }
       });
       if (res.ok) setMyOrders(await res.json());
@@ -227,7 +227,7 @@ export default function DeliveryApp() {
     const code = deliveryCodes[order.id];
     if (!code || code.length < 4) return alert('⚠️ Digite a senha de 4 dígitos!');
     
-    const storeId = localStorage.getItem('zenix_store_id');
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
     const token = localStorage.getItem('@Canone:deliveryToken');
     try {
       const res = await fetch(`${API_URL}/api/delivery/confirm`, {
@@ -235,7 +235,7 @@ export default function DeliveryApp() {
         headers: { 
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` }),
-          ...(storeId && { 'x-store-id': storeId })
+          ...(storeId && { 'x-loja-slug': storeId })
         }, 
         body: JSON.stringify({ shortId: order.shortId, code })
       });

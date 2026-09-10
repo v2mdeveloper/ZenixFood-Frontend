@@ -22,7 +22,7 @@ export default function KdsClientePage() {
 
     const identifyStore = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/stores/slug/${storeSlug}`);
+        const res = await fetch(`${API_URL || 'https://zenixfood-backend.onrender.com'}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
         const data = await res.json();
 
         if (data.success) {
@@ -42,11 +42,11 @@ export default function KdsClientePage() {
   // Helper local com interceptador de Inadimplência
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
-    const storeId = localStorage.getItem('zenix_store_id');
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
 
     const headers = {
       ...(token && { 'Authorization': `Bearer ${token}` }),
-      ...(storeId && { 'x-store-id': storeId }),
+      ...(storeId && { 'x-loja-slug': storeId }),
       ...options.headers,
     };
 

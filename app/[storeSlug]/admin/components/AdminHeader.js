@@ -4,7 +4,7 @@ export default function AdminHeader({ isAutoPrintEnabled, toggleAutoPrintState, 
   const [storeId, setStoreId] = useState('');
 
   useEffect(() => {
-    const currentStore = localStorage.getItem('zenix_store_id') || '';
+    const currentStore = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '') || '';
     setStoreId(currentStore);
   }, []);
 

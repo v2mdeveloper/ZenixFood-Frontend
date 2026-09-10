@@ -13,8 +13,8 @@ export default function MinhaEmpresaTab() {
 
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_adminToken') || localStorage.getItem('zenix_employeeToken');
-    const storeId = localStorage.getItem('zenix_store_id');
-    const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-store-id': storeId }), ...options.headers };
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
+    const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-loja-slug': storeId }), ...options.headers };
     return fetch(url, { ...options, headers });
   };
 
