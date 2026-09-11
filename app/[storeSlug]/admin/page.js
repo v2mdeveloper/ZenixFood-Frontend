@@ -18,6 +18,8 @@ import PdvTab from './components/tabs/PdvTab';
 import TurnosTab from './components/tabs/TurnosTab'; 
 import SalaoTab from './components/tabs/SalaoTab';
 import MinhaEmpresaTab from './components/tabs/MinhaEmpresaTab';
+import ContasTab from './components/tabs/ContasTab'; // NOVO IMPORT
+import RelatorioTab from './components/tabs/RelatorioTab'; // NOVO IMPORT
 import OrderDetailsModal from './components/modals/OrderDetailsModal';
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
@@ -122,6 +124,7 @@ export default function AdminDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('pdv'); 
   const [isKdsMenuOpen, setIsKdsMenuOpen] = useState(false); 
+  const [isFinanceiroMenuOpen, setIsFinanceiroMenuOpen] = useState(false); // NOVO STATE PARA O FINANCEIRO
   const [orders, setOrders] = useState([]);
   const [menu, setMenu] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
@@ -187,7 +190,7 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('zenix_token');
+    const savedToken = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
     const savedEmployee = localStorage.getItem('zenix_loggedEmployee');
     if (savedToken) {
       setIsAdminAuthenticated(true);
@@ -216,6 +219,36 @@ export default function AdminDashboard() {
       setLoading(false);
     }
   }, [isAdminAuthenticated, loggedEmployee]);
+
+  // SISTEMA DE PERMISSÕES 🛡️
+  const isAdmin = loggedEmployee?.role === 'ADMIN' || loggedEmployee?.role === 'Administrador' || loggedEmployee?.role === 'Gerente Master' || loggedEmployee?.id === 'ADMIN_MASTER';
+  const hasPermission = (permId) => {
+    if (isAdmin) return true;
+    return loggedEmployee?.permissions?.includes(permId);
+  };
+  const canViewCompany = hasPermission('minha_empresa');
+
+  // MAPEAMENTO DO MENU E VERIFICAÇÃO DE PERMISSÃO
+  const menuItems = [
+    { id: 'pdv', label: 'PDV / Frente de Caixa', icon: '💻', perm: 'pdv' },
+    { id: 'salao', label: 'Salão & Mesas', icon: '🪑', perm: 'salao' },
+    { id: 'kds', label: 'Telas KDS (Produção)', icon: '🖥️', isDropdown: true, perm: 'kds' },
+    { id: 'expedicao', label: 'Expedição & Rotas', icon: '🛵', perm: 'expedicao' },
+    { id: 'historico', label: 'Relatórios Analíticos', icon: '📊', perm: 'historico' },
+    { id: 'turnos', label: 'Turnos & Faturamento', icon: '💰', perm: 'turnos' },
+    { id: 'financeiro', label: 'Financeiro', icon: '💸', isDropdown: true, perm: 'financeiro' }, // NOVO MÓDULO FINANCEIRO
+    { id: 'analytics', label: 'Acessos', icon: '📈', perm: 'analytics' },
+    { id: 'produtos', label: 'Produtos', icon: '🍟', perm: 'produtos' },
+    { id: 'categorias', label: 'Categorias', icon: '📑', perm: 'categorias' },
+    { id: 'promocoes', label: 'Promoções & Cupons', icon: '🎟️', perm: 'promocoes' },
+    { id: 'crm', label: 'Clientes', icon: '👥', perm: 'crm' },
+    { id: 'fornecedores', label: 'Parceiros/Fornecedores', icon: '🤝', perm: 'fornecedores' },
+    { id: 'rh', label: 'RH & Funcionários', icon: '👔', perm: 'rh' }, 
+    { id: 'estoque', label: 'Estoque & Fichas', icon: '📦', perm: 'estoque' },
+    { id: 'impressoes', label: 'Impressoras & Praças', icon: '🖨️', perm: 'impressoes' }, 
+    { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: '🧾', perm: 'fiscal' },
+    { id: 'config', label: 'Configurações', icon: '⚙️', perm: 'config' }
+  ];
 
   useEffect(() => {
     if (newProduct.groupId) {
@@ -282,6 +315,7 @@ export default function AdminDashboard() {
 
   const handleAdminLogout = () => {
     localStorage.removeItem('zenix_token');
+    localStorage.removeItem('zenix_employeeToken');
     localStorage.removeItem('zenix_store_id');
     localStorage.removeItem('zenix_loggedEmployee');
     setIsAdminAuthenticated(false);
@@ -713,29 +747,6 @@ export default function AdminDashboard() {
 
   const getMetodoPagamentoLabel = (method) => ({'PIX_ONLINE':'Pix','CREDIT_CARD_ONLINE':'Cartão Online','CREDIT_CARD_DELIVERY':'Cartão Entrega','CASH':'Dinheiro'}[method] || method);
 
-  const isAdmin = loggedEmployee?.role === 'ADMIN' || loggedEmployee?.role === 'OWNER' || loggedEmployee?.role === 'Gerente Geral' || loggedEmployee?.id === 'ADMIN_MASTER';
-  const canViewCompany = isAdmin || loggedEmployee?.canViewCompanyData === true;
-
-  const menuItems = [
-    { id: 'pdv', label: 'PDV / Frente de Caixa', icon: '💻' },
-    { id: 'salao', label: 'Salão & Mesas', icon: '🪑' },
-    { id: 'kds', label: 'Telas KDS (Produção)', icon: '🖥️', isDropdown: true },
-    { id: 'expedicao', label: 'Expedição & Rotas', icon: '🛵' },
-    { id: 'historico', label: 'Relatórios Analíticos', icon: '📊' },
-    { id: 'turnos', label: 'Turnos & Faturamento', icon: '💰' },
-    { id: 'analytics', label: 'Acessos', icon: '📈' },
-    { id: 'produtos', label: 'Produtos', icon: '🍟' },
-    { id: 'categorias', label: 'Categorias', icon: '📑' },
-    { id: 'promocoes', label: 'Promoções & Cupons', icon: '🎟️' },
-    { id: 'crm', label: 'Clientes', icon: '👥' },
-    { id: 'fornecedores', label: 'Parceiros/Fornecedores', icon: '🤝' },
-    { id: 'rh', label: 'RH & Funcionários', icon: '👔' }, 
-    { id: 'estoque', label: 'Estoque & Fichas', icon: '📦' },
-    { id: 'impressoes', label: 'Impressoras & Praças', icon: '🖨️' }, 
-    { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: '🧾' },
-    { id: 'config', label: 'Configurações', icon: '⚙️' }
-  ];
-
   if (!isAdminAuthenticated) {
     return <AdminLogin adminLoginForm={adminLoginForm} setAdminLoginForm={setAdminLoginForm} handleAdminLogin={handleAdminLogin} />;
   }
@@ -758,24 +769,43 @@ export default function AdminDashboard() {
         </div>
         <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto hide-scrollbar">
           {menuItems.map((item) => {
+            if (!hasPermission(item.perm)) return null; 
+
             if (item.isDropdown) {
+              const isOpen = item.id === 'kds' ? isKdsMenuOpen : isFinanceiroMenuOpen;
+              const toggleOpen = () => {
+                if (!isSidebarOpen) setIsSidebarOpen(true);
+                if (item.id === 'kds') setIsKdsMenuOpen(!isKdsMenuOpen);
+                if (item.id === 'financeiro') setIsFinanceiroMenuOpen(!isFinanceiroMenuOpen);
+              };
+
               return (
                 <div key={item.id} className="flex flex-col">
-                  <button onClick={() => { if (!isSidebarOpen) setIsSidebarOpen(true); setIsKdsMenuOpen(!isKdsMenuOpen); }} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isKdsMenuOpen ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
+                  <button onClick={toggleOpen} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isOpen ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
                     <span className="text-xl shrink-0 flex items-center justify-center w-8">{item.icon}</span>
                     {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm flex-1 text-left">{item.label}</span>}
-                    {isSidebarOpen && <span className="text-[10px] font-black">{isKdsMenuOpen ? '▼' : '▶'}</span>}
+                    {isSidebarOpen && <span className="text-[10px] font-black">{isOpen ? '▼' : '▶'}</span>}
                   </button>
-                  {isKdsMenuOpen && isSidebarOpen && (
+                  
+                  {item.id === 'kds' && isKdsMenuOpen && isSidebarOpen && (
                     <div className="ml-4 mt-2 space-y-1 pl-4 border-l border-slate-200 animate-fade-in-up">
-                      <a href={`/${storeSlug}/kds-cozinha`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 py-2">👨‍🍳 Cozinha Principal</a>
-                      <a href={`/${storeSlug}/kds-delivery`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 py-2">🛵 Expedição</a>
-                      <a href={`/${storeSlug}/kds-bebidas`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 py-2">🍹 Bar & Bebidas</a>
+                      <a href={`/${storeSlug}/kds-cozinha`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 hover:text-amber-500 py-2 transition-colors">👨‍🍳 Cozinha Principal</a>
+                      <a href={`/${storeSlug}/kds-delivery`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 hover:text-amber-500 py-2 transition-colors">🛵 Expedição</a>
+                      <a href={`/${storeSlug}/kds-bebidas`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 hover:text-amber-500 py-2 transition-colors">🍹 Bar & Bebidas</a>
+                      <a href={`/${storeSlug}/kds-cliente`} target="_blank" rel="noopener noreferrer" className="block text-xs font-bold text-slate-500 hover:text-amber-500 py-2 transition-colors">📺 Painel do Cliente</a>
+                    </div>
+                  )}
+
+                  {item.id === 'financeiro' && isFinanceiroMenuOpen && isSidebarOpen && (
+                    <div className="ml-4 mt-2 space-y-1 pl-4 border-l border-slate-200 animate-fade-in-up">
+                      <button onClick={() => setActiveTab('contas')} className={`block text-xs font-bold w-full text-left py-2 transition-colors ${activeTab === 'contas' ? 'text-amber-500' : 'text-slate-500 hover:text-slate-800'}`}>💸 Contas a Pagar</button>
+                      <button onClick={() => setActiveTab('relatorio')} className={`block text-xs font-bold w-full text-left py-2 transition-colors ${activeTab === 'relatorio' ? 'text-amber-500' : 'text-slate-500 hover:text-slate-800'}`}>📊 Relatório (DRE)</button>
                     </div>
                   )}
                 </div>
               );
             }
+            
             const isActive = activeTab === item.id;
             return (
               <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isActive ? 'bg-amber-500 text-black shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
@@ -784,6 +814,7 @@ export default function AdminDashboard() {
               </button>
             );
           })}
+          
           {canViewCompany && (
             <button onClick={() => setActiveTab('minha-empresa')} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer mt-4 border-t border-slate-200 pt-6 ${activeTab === 'minha-empresa' ? 'bg-amber-500 text-black shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
               <span className="text-xl shrink-0 flex items-center justify-center w-8">🏢</span>
@@ -797,7 +828,7 @@ export default function AdminDashboard() {
       </aside>
       <main className="flex-1 flex flex-col h-screen relative overflow-hidden bg-slate-50">
         <header className="h-20 flex items-center justify-between px-8 bg-white border-b border-slate-200 shadow-sm z-20">
-           <h1 className="text-2xl font-black text-slate-800">{activeTab === 'minha-empresa' ? 'Minha Empresa' : menuItems.find(m => m.id === activeTab)?.label || 'Acesso Restrito'}</h1>
+           <h1 className="text-2xl font-black text-slate-800">{activeTab === 'minha-empresa' ? 'Minha Empresa' : (activeTab === 'contas' ? 'Contas a Pagar' : (activeTab === 'relatorio' ? 'Relatórios (DRE)' : menuItems.find(m => m.id === activeTab)?.label || 'Acesso Restrito'))}</h1>
         </header>
         <div className="flex-1 overflow-y-auto p-6 md:p-8 pb-32">
            {activeTab === 'pdv' && <PdvTab employeeUser={{ id: 'ADMIN_MASTER', name: 'Administrador Master', role: 'Gerente Geral' }} allProducts={allProducts} menu={menu} />}
@@ -805,6 +836,8 @@ export default function AdminDashboard() {
            {activeTab === 'expedicao' && <ExpeditionTab orders={orders} updateOrderStatus={updateOrderStatus} deliveryPersons={deliveryPersons} assignDelivery={assignDelivery} />}
            {activeTab === 'historico' && <OrderHistoryTab orders={orders} setSelectedOrderDetails={setSelectedOrderDetails} getMetodoPagamentoLabel={getMetodoPagamentoLabel} getProductSizeLabel={getProductSizeLabel} />}
            {activeTab === 'turnos' && <TurnosTab />}
+           {activeTab === 'contas' && <ContasTab API_URL={API_URL} />} 
+           {activeTab === 'relatorio' && <RelatorioTab API_URL={API_URL} />} 
            {activeTab === 'analytics' && <AnalyticsTab visitsData={visitsData} />}
            {activeTab === 'produtos' && <ProductsTab allProducts={allProducts} searchProduct={searchProduct} setSearchProduct={setSearchProduct} filteredProducts={filteredProducts} setIsCreatingProduct={setIsCreatingProduct} isCreatingProduct={isCreatingProduct} newProduct={newProduct} setNewProduct={setNewProduct} handleAddProduct={handleAddProduct} menu={menu} fiscalData={fiscalData} editingProduct={editingProduct} setEditingProduct={setEditingProduct} handleEditProduct={handleEditProduct} toggleProductStatus={toggleProductStatus} toggleFeatureProduct={toggleFeatureProduct} calculateCmv={calculateCmv} getCmvColor={getCmvColor} productGroups={productGroups} />}
            {activeTab === 'categorias' && <CategoriesTab menu={menu} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryIsDrink={newCategoryIsDrink} setNewCategoryIsDrink={setNewCategoryIsDrink} handleAddCategory={handleAddCategory} moveCategory={moveCategory} moveProduct={moveProduct} setEditingCategory={setEditingCategory} handleEditCategory={handleEditCategory} handleDeleteCategory={handleDeleteCategory} />}

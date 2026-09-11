@@ -240,13 +240,14 @@ export default function RhTab() {
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-  const AVAILABLE_PERMISSIONS = [
+const AVAILABLE_PERMISSIONS = [
     { id: 'pdv', label: '💻 PDV / Frente de Caixa', desc: 'Abertura, fechamento e vendas no caixa.' },
     { id: 'salao', label: '🪑 Salão & Mesas', desc: 'Gerenciar mapa de mesas e comandas.' },
     { id: 'kds', label: '🖥️ Telas KDS (Produção)', desc: 'Acesso unificado às telas de Cozinha, Delivery e Bar.' },
     { id: 'expedicao', label: '🛵 Expedição & Rotas', desc: 'Gerenciar entregas e despachar motoboys.' },
     { id: 'historico', label: '📊 Relatórios Analíticos', desc: 'Histórico de vendas, top produtos, clientes e comissões.' },
     { id: 'turnos', label: '💰 Turnos & Faturamento', desc: 'Relatórios de fechamento de turnos diários.' },
+    { id: 'financeiro', label: '💸 Financeiro', desc: 'Acesso às Contas a Pagar e Relatório de Lucros (DRE).' },
     { id: 'analytics', label: '📈 Acessos (Analytics)', desc: 'Gráficos de visitas ao cardápio digital.' },
     { id: 'produtos', label: '🍟 Produtos', desc: 'Cadastrar, editar e excluir itens do catálogo.' },
     { id: 'categorias', label: '📑 Categorias', desc: 'Gerir seções do cardápio.' },
@@ -259,6 +260,7 @@ export default function RhTab() {
     { id: 'impressoes', label: '🖨️ Impressoras & Praças', desc: 'Configurar hardware de impressão e grupos de produção.' },
     { id: 'fiscal', label: '🧾 Fiscal (NFC-e)', desc: 'Configuração e emissão de notas fiscais.' },
     { id: 'config', label: '⚙️ Configurações', desc: 'Ajustar horários, informações da loja e integrações.' },
+    { id: 'minha_empresa', label: '🏢 Minha Empresa', desc: 'Visualizar dados do CNPJ, assinatura e faturas do sistema.' },
     { id: 'gestao', label: '🔒 Gerência Suprema', desc: 'Autorizar sangrias, estornos e acessos irrestritos.' }
   ];
 

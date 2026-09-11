@@ -19,6 +19,8 @@ import SalaoTab from '../admin/components/tabs/SalaoTab';
 import TurnosTab from '../admin/components/tabs/TurnosTab';
 import MinhaEmpresaTab from '../admin/components/tabs/MinhaEmpresaTab'; 
 import RhTab from '../admin/components/tabs/RhTab'; 
+import ContasTab from '../admin/components/tabs/ContasTab'; // NOVO IMPORT
+import RelatorioTab from '../admin/components/tabs/RelatorioTab'; // NOVO IMPORT
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
@@ -124,7 +126,9 @@ function FuncionariosPortal({ storeSlug }) {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('');
+  
   const [isKdsMenuOpen, setIsKdsMenuOpen] = useState(false);
+  const [isFinanceiroMenuOpen, setIsFinanceiroMenuOpen] = useState(false); // NOVO STATE
   
   const [orders, setOrders] = useState([]);
   const [menu, setMenu] = useState([]);
@@ -238,6 +242,7 @@ function FuncionariosPortal({ storeSlug }) {
     { id: 'expedicao', label: 'Expedição & Rotas', icon: '🛵' },
     { id: 'historico', label: 'Relatórios Analíticos', icon: '📊' },
     { id: 'turnos', label: 'Turnos & Faturamento', icon: '💰' }, 
+    { id: 'financeiro', label: 'Financeiro', icon: '💸', isDropdown: true }, // NOVO MENU FINANCEIRO
     { id: 'produtos', label: 'Produtos', icon: '🍟' },
     { id: 'categorias', label: 'Categorias', icon: '📑' },
     { id: 'promocoes', label: 'Promoções & Cupons', icon: '🎟️' },
@@ -264,6 +269,7 @@ function FuncionariosPortal({ storeSlug }) {
       case 'expedicao': return perms.includes('expedicao') || perms.includes('entregas');
       case 'historico': return perms.includes('historico');
       case 'turnos': return perms.includes('turnos');
+      case 'financeiro': return perms.includes('financeiro'); // NOVA PERMISSÃO
       case 'produtos':
       case 'categorias':
       case 'promocoes': return perms.includes('produtos') || perms.includes('promocoes') || perms.includes('categorias');
@@ -279,7 +285,10 @@ function FuncionariosPortal({ storeSlug }) {
     }
   });
 
-  const isPermitted = (tabId) => permittedMenuItems.some(m => m.id === tabId);
+  const isPermitted = (tabId) => {
+     if (tabId === 'contas' || tabId === 'relatorio') return permittedMenuItems.some(m => m.id === 'financeiro');
+     return permittedMenuItems.some(m => m.id === tabId);
+  };
 
   useEffect(() => {
     if (isAuthenticated && isDataLoaded && permittedMenuItems.length > 0 && !activeTab) {
@@ -359,32 +368,19 @@ function FuncionariosPortal({ storeSlug }) {
   
   const fetchSystemSettings = async () => {
     try {
-        const res = await fetchWithStore(
-            `${API_URL}/api/settings?_=${Date.now()}`
-        );
+        const res = await fetchWithStore(`${API_URL}/api/settings?_=${Date.now()}`);
         if (res.ok) {
             const data = await res.json();
             setSettingsForm({
-                isManualFechado: data.isManualFechado,
-                deliveryFee: Number(data.deliveryFee),
-                cashbackPercent: Number(data.cashbackPercent),
-                promoBannerUrl: data.promoBannerUrl || "",
-                promoBannerLink: data.promoBannerLink || "",
-                youtubeLiveId: data.youtubeLiveId || "",
-                printerName: data.printerName || "",
-                aboutUsText: data.aboutUsText || "",
-                schedule: data.schedule || settingsForm.schedule,
-                storeCnpj: data.storeCnpj || "",
-                logoUrl: data.logoUrl || "",
-                coverImageUrl: data.coverImageUrl || "",
-                totemCoverImageUrl: data.totemCoverImageUrl || "",
-                ifoodLink: data.ifoodLink || "",
-                ninetyNineFoodLink: data.ninetyNineFoodLink || "",
+                isManualFechado: data.isManualFechado, deliveryFee: Number(data.deliveryFee), cashbackPercent: Number(data.cashbackPercent),
+                promoBannerUrl: data.promoBannerUrl || "", promoBannerLink: data.promoBannerLink || "", youtubeLiveId: data.youtubeLiveId || "",
+                printerName: data.printerName || "", aboutUsText: data.aboutUsText || "", schedule: data.schedule || settingsForm.schedule, storeCnpj: data.storeCnpj || "",
+                logoUrl: data.logoUrl || "", coverImageUrl: data.coverImageUrl || "", totemCoverImageUrl: data.totemCoverImageUrl || "",
+                ifoodLink: data.ifoodLink || "", ninetyNineFoodLink: data.ninetyNineFoodLink || "",
             });
         }
     } catch (e) {}
-};
-
+  };
 
   const fetchFiscalData = async () => {
     try {
@@ -718,7 +714,7 @@ function FuncionariosPortal({ storeSlug }) {
           <form onSubmit={handleLogin} className="space-y-4">
             <input type="text" required value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-amber-500" placeholder="E-mail ou CPF" />
             <input type="password" required value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-amber-500" placeholder="Senha" />
-            <button type="submit" disabled={loading} className="w-full bg-amber-500 text-black font-black py-4 rounded-xl transition-all shadow-lg mt-2">{loading ? 'Entrando...' : 'Acessar'}</button>
+            <button type="submit" disabled={loading} className="w-full bg-amber-500 text-black font-black py-4 rounded-xl transition-all shadow-lg mt-2 cursor-pointer">{loading ? 'Entrando...' : 'Acessar'}</button>
           </form>
         </div>
       </div>
@@ -727,7 +723,7 @@ function FuncionariosPortal({ storeSlug }) {
 
   if (loading) return <div className="flex h-screen items-center justify-center bg-slate-950 text-amber-500 font-bold">Carregando...</div>;
 
-  const canViewCompany = employeeUser?.canViewCompanyData === true; 
+  const canViewCompany = employeeUser?.canViewCompanyData === true || permittedMenuItems.some(m => m.id === 'minha_empresa');
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
@@ -741,22 +737,40 @@ function FuncionariosPortal({ storeSlug }) {
         <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto hide-scrollbar">
           {permittedMenuItems.map((item) => {
             if (item.isDropdown) {
+              const isOpen = item.id === 'kds' ? isKdsMenuOpen : isFinanceiroMenuOpen;
+              const toggleOpen = () => {
+                if (!isSidebarOpen) setIsSidebarOpen(true);
+                if (item.id === 'kds') setIsKdsMenuOpen(!isKdsMenuOpen);
+                if (item.id === 'financeiro') setIsFinanceiroMenuOpen(!isFinanceiroMenuOpen);
+              };
+
               return (
                 <div key={item.id} className="flex flex-col">
-                  <button onClick={() => { if (!isSidebarOpen) setIsSidebarOpen(true); setIsKdsMenuOpen(!isKdsMenuOpen); }} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isKdsMenuOpen ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
+                  <button onClick={toggleOpen} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isOpen ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
                     <span className="text-xl shrink-0 flex items-center justify-center w-8">{item.icon}</span>
                     {isSidebarOpen && <span className="font-bold whitespace-nowrap text-sm flex-1 text-left">{item.label}</span>}
+                    {isSidebarOpen && <span className="text-[10px] font-black">{isOpen ? '▼' : '▶'}</span>}
                   </button>
-                  {isKdsMenuOpen && isSidebarOpen && (
+                  
+                  {item.id === 'kds' && isKdsMenuOpen && isSidebarOpen && (
                     <div className="ml-4 mt-2 space-y-1 pl-4 border-l border-slate-700 animate-fade-in-up">
-                      <a href={`/${storeSlug}/kds-cozinha`} target="_blank" className="block text-xs font-bold text-slate-400 py-2">👨‍🍳 Cozinha Principal</a>
-                      <a href={`/${storeSlug}/kds-delivery`} target="_blank" className="block text-xs font-bold text-slate-400 py-2">🛵 Expedição</a>
-                      <a href={`/${storeSlug}/kds-bebidas`} target="_blank" className="block text-xs font-bold text-slate-400 py-2">🍹 Bar</a>
+                      <a href={`/${storeSlug}/kds-cozinha`} target="_blank" className="block text-xs font-bold text-slate-400 hover:text-white transition-colors py-2">👨‍🍳 Cozinha Principal</a>
+                      <a href={`/${storeSlug}/kds-delivery`} target="_blank" className="block text-xs font-bold text-slate-400 hover:text-white transition-colors py-2">🛵 Expedição</a>
+                      <a href={`/${storeSlug}/kds-bebidas`} target="_blank" className="block text-xs font-bold text-slate-400 hover:text-white transition-colors py-2">🍹 Bar & Bebidas</a>
+                      <a href={`/${storeSlug}/kds-cliente`} target="_blank" className="block text-xs font-bold text-slate-400 hover:text-white transition-colors py-2">📺 Painel do Cliente</a>
+                    </div>
+                  )}
+
+                  {item.id === 'financeiro' && isFinanceiroMenuOpen && isSidebarOpen && (
+                    <div className="ml-4 mt-2 space-y-1 pl-4 border-l border-slate-700 animate-fade-in-up">
+                      <button onClick={() => setActiveTab('contas')} className={`block text-xs font-bold w-full text-left py-2 transition-colors ${activeTab === 'contas' ? 'text-amber-500' : 'text-slate-400 hover:text-white'}`}>💸 Contas a Pagar</button>
+                      <button onClick={() => setActiveTab('relatorio')} className={`block text-xs font-bold w-full text-left py-2 transition-colors ${activeTab === 'relatorio' ? 'text-amber-500' : 'text-slate-400 hover:text-white'}`}>📊 Relatório (DRE)</button>
                     </div>
                   )}
                 </div>
               );
             }
+            
             const isActive = activeTab === item.id;
             return (
               <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer ${isActive ? 'bg-amber-500 text-black shadow-md' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
@@ -765,6 +779,7 @@ function FuncionariosPortal({ storeSlug }) {
               </button>
             );
           })}
+
           {canViewCompany && (
             <button onClick={() => setActiveTab('minha-empresa')} className={`w-full flex items-center gap-4 px-3 py-3.5 rounded-xl transition-all cursor-pointer mt-4 border-t border-white/5 pt-6 ${activeTab === 'minha-empresa' ? 'bg-amber-500 text-black shadow-md' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
               <span className="text-xl shrink-0 flex items-center justify-center w-8">🏢</span>
@@ -779,7 +794,7 @@ function FuncionariosPortal({ storeSlug }) {
 
       <main className="flex-1 flex flex-col h-screen relative overflow-hidden bg-slate-50">
         <header className="h-20 flex items-center justify-between px-8 bg-white border-b border-slate-200 shadow-sm z-20">
-           <h1 className="text-2xl font-black text-slate-800">{activeTab === 'minha-empresa' ? 'Minha Empresa' : permittedMenuItems.find(m => m.id === activeTab)?.label || 'Acesso Restrito'}</h1>
+           <h1 className="text-2xl font-black text-slate-800">{activeTab === 'minha-empresa' ? 'Minha Empresa' : (activeTab === 'contas' ? 'Contas a Pagar' : (activeTab === 'relatorio' ? 'Relatórios (DRE)' : permittedMenuItems.find(m => m.id === activeTab)?.label || 'Acesso Restrito'))}</h1>
         </header>
         <div className="flex-1 overflow-y-auto p-6 md:p-8 pb-32">
            {activeTab === 'pdv' && isPermitted('pdv') && <PdvTab employeeUser={employeeUser} allProducts={allProducts} menu={menu} />}
@@ -788,16 +803,22 @@ function FuncionariosPortal({ storeSlug }) {
            {activeTab === 'historico' && isPermitted('historico') && <OrderHistoryTab orders={orders} setSelectedOrderDetails={setSelectedOrderDetails} getMetodoPagamentoLabel={getMetodoPagamentoLabel} getProductSizeLabel={getProductSizeLabel} />}
            {activeTab === 'analytics' && isPermitted('analytics') && <AnalyticsTab visitsData={visitsData} />}
            {activeTab === 'turnos' && isPermitted('turnos') && <TurnosTab />}
+           
+           {activeTab === 'contas' && isPermitted('financeiro') && <ContasTab API_URL={API_URL} />} 
+           {activeTab === 'relatorio' && isPermitted('financeiro') && <RelatorioTab API_URL={API_URL} />} 
+
            {activeTab === 'produtos' && isPermitted('produtos') && <ProductsTab allProducts={allProducts} searchProduct={searchProduct} setSearchProduct={setSearchProduct} filteredProducts={filteredProducts} setIsCreatingProduct={setIsCreatingProduct} isCreatingProduct={isCreatingProduct} newProduct={newProduct} setNewProduct={setNewProduct} handleAddProduct={handleAddProduct} menu={menu} fiscalData={fiscalData} editingProduct={editingProduct} setEditingProduct={setEditingProduct} handleEditProduct={handleEditProduct} toggleProductStatus={toggleProductStatus} toggleFeatureProduct={toggleFeatureProduct} calculateCmv={calculateCmv} getCmvColor={getCmvColor} />}
            {activeTab === 'categorias' && isPermitted('categorias') && <CategoriesTab menu={menu} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryIsDrink={newCategoryIsDrink} setNewCategoryIsDrink={setNewCategoryIsDrink} handleAddCategory={handleAddCategory} moveCategory={moveCategory} moveProduct={moveProduct} setEditingCategory={setEditingCategory} handleEditCategory={handleEditCategory} handleDeleteCategory={handleDeleteCategory} />}
            {activeTab === 'promocoes' && isPermitted('promocoes') && <PromotionsTab promoSubTab={promoSubTab} setPromoSubTab={setPromoSubTab} allProducts={allProducts} toggleFeatureProduct={toggleFeatureProduct} coupons={coupons} couponForm={couponForm} setCouponForm={setCouponForm} handleAddCoupon={handleAddCoupon} toggleCouponStatus={toggleCouponStatus} />}
            {activeTab === 'crm' && isPermitted('crm') && <CrmTab customers={customers} searchCustomer={searchCustomer} setSearchCustomer={setSearchCustomer} filteredCustomers={filteredCustomers} setEditingCustomer={setEditingCustomer} />}
            {activeTab === 'fornecedores' && isPermitted('fornecedores') && <SuppliersTab />}
+           
            {activeTab === 'estoque' && isPermitted('estoque') && <StockTab estoqueSubTab={estoqueSubTab} setEstoqueSubTab={setEstoqueSubTab} fetchMovimentacoes={fetchMovimentacoes} handleUploadXMLPreview={handleUploadXMLPreview} setXmlFile={setXmlFile} novaMovimentacao={novaMovimentacao} setNovaMovimentacao={setNovaMovimentacao} insumos={insumos} handleMovimentacaoManual={handleMovimentacaoManual} novoInsumo={novoInsumo} setNovoInsumo={setNovoInsumo} handleSalvarInsumo={handleSalvarInsumo} toggleInsumoStatus={toggleInsumoStatus} setEditingInsumo={setEditingInsumo} editingInsumo={editingInsumo} handleEditInsumoSubmit={handleEditInsumoSubmit} allProducts={allProducts} fichasVisiveis={fichasVisiveis} carregarFicha={carregarFicha} setFichasVisiveis={setFichasVisiveis} calculateCmv={calculateCmv} getCmvColor={getCmvColor} handleRemoveFicha={handleRemoveFicha} handleAddFicha={handleAddFicha} movimentacoes={movimentacoes} showXmlModal={showXmlModal} setShowXmlModal={setShowXmlModal} xmlPreviewData={xmlPreviewData} xmlMappings={xmlMappings} updateMapping={updateMapping} handleConfirmXmlImport={handleConfirmXmlImport} />}
            {activeTab === 'impressoes' && isPermitted('impressoes') && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
            {activeTab === 'fiscal' && isPermitted('fiscal') && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
            {activeTab === 'config' && isPermitted('config') && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={()=>{}} />}
            {activeTab === 'rh' && isPermitted('rh') && <RhTab />}
+           
            {activeTab === 'minha-empresa' && canViewCompany && <MinhaEmpresaTab />}
         </div>
       </main>
