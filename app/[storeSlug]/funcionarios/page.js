@@ -866,10 +866,24 @@ export default function FuncionariosWrapper() {
     if (!storeSlug) return;
     const identifyStore = async () => {
       try {
-        const res = await fetch(`${API_URL || 'https://zenixfood-backend.onrender.com'}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
+        const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
+          ? 'http://localhost:3333' 
+          : 'https://zenixfood-backend.onrender.com';
+
+        const res = await fetch(`${API_URL}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
+        
+        //SE A LOJA ESTIVER BLOQUEADA, REDIRECIONA IMEDIATAMENTE!
+        if (res.status === 402) {
+           window.location.href = `/${storeSlug}/bloqueado`;
+           return;
+        }
+
         const data = await res.json();
-        if (data.success) {
-          localStorage.setItem('zenix_store_id', data.store.id);
+        
+        if (data.success || data.isOpen !== undefined) {
+          if (data.store && data.store.id) {
+             localStorage.setItem('zenix_store_id', data.store.id);
+          }
           setStoreStatus('FOUND');
         } else {
           setStoreStatus('NOT_FOUND');

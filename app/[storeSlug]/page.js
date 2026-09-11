@@ -808,23 +808,38 @@ function HomeContent({ storeSlug }) {
 
 import { useParams } from 'next/navigation';
 
+import { useParams } from 'next/navigation';
+
 export default function StorePage() {
   const params = useParams();
   const storeSlug = params.storeSlug; 
   
-  const [storeStatus, setStoreStatus] = useState('LOADING'); // LOADING, FOUND, NOT_FOUND
+  const [storeStatus, setStoreStatus] = useState('LOADING');
 
   useEffect(() => {
     if (!storeSlug) return;
 
     const identifyStore = async () => {
       try {
-        const res = await fetch(`${API_URL || 'https://zenixfood-backend.onrender.com'}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
+        const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
+          ? 'http://localhost:3333' 
+          : 'https://zenixfood-backend.onrender.com';
+
+        const res = await fetch(`${API_URL}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
+        
+        //E A LOJA ESTIVER BLOQUEADA, REDIRECIONA IMEDIATAMENTE!
+        if (res.status === 402) {
+           window.location.href = `/${storeSlug}/bloqueado`;
+           return;
+        }
+
         const data = await res.json();
 
-        if (data.success) {
-          // Salva o ID da loja para que o `fetchWithStore` consiga usar nas requisições
-          localStorage.setItem('zenix_store_id', data.store.id);
+        // Aceita a loja se vier a flag de sucesso OU os horários (isOpen)
+        if (data.success || data.isOpen !== undefined) {
+          if (data.store && data.store.id) {
+             localStorage.setItem('zenix_store_id', data.store.id);
+          }
           setStoreStatus('FOUND');
         } else {
           setStoreStatus('NOT_FOUND');
