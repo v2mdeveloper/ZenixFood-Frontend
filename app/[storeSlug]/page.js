@@ -808,8 +808,6 @@ function HomeContent({ storeSlug }) {
 
 import { useParams } from 'next/navigation';
 
-import { useParams } from 'next/navigation';
-
 export default function StorePage() {
   const params = useParams();
   const storeSlug = params.storeSlug; 
