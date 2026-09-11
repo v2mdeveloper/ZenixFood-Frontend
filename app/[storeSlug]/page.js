@@ -785,12 +785,12 @@ function HomeContent({ storeSlug }) {
         )}
         
         {!isTotemMode && <Footer view={view} getTodayScheduleText={() => {
-  const diaHoje = new Date().getDay();
-  if (storeSettings?.schedule && storeSettings.schedule[diaHoje] && storeSettings.schedule[diaHoje].open) {
-    return `${storeSettings.schedule[diaHoje].open} às ${storeSettings.schedule[diaHoje].close}`;
-  }
-  return "Horários não configurados";
-}} storeSettings={storeSettings} />}
+          const diaHoje = new Date().getDay();
+            if (storeSettings?.schedule && storeSettings.schedule[diaHoje] && storeSettings.schedule[diaHoje].open) {
+             return `${storeSettings.schedule[diaHoje].open} às ${storeSettings.schedule[diaHoje].close}`;
+        }
+           return "Horários não configurados";
+       }} storeSettings={storeSettings} />}
 
         <FloatingCart cart={cart} view={view} cartTotal={cartTotal} handleVerSacola={handleVerSacola} />
         
