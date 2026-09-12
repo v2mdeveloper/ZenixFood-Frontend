@@ -18,8 +18,8 @@ import PdvTab from './components/tabs/PdvTab';
 import TurnosTab from './components/tabs/TurnosTab'; 
 import SalaoTab from './components/tabs/SalaoTab';
 import MinhaEmpresaTab from './components/tabs/MinhaEmpresaTab';
-import ContasTab from './components/tabs/ContasTab'; // NOVO IMPORT
-import RelatorioTab from './components/tabs/RelatorioTab'; // NOVO IMPORT
+import ContasTab from './components/tabs/ContasTab'; 
+import RelatorioTab from './components/tabs/RelatorioTab'; 
 import OrderDetailsModal from './components/modals/OrderDetailsModal';
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('pdv'); 
   const [isKdsMenuOpen, setIsKdsMenuOpen] = useState(false); 
-  const [isFinanceiroMenuOpen, setIsFinanceiroMenuOpen] = useState(false); // NOVO STATE PARA O FINANCEIRO
+  const [isFinanceiroMenuOpen, setIsFinanceiroMenuOpen] = useState(false); 
   const [orders, setOrders] = useState([]);
   const [menu, setMenu] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
@@ -220,7 +220,7 @@ export default function AdminDashboard() {
     }
   }, [isAdminAuthenticated, loggedEmployee]);
 
-  // SISTEMA DE PERMISSÕES 🛡️
+  // SISTEMA DE PERMISSÕES 
   const isAdmin = loggedEmployee?.role === 'ADMIN' || loggedEmployee?.role === 'Administrador' || loggedEmployee?.role === 'Gerente Master' || loggedEmployee?.id === 'ADMIN_MASTER';
   const hasPermission = (permId) => {
     if (isAdmin) return true;
@@ -228,7 +228,6 @@ export default function AdminDashboard() {
   };
   const canViewCompany = hasPermission('minha_empresa');
 
-  // MAPEAMENTO DO MENU E VERIFICAÇÃO DE PERMISSÃO
   const menuItems = [
     { id: 'pdv', label: 'PDV / Frente de Caixa', icon: '💻', perm: 'pdv' },
     { id: 'salao', label: 'Salão & Mesas', icon: '🪑', perm: 'salao' },
@@ -236,7 +235,7 @@ export default function AdminDashboard() {
     { id: 'expedicao', label: 'Expedição & Rotas', icon: '🛵', perm: 'expedicao' },
     { id: 'historico', label: 'Relatórios Analíticos', icon: '📊', perm: 'historico' },
     { id: 'turnos', label: 'Turnos & Faturamento', icon: '💰', perm: 'turnos' },
-    { id: 'financeiro', label: 'Financeiro', icon: '💸', isDropdown: true, perm: 'financeiro' }, // NOVO MÓDULO FINANCEIRO
+    { id: 'financeiro', label: 'Financeiro', icon: '💸', isDropdown: true, perm: 'financeiro' }, 
     { id: 'analytics', label: 'Acessos', icon: '📈', perm: 'analytics' },
     { id: 'produtos', label: 'Produtos', icon: '🍟', perm: 'produtos' },
     { id: 'categorias', label: 'Categorias', icon: '📑', perm: 'categorias' },
@@ -323,16 +322,29 @@ export default function AdminDashboard() {
     window.location.href = `/${storeSlug}/admin`;
   };
 
-  const fetchVisits = async () => {
-    try { const res = await fetchWithStore(`${API_URL}/api/admin/analytics?_=${Date.now()}`); if (res.ok) setVisitsData(await res.json()); } catch (e) {}
+  const fetchAdminProfile = async () => {
+    if (loggedEmployee && loggedEmployee.id && loggedEmployee.id !== 'ADMIN_MASTER') {
+      try {
+        const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile/${loggedEmployee.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) setAdminConfig({ name: data.profile.name || '', email: data.profile.email || '', password: '' });
+        }
+      } catch (e) {}
+    }
   };
 
   const fetchAllData = async () => {
     await Promise.all([
       fetchOrders(), fetchMenu(), fetchProducts(), fetchCustomers(), fetchInsumos(), 
-      fetchCoupons(), fetchSystemSettings(), fetchFiscalData(), fetchVisits(), fetchPrintersAndGroups(), fetchDeliveryPersons()
+      fetchCoupons(), fetchSystemSettings(), fetchFiscalData(), fetchVisits(), fetchPrintersAndGroups(), fetchDeliveryPersons(),
+      fetchAdminProfile()
     ]);
     setLoading(false);
+  };
+
+  const fetchVisits = async () => {
+    try { const res = await fetchWithStore(`${API_URL}/api/admin/analytics?_=${Date.now()}`); if (res.ok) setVisitsData(await res.json()); } catch (e) {}
   };
 
   const fetchDeliveryPersons = async () => {
@@ -433,14 +445,16 @@ export default function AdminDashboard() {
         const data = await res.json();
         setSettingsForm({
           isManualFechado: data.isManualFechado, deliveryFee: Number(data.deliveryFee), cashbackPercent: Number(data.cashbackPercent),
-          promoBannerUrl: data.promoBannerUrl || '', promoBannerLink: data.promoBannerLink || '',
-          youtubeLiveId: data.youtubeLiveId || '', printerName: data.printerName || '', aboutUsText: data.aboutUsText || '', 
-          schedule: data.schedule || settingsForm.schedule, storeCnpj: data.storeCnpj || '',
-          logoUrl: data.logoUrl || '', coverImageUrl: data.coverImageUrl || '', totemCoverImageUrl: data.totemCoverImageUrl || '',
+          promoBannerUrl: data.promoBannerUrl || '', promoBannerLink: data.promoBannerLink || '', youtubeLiveId: data.youtubeLiveId || '',
+          printerName: data.printerName || '', aboutUsText: data.aboutUsText || '', schedule: data.schedule || settingsForm.schedule, 
+          storeCnpj: data.storeCnpj || data.store?.cnpj || '',
+          logoUrl: data.logoUrl || data.store?.logoUrl || '', 
+          coverImageUrl: data.coverImageUrl || '', 
+          totemCoverImageUrl: data.totemCoverImageUrl || '',
           ifoodLink: data.ifoodLink || '', ninetyNineFoodLink: data.ninetyNineFoodLink || ''
         });
       }
-    } catch (error) {}
+    } catch (e) {}
   };
 
   const fetchFiscalData = async () => {
@@ -715,10 +729,22 @@ export default function AdminDashboard() {
 
   const handleUpdateAdminConfig = async (e) => { 
     e.preventDefault(); 
+    if (!loggedEmployee || loggedEmployee.id === 'ADMIN_MASTER') return alert("O acesso via Chave Mestra não permite alterar e-mails. Logue com o funcionário original.");
     try {
-      const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminConfig) });
-      if ((await res.json()).success) alert("Perfil atualizado!"); else alert("Erro ao atualizar.");
-    } catch(e) {}
+      const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile/${loggedEmployee.id}`, { 
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminConfig) 
+      });
+      const data = await res.json();
+      if (data.success) { 
+        alert("Perfil atualizado com sucesso!"); 
+        const updatedEmp = { ...loggedEmployee, name: data.profile.name, email: data.profile.email };
+        setLoggedEmployee(updatedEmp);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('zenix_loggedEmployee', JSON.stringify(updatedEmp));
+          localStorage.setItem('zenix_employeeUser', JSON.stringify(updatedEmp));
+        }
+      } else alert(data.error || "Erro ao atualizar.");
+    } catch(e) { alert("Erro de conexão"); }
   };
 
   const handleSaveSystemSettings = async (e) => {

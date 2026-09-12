@@ -19,8 +19,8 @@ import SalaoTab from '../admin/components/tabs/SalaoTab';
 import TurnosTab from '../admin/components/tabs/TurnosTab';
 import MinhaEmpresaTab from '../admin/components/tabs/MinhaEmpresaTab'; 
 import RhTab from '../admin/components/tabs/RhTab'; 
-import ContasTab from '../admin/components/tabs/ContasTab'; // NOVO IMPORT
-import RelatorioTab from '../admin/components/tabs/RelatorioTab'; // NOVO IMPORT
+import ContasTab from '../admin/components/tabs/ContasTab'; 
+import RelatorioTab from '../admin/components/tabs/RelatorioTab'; 
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
@@ -128,7 +128,7 @@ function FuncionariosPortal({ storeSlug }) {
   const [activeTab, setActiveTab] = useState('');
   
   const [isKdsMenuOpen, setIsKdsMenuOpen] = useState(false);
-  const [isFinanceiroMenuOpen, setIsFinanceiroMenuOpen] = useState(false); // NOVO STATE
+  const [isFinanceiroMenuOpen, setIsFinanceiroMenuOpen] = useState(false); 
   
   const [orders, setOrders] = useState([]);
   const [menu, setMenu] = useState([]);
@@ -242,7 +242,7 @@ function FuncionariosPortal({ storeSlug }) {
     { id: 'expedicao', label: 'Expedição & Rotas', icon: '🛵' },
     { id: 'historico', label: 'Relatórios Analíticos', icon: '📊' },
     { id: 'turnos', label: 'Turnos & Faturamento', icon: '💰' }, 
-    { id: 'financeiro', label: 'Financeiro', icon: '💸', isDropdown: true }, // NOVO MENU FINANCEIRO
+    { id: 'financeiro', label: 'Financeiro', icon: '💸', isDropdown: true }, 
     { id: 'produtos', label: 'Produtos', icon: '🍟' },
     { id: 'categorias', label: 'Categorias', icon: '📑' },
     { id: 'promocoes', label: 'Promoções & Cupons', icon: '🎟️' },
@@ -269,7 +269,7 @@ function FuncionariosPortal({ storeSlug }) {
       case 'expedicao': return perms.includes('expedicao') || perms.includes('entregas');
       case 'historico': return perms.includes('historico');
       case 'turnos': return perms.includes('turnos');
-      case 'financeiro': return perms.includes('financeiro'); // NOVA PERMISSÃO
+      case 'financeiro': return perms.includes('financeiro'); 
       case 'produtos':
       case 'categorias':
       case 'promocoes': return perms.includes('produtos') || perms.includes('promocoes') || perms.includes('categorias');
@@ -348,10 +348,23 @@ function FuncionariosPortal({ storeSlug }) {
     setIsAuthenticated(false); setEmployeeUser(null); setIsDataLoaded(false);
   };
 
+  const fetchAdminProfile = async () => {
+    if (employeeUser && employeeUser.id && employeeUser.id !== 'ADMIN_MASTER') {
+      try {
+        const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile/${employeeUser.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) setAdminConfig({ name: data.profile.name || '', email: data.profile.email || '', password: '' });
+        }
+      } catch (e) {}
+    }
+  };
+
   const fetchAllData = async () => {
     await Promise.all([
       fetchOrders(), fetchMenu(), fetchProducts(), fetchCustomers(), fetchInsumos(), 
-      fetchCoupons(), fetchSystemSettings(), fetchFiscalData(), fetchVisits(), fetchPrintersAndGroups(), fetchDeliveryPersons()
+      fetchCoupons(), fetchSystemSettings(), fetchFiscalData(), fetchVisits(), fetchPrintersAndGroups(), fetchDeliveryPersons(),
+      fetchAdminProfile()
     ]);
     setIsDataLoaded(true); setLoading(false);
   };
@@ -368,17 +381,20 @@ function FuncionariosPortal({ storeSlug }) {
   
   const fetchSystemSettings = async () => {
     try {
-        const res = await fetchWithStore(`${API_URL}/api/settings?_=${Date.now()}`);
-        if (res.ok) {
-            const data = await res.json();
-            setSettingsForm({
-                isManualFechado: data.isManualFechado, deliveryFee: Number(data.deliveryFee), cashbackPercent: Number(data.cashbackPercent),
-                promoBannerUrl: data.promoBannerUrl || "", promoBannerLink: data.promoBannerLink || "", youtubeLiveId: data.youtubeLiveId || "",
-                printerName: data.printerName || "", aboutUsText: data.aboutUsText || "", schedule: data.schedule || settingsForm.schedule, storeCnpj: data.storeCnpj || "",
-                logoUrl: data.logoUrl || "", coverImageUrl: data.coverImageUrl || "", totemCoverImageUrl: data.totemCoverImageUrl || "",
-                ifoodLink: data.ifoodLink || "", ninetyNineFoodLink: data.ninetyNineFoodLink || "",
-            });
-        }
+      const res = await fetchWithStore(`${API_URL}/api/settings?_=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSettingsForm({
+          isManualFechado: data.isManualFechado, deliveryFee: Number(data.deliveryFee), cashbackPercent: Number(data.cashbackPercent),
+          promoBannerUrl: data.promoBannerUrl || '', promoBannerLink: data.promoBannerLink || '', youtubeLiveId: data.youtubeLiveId || '',
+          printerName: data.printerName || '', aboutUsText: data.aboutUsText || '', schedule: data.schedule || settingsForm.schedule, 
+          storeCnpj: data.storeCnpj || data.store?.cnpj || '',
+          logoUrl: data.logoUrl || data.store?.logoUrl || '', 
+          coverImageUrl: data.coverImageUrl || '', 
+          totemCoverImageUrl: data.totemCoverImageUrl || '',
+          ifoodLink: data.ifoodLink || '', ninetyNineFoodLink: data.ninetyNineFoodLink || ''
+        });
+      }
     } catch (e) {}
   };
 
@@ -445,6 +461,25 @@ function FuncionariosPortal({ storeSlug }) {
       const res = await fetchWithStore(`${API_URL}/api/estoque/manual`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaMovimentacao) });
       if ((await res.json()).success) { alert('Registrado!'); setNovaMovimentacao({ insumoId: '', type: 'IN', quantity: '', reason: '' }); fetchInsumos(); if (estoqueSubTab === 'movimentacoes') fetchMovimentacoes(); } else alert('Erro.');
     } catch (error) {}
+  };
+
+  const handleUpdateAdminConfig = async (e) => { 
+    e.preventDefault(); 
+    if (!employeeUser || employeeUser.id === 'ADMIN_MASTER') return alert("O acesso via Chave Mestra não permite alterar e-mails. Logue com o funcionário original.");
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile/${employeeUser.id}`, { 
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminConfig) 
+      });
+      const data = await res.json();
+      if (data.success) { 
+        alert("Perfil atualizado com sucesso!"); 
+        const updatedEmp = { ...employeeUser, name: data.profile.name, email: data.profile.email };
+        setEmployeeUser(updatedEmp);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('zenix_employeeUser', JSON.stringify(updatedEmp));
+        }
+      } else alert(data.error || "Erro ao atualizar.");
+    } catch(e) { alert("Erro de conexão"); }
   };
 
   const handleSaveSystemSettings = async (e) => {
@@ -816,7 +851,7 @@ function FuncionariosPortal({ storeSlug }) {
            {activeTab === 'estoque' && isPermitted('estoque') && <StockTab estoqueSubTab={estoqueSubTab} setEstoqueSubTab={setEstoqueSubTab} fetchMovimentacoes={fetchMovimentacoes} handleUploadXMLPreview={handleUploadXMLPreview} setXmlFile={setXmlFile} novaMovimentacao={novaMovimentacao} setNovaMovimentacao={setNovaMovimentacao} insumos={insumos} handleMovimentacaoManual={handleMovimentacaoManual} novoInsumo={novoInsumo} setNovoInsumo={setNovoInsumo} handleSalvarInsumo={handleSalvarInsumo} toggleInsumoStatus={toggleInsumoStatus} setEditingInsumo={setEditingInsumo} editingInsumo={editingInsumo} handleEditInsumoSubmit={handleEditInsumoSubmit} allProducts={allProducts} fichasVisiveis={fichasVisiveis} carregarFicha={carregarFicha} setFichasVisiveis={setFichasVisiveis} calculateCmv={calculateCmv} getCmvColor={getCmvColor} handleRemoveFicha={handleRemoveFicha} handleAddFicha={handleAddFicha} movimentacoes={movimentacoes} showXmlModal={showXmlModal} setShowXmlModal={setShowXmlModal} xmlPreviewData={xmlPreviewData} xmlMappings={xmlMappings} updateMapping={updateMapping} handleConfirmXmlImport={handleConfirmXmlImport} />}
            {activeTab === 'impressoes' && isPermitted('impressoes') && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
            {activeTab === 'fiscal' && isPermitted('fiscal') && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
-           {activeTab === 'config' && isPermitted('config') && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={()=>{}} />}
+           {activeTab === 'config' && isPermitted('config') && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={handleUpdateAdminConfig} />}
            {activeTab === 'rh' && isPermitted('rh') && <RhTab />}
            
            {activeTab === 'minha-empresa' && canViewCompany && <MinhaEmpresaTab />}
@@ -872,7 +907,6 @@ export default function FuncionariosWrapper() {
 
         const res = await fetch(`${API_URL}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
         
-        //SE A LOJA ESTIVER BLOQUEADA, REDIRECIONA IMEDIATAMENTE!
         if (res.status === 402) {
            window.location.href = `/${storeSlug}/bloqueado`;
            return;
