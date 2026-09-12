@@ -56,13 +56,15 @@ export default function TotemModerno() {
     const fetchStoreAndMenu = async () => {
       try {
         const [resStore, resMenu] = await Promise.all([
-          fetch(`${API_URL || 'https://zenixfood-backend.onrender.com'}/api/settings`, { headers: { 'x-loja-slug': storeSlug } }),
+          // 🎯 CORREÇÃO 1: Usando a rota pública correta
+          fetch(`${API_URL}/api/settings/public/${storeSlug}`),
           fetch(`${API_URL}/api/menu/public/${storeSlug}`)
         ]);
         
         if (resStore.ok) {
           const sData = await resStore.json();
-          setStoreData(sData.store || sData);
+          // 🎯 CORREÇÃO 2: Salvando o objeto inteiro (sData) que contém as imagens!
+          setStoreData(sData);
         }
         
         if (resMenu.ok) {
@@ -157,7 +159,7 @@ export default function TotemModerno() {
   if (isIdle) {
     return (
       <div className="relative w-screen h-screen flex flex-col items-center justify-end pb-32 bg-slate-900 animate-fade-in-up overflow-hidden">
-        {/* Fundo do Totem */}
+        {/* Fundo do Totem - Lendo as imagens dinamicamente */}
         {storeData.totemCoverImageUrl ? (
            <img src={storeData.totemCoverImageUrl} alt="Capa do Totem" className="absolute inset-0 w-full h-full object-cover opacity-60" />
         ) : storeData.coverImageUrl ? (
@@ -197,10 +199,10 @@ export default function TotemModerno() {
       {/* SIDEBAR - CATEGORIAS */}
       <aside className="w-32 md:w-48 bg-white shadow-[2px_0_15px_rgba(0,0,0,0.05)] flex flex-col z-20">
         <div className="h-24 md:h-32 flex items-center justify-center p-4 border-b border-slate-100 shrink-0">
-           {storeData.logoUrl ? (
-             <img src={storeData.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+           {storeData.logoUrl || storeData.store?.logoUrl ? (
+             <img src={storeData.logoUrl || storeData.store?.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
            ) : (
-             <span className="font-black text-xl text-center text-slate-800">{storeData.name}</span>
+             <span className="font-black text-xl text-center text-slate-800">{storeData.store?.razaoSocial || 'ZenixFood'}</span>
            )}
         </div>
         
@@ -299,7 +301,7 @@ export default function TotemModerno() {
       </main>
 
       {/* DEV FOOTER ABSOLUTO */}
-      <div className="absolute top-2 right-4 text-[10px] text-slate-400 font-bold z-50 mix-blend-multiply">
+      <div className="absolute top-2 right-4 text-[10px] text-slate-400 font-bold z-50 mix-blend-multiply pointer-events-none">
         Desenvolvido por V2M Commercial Automation & Software Developer
         &copy; {new Date().getFullYear()} - Tecnologia em Food Service. Todos os direitos reservados.
       </div>
