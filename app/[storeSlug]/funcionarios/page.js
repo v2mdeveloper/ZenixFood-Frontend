@@ -716,13 +716,45 @@ function FuncionariosPortal({ storeSlug }) {
     } catch (error) {}
   };
 
-  const handleAddIcms = (e) => { e.preventDefault(); const updatedIcms = [...(fiscalData.icms || []), { ...formIcms, id: formIcms.id || Date.now().toString() }]; saveFiscalData({ ...fiscalData, icms: updatedIcms }); setFormIcms({ id: '', descricao: '', regime: 'Simples Nacional', cfop: '', cst: '', aliquota: '' }); };
+  const handleAddIcms = (e) => { 
+    e.preventDefault(); 
+    const isEdit = formIcms.id;
+    const updatedIcms = isEdit 
+      ? (fiscalData.icms || []).map(x => x.id === formIcms.id ? { ...formIcms } : x)
+      : [...(fiscalData.icms || []), { ...formIcms, id: Date.now().toString() }];
+    saveFiscalData({ ...fiscalData, icms: updatedIcms }); 
+    setFormIcms({ id: '', descricao: '', regime: 'Simples Nacional', cfop: '', cst: '', aliquota: '' }); 
+  };
   const handleDeleteIcms = (id) => { if(!confirm("Excluir Categoria ICMS?")) return; saveFiscalData({ ...fiscalData, icms: (fiscalData.icms || []).filter(x => x.id !== id) }); };
-  const handleAddPis = (e) => { e.preventDefault(); const updatedPis = [...(fiscalData.pisCofins || []), { ...formPis, id: formPis.id || Date.now().toString() }]; saveFiscalData({ ...fiscalData, pisCofins: updatedPis }); setFormPis({ id: '', descricao: '', aliqPis: '', aliqCofins: '' }); };
+  const handleAddPis = (e) => { 
+    e.preventDefault(); 
+    const isEdit = formPis.id;
+    const updatedPis = isEdit 
+      ? (fiscalData.pisCofins || []).map(x => x.id === formPis.id ? { ...formPis } : x)
+      : [...(fiscalData.pisCofins || []), { ...formPis, id: Date.now().toString() }];
+    saveFiscalData({ ...fiscalData, pisCofins: updatedPis }); 
+    setFormPis({ id: '', descricao: '', cstPis: '', aliqPis: '', cstCofins: '', aliqCofins: '' }); 
+  };
   const handleDeletePis = (id) => { if(!confirm("Excluir Categoria PIS/Cofins?")) return; saveFiscalData({ ...fiscalData, pisCofins: (fiscalData.pisCofins || []).filter(x => x.id !== id) }); };
-  const handleAddIbsCbs = (e) => { e.preventDefault(); const updated = [...(fiscalData.ibsCbs || []), { ...formIbsCbs, id: formIbsCbs.id || Date.now().toString() }]; saveFiscalData({ ...fiscalData, ibsCbs: updated }); setFormIbsCbs({ id: '', descricao: '', cst: '000', classificacao: '000001', aliqIbsUf: '0.1', aliqCbs: '0.9' }); };
+  const handleAddIbsCbs = (e) => { 
+    e.preventDefault(); 
+    const isEdit = formIbsCbs.id;
+    const updated = isEdit 
+      ? (fiscalData.ibsCbs || []).map(x => x.id === formIbsCbs.id ? { ...formIbsCbs } : x)
+      : [...(fiscalData.ibsCbs || []), { ...formIbsCbs, id: Date.now().toString() }];
+    saveFiscalData({ ...fiscalData, ibsCbs: updated }); 
+    setFormIbsCbs({ id: '', descricao: '', cst: '000', classificacao: '000001', aliqIbsUf: '0.1', aliqCbs: '0.9' }); 
+  };
   const handleDeleteIbsCbs = (id) => { if(!confirm("Excluir Categoria IBS/CBS?")) return; saveFiscalData({ ...fiscalData, ibsCbs: (fiscalData.ibsCbs || []).filter(x => x.id !== id) }); };
-  const handleAddRegra = (e) => { e.preventDefault(); const updatedRegras = [...(fiscalData.regras || []), { ...formRegra, id: formRegra.id || Date.now().toString() }]; saveFiscalData({ ...fiscalData, regras: updatedRegras }); setFormRegra({ id: '', ordenar: '', descricao: '', icmsId: '', pisCofinsId: '', ibsCbsId: '', ipi: '' }); };
+  const handleAddRegra = (e) => { 
+    e.preventDefault(); 
+    const isEdit = formRegra.id;
+    const updatedRegras = isEdit 
+      ? (fiscalData.regras || []).map(x => x.id === formRegra.id ? { ...formRegra } : x)
+      : [...(fiscalData.regras || []), { ...formRegra, id: Date.now().toString() }];
+    saveFiscalData({ ...fiscalData, regras: updatedRegras }); 
+    setFormRegra({ id: '', ordenar: '', descricao: '', icmsId: '', pisCofinsId: '', ibsCbsId: '', ipi: '' }); 
+  };
   const handleDeleteRegra = (id) => { if(!confirm("Excluir Regra Fiscal?")) return; saveFiscalData({ ...fiscalData, regras: (fiscalData.regras || []).filter(x => x.id !== id) }); };
   const saveFiscalData = async (newData) => { try { await fetchWithStore(`${API_URL}/api/fiscal`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) }); setFiscalData(newData); } catch (error) {} };
   

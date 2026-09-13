@@ -19,8 +19,7 @@ export default function FiscalTab({
   const [isUploadingCert, setIsUploadingCert] = useState(false);
   const [cnpjInput, setCnpjInput] = useState('');
 
-  //Helper local para garantir o envio do x-store-id e Token JWT
- const fetchWithStore = async (url, options = {}) => {
+  const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
 
@@ -32,15 +31,15 @@ export default function FiscalTab({
 
     const response = await fetch(url, { ...options, headers });
 
-    //SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
-        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+        window.location.href = '/bloqueado'; 
       }
     }
 
     return response;
   };
+
   useEffect(() => {
     if (fiscalData && fiscalData.cnpjLoja) {
        setCnpjInput(fiscalData.cnpjLoja);
@@ -77,6 +76,25 @@ export default function FiscalTab({
     setIsUploadingCert(false);
   };
 
+  // 🎯 NOVA FUNÇÃO PARA EXCLUIR O CERTIFICADO
+  const handleDeleteCertificado = async () => {
+    if (!confirm("Tem certeza que deseja excluir o certificado digital ativo? Você não poderá emitir notas até cadastrar um novo.")) return;
+    
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/fiscal/certificado`, { method: 'DELETE' });
+      const data = await res.json();
+      
+      if (data.success) {
+         setCertStatus({ cadastrado: false });
+         alert("Certificado removido com sucesso.");
+      } else {
+         alert(data.error || "Erro ao remover certificado.");
+      }
+    } catch (err) {
+      alert("Erro de conexão ao tentar excluir.");
+    }
+  };
+
   return (
     <main className="space-y-6">
       <div className="bg-white p-6 rounded-3xl border border-emerald-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -104,21 +122,36 @@ export default function FiscalTab({
                     <button onClick={() => handleSaveCnpj(cnpjInput)} className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-6 rounded-xl shadow-md transition-all cursor-pointer">Salvar</button>
                  </div>
               </div>
-              <div className={`p-6 rounded-3xl border shadow-sm ${certStatus?.cadastrado ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
-                 <div className="flex items-center gap-4 mb-4">
+              
+              {/* 🎯 BOX DE STATUS DO CERTIFICADO ATUALIZADO COM OS BOTÕES */}
+              <div className={`p-6 rounded-3xl border shadow-sm flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 ${certStatus?.cadastrado ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+                 <div className="flex items-center gap-4">
                     <span className="text-4xl">{certStatus?.cadastrado ? '✅' : '❌'}</span>
                     <div>
                        <h3 className={`text-lg font-black ${certStatus?.cadastrado ? 'text-emerald-700' : 'text-slate-700'}`}>{certStatus?.cadastrado ? 'Certificado Ativo' : 'Nenhum Certificado Encontrado'}</h3>
                        <p className="text-xs text-slate-500 mt-1">Status da integração fiscal no servidor.</p>
                     </div>
                  </div>
+                 {certStatus?.cadastrado && (
+                    <div className="flex gap-2 w-full xl:w-auto mt-2 xl:mt-0">
+                       <button onClick={() => document.getElementById('certInput').click()} className="flex-1 xl:flex-none text-blue-600 font-bold text-xs bg-blue-100 hover:bg-blue-200 px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-sm">Editar</button>
+                       <button onClick={handleDeleteCertificado} className="flex-1 xl:flex-none text-red-500 font-bold text-xs bg-red-100 hover:bg-red-200 px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-sm">Excluir</button>
+                    </div>
+                 )}
               </div>
            </div>
+           
            <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
               <h3 className="text-lg font-black text-slate-900 mb-2">Upload de Certificado Digital (A1)</h3>
               <form onSubmit={handleUploadCertificado} className="space-y-4">
-                 <div><label className="text-xs text-slate-500 block mb-1 font-bold uppercase">Arquivo (.pfx / .p12)</label><input type="file" accept=".pfx,.p12" required onChange={(e) => setCertFile(e.target.files[0])} className="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-emerald-50 file:text-emerald-700 border border-slate-200 rounded-xl cursor-pointer" /></div>
-                 <div><label className="text-xs text-slate-500 block mb-1 font-bold uppercase">Senha</label><input type="password" required value={certPassword} onChange={(e) => setCertPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-emerald-500" /></div>
+                 <div>
+                    <label className="text-xs text-slate-500 block mb-1 font-bold uppercase">Arquivo (.pfx / .p12)</label>
+                    <input type="file" id="certInput" accept=".pfx,.p12" required onChange={(e) => setCertFile(e.target.files[0])} className="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-emerald-50 file:text-emerald-700 border border-slate-200 rounded-xl cursor-pointer" />
+                 </div>
+                 <div>
+                    <label className="text-xs text-slate-500 block mb-1 font-bold uppercase">Senha</label>
+                    <input type="password" required value={certPassword} onChange={(e) => setCertPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-emerald-500" />
+                 </div>
                  <button type="submit" disabled={isUploadingCert} className={`w-full font-black py-4 rounded-xl transition-all shadow-md mt-4 cursor-pointer ${isUploadingCert ? 'bg-emerald-300 text-white cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}>{isUploadingCert ? 'Enviando...' : '💾 Salvar Certificado A1'}</button>
               </form>
            </div>
@@ -180,7 +213,7 @@ export default function FiscalTab({
       {fiscalSubTab === 'config' && (
         <div className="space-y-6 animate-fade-in-up">
            
-          {/* 1. ICMS (AGORA COM CAMPO DE ALÍQUOTA) */}
+          {/* 1. ICMS */}
           <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
             <h3 className="text-lg font-black text-slate-900 mb-2">1. Configurar ICMS</h3>
             <form onSubmit={handleAddIcms} className="flex flex-col gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
@@ -192,7 +225,14 @@ export default function FiscalTab({
                 <input required placeholder="Alíquota ICMS (%)" value={formIcms.aliquota || ''} onChange={e=>setFormIcms({...formIcms, aliquota: e.target.value})} className="border border-slate-300 p-3 rounded-xl text-sm w-full focus:outline-emerald-500" />
               </div>
               
-              <button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold cursor-pointer transition-colors shadow-sm mt-2 md:w-auto self-end">Add ICMS</button>
+              <div className="flex justify-end gap-3 mt-2">
+                {formIcms.id && (
+                  <button type="button" onClick={() => setFormIcms({ id: '', descricao: '', regime: 'Simples Nacional', cfop: '', cst: '', aliquota: '' })} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-3 rounded-xl font-bold cursor-pointer transition-colors shadow-sm">Cancelar</button>
+                )}
+                <button type="submit" className={`${formIcms.id ? 'bg-amber-500 hover:bg-amber-600 text-black' : 'bg-emerald-500 hover:bg-emerald-600 text-white'} px-6 py-3 rounded-xl font-bold cursor-pointer transition-colors shadow-sm`}>
+                  {formIcms.id ? '💾 Salvar Edição' : 'Add ICMS'}
+                </button>
+              </div>
             </form>
             <div className="space-y-2">
               {fiscalData.icms?.map(i => (
@@ -201,7 +241,10 @@ export default function FiscalTab({
                     <span className="text-sm font-bold text-slate-700 block">{i.descricao}</span>
                     <span className="text-xs text-slate-500">CFOP: {i.cfop} | CST/CSOSN: {i.cst} | Alíq: {i.aliquota || '0'}%</span>
                   </div>
-                  <button onClick={() => handleDeleteIcms(i.id)} className="text-red-500 font-bold text-xs bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg cursor-pointer transition-colors">Excluir</button>
+                  <div className="flex gap-2">
+                    <button onClick={() => setFormIcms(i)} className="text-blue-600 font-bold text-xs bg-blue-100 hover:bg-blue-200 px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-sm">Editar</button>
+                    <button onClick={() => handleDeleteIcms(i.id)} className="text-red-500 font-bold text-xs bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg cursor-pointer transition-colors">Excluir</button>
+                  </div>
                 </div>
               ))}
               {(!fiscalData.icms || fiscalData.icms.length === 0) && <p className="text-xs text-slate-400 italic">Nenhuma regra de ICMS configurada.</p>}
@@ -224,7 +267,14 @@ export default function FiscalTab({
                    <input required placeholder="Alíq. COFINS (%)" value={formPis.aliqCofins || ''} onChange={e=>setFormPis({...formPis, aliqCofins: e.target.value})} className="border border-slate-300 p-3 rounded-xl text-sm flex-1 focus:outline-emerald-500" />
                 </div>
               </div>
-              <button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold cursor-pointer transition-colors shadow-sm mt-2 md:w-auto self-end">Add PIS/COFINS</button>
+              <div className="flex justify-end gap-3 mt-2">
+                {formPis.id && (
+                  <button type="button" onClick={() => setFormPis({ id: '', descricao: '', cstPis: '', aliqPis: '', cstCofins: '', aliqCofins: '' })} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-3 rounded-xl font-bold cursor-pointer transition-colors shadow-sm">Cancelar</button>
+                )}
+                <button type="submit" className={`${formPis.id ? 'bg-amber-500 hover:bg-amber-600 text-black' : 'bg-emerald-500 hover:bg-emerald-600 text-white'} px-6 py-3 rounded-xl font-bold cursor-pointer transition-colors shadow-sm`}>
+                  {formPis.id ? '💾 Salvar Edição' : 'Add PIS/COFINS'}
+                </button>
+              </div>
             </form>
 
             <div className="space-y-2">
@@ -234,7 +284,10 @@ export default function FiscalTab({
                     <span className="text-sm font-bold text-slate-700 block">{p.descricao}</span>
                     <span className="text-xs text-slate-500">PIS: {p.cstPis} ({p.aliqPis}%) | COFINS: {p.cstCofins} ({p.aliqCofins}%)</span>
                   </div>
-                  <button onClick={() => handleDeletePis(p.id)} className="text-red-500 font-bold text-xs bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg cursor-pointer transition-colors">Excluir</button>
+                  <div className="flex gap-2">
+                    <button onClick={() => setFormPis(p)} className="text-blue-600 font-bold text-xs bg-blue-100 hover:bg-blue-200 px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-sm">Editar</button>
+                    <button onClick={() => handleDeletePis(p.id)} className="text-red-500 font-bold text-xs bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg cursor-pointer transition-colors">Excluir</button>
+                  </div>
                 </div>
               ))}
               {(!fiscalData.pisCofins || fiscalData.pisCofins.length === 0) && <p className="text-xs text-slate-400 italic">Nenhuma regra de PIS/COFINS configurada.</p>}
@@ -248,13 +301,21 @@ export default function FiscalTab({
               <input required placeholder="Descrição (Ex: Alíquota Padrão)" value={formIbsCbs.descricao} onChange={e=>setFormIbsCbs({...formIbsCbs, descricao: e.target.value})} className="border border-slate-300 p-3 rounded-xl text-sm flex-1 focus:outline-emerald-500" />
               <input required placeholder="Alíq IBS (%)" value={formIbsCbs.aliqIbsUf} onChange={e=>setFormIbsCbs({...formIbsCbs, aliqIbsUf: e.target.value})} className="border border-slate-300 p-3 rounded-xl text-sm w-full md:w-32 focus:outline-emerald-500" />
               <input required placeholder="Alíq CBS (%)" value={formIbsCbs.aliqCbs} onChange={e=>setFormIbsCbs({...formIbsCbs, aliqCbs: e.target.value})} className="border border-slate-300 p-3 rounded-xl text-sm w-full md:w-32 focus:outline-emerald-500" />
-              <button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold cursor-pointer transition-colors shadow-sm">Add IBS/CBS</button>
+              {formIbsCbs.id && (
+                <button type="button" onClick={() => setFormIbsCbs({ id: '', descricao: '', cst: '000', classificacao: '000001', aliqIbsUf: '0.1', aliqCbs: '0.9' })} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-3 rounded-xl font-bold cursor-pointer transition-colors shadow-sm">Cancelar</button>
+              )}
+              <button type="submit" className={`${formIbsCbs.id ? 'bg-amber-500 hover:bg-amber-600 text-black' : 'bg-emerald-500 hover:bg-emerald-600 text-white'} px-6 py-3 rounded-xl font-bold cursor-pointer transition-colors shadow-sm`}>
+                {formIbsCbs.id ? 'Salvar Edição' : 'Add IBS/CBS'}
+              </button>
             </form>
             <div className="space-y-2">
               {fiscalData.ibsCbs?.map(i => (
                 <div key={i.id} className="flex justify-between items-center bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                   <span className="text-sm font-bold text-slate-700">{i.descricao} | IBS: {i.aliqIbsUf}% | CBS: {i.aliqCbs}%</span>
-                  <button onClick={() => handleDeleteIbsCbs(i.id)} className="text-red-500 font-bold text-xs bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg cursor-pointer transition-colors">Excluir</button>
+                  <div className="flex gap-2">
+                    <button onClick={() => setFormIbsCbs(i)} className="text-blue-600 font-bold text-xs bg-blue-100 hover:bg-blue-200 px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-sm">Editar</button>
+                    <button onClick={() => handleDeleteIbsCbs(i.id)} className="text-red-500 font-bold text-xs bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg cursor-pointer transition-colors">Excluir</button>
+                  </div>
                 </div>
               ))}
               {(!fiscalData.ibsCbs || fiscalData.ibsCbs.length === 0) && <p className="text-xs text-slate-400 italic">Nenhuma regra de IBS/CBS configurada.</p>}
@@ -283,7 +344,14 @@ export default function FiscalTab({
                 </select>
               </div>
               
-              <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-black px-4 py-4 rounded-xl font-black transition-colors w-full shadow-lg mt-2 cursor-pointer">💾 Salvar Regra Fiscal Pronta</button>
+              <div className="flex gap-4 mt-2">
+                {formRegra.id && (
+                  <button type="button" onClick={() => setFormRegra({ id: '', ordenar: '', descricao: '', icmsId: '', pisCofinsId: '', ibsCbsId: '', ipi: '' })} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-4 py-4 rounded-xl font-black transition-colors shadow-lg cursor-pointer">Cancelar Edição</button>
+                )}
+                <button type="submit" className={`flex-2 ${formRegra.id ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-amber-500 hover:bg-amber-400'} text-black px-4 py-4 rounded-xl font-black transition-colors shadow-lg cursor-pointer`}>
+                  {formRegra.id ? '💾 Salvar Edição da Regra' : '💾 Salvar Regra Fiscal Pronta'}
+                </button>
+              </div>
             </form>
 
             <div className="space-y-3">
@@ -298,7 +366,10 @@ export default function FiscalTab({
                        <span className="text-base font-black text-amber-500 block mb-1">{r.descricao}</span>
                        <span className="text-[11px] text-slate-300 font-bold bg-slate-950 px-2 py-1 rounded inline-block">ICMS: {icms?.descricao || 'Não Encontrado'} | PIS/COF: {pis?.descricao || 'Não Encontrado'} | IBS/CBS: {ibs?.descricao || 'Não Encontrado'}</span>
                     </div>
-                    <button onClick={() => handleDeleteRegra(r.id)} className="text-red-400 hover:text-white font-black text-xs px-4 py-2 bg-red-500/20 hover:bg-red-500 rounded-xl transition-colors cursor-pointer">Excluir</button>
+                    <div className="flex gap-2">
+                       <button onClick={() => setFormRegra(r)} className="text-blue-400 hover:text-white font-black text-xs px-4 py-2 bg-blue-500/20 hover:bg-blue-500 rounded-xl transition-colors cursor-pointer">Editar</button>
+                       <button onClick={() => handleDeleteRegra(r.id)} className="text-red-400 hover:text-white font-black text-xs px-4 py-2 bg-red-500/20 hover:bg-red-500 rounded-xl transition-colors cursor-pointer">Excluir</button>
+                    </div>
                   </div>
                 )
               })}
