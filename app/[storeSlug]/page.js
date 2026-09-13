@@ -84,6 +84,12 @@ function HomeContent({ storeSlug }) {
   const [isTotemMode, setIsTotemMode] = useState(false);
   const [totemName, setTotemName] = useState('');
 
+  // 🍕 ESTADOS DO CONSTRUTOR DE PIZZAS (CARDÁPIO DIGITAL)
+  const [showPizzaModal, setShowPizzaModal] = useState(false);
+  const [pizzaBase, setPizzaBase] = useState(null);
+  const [pizzaFlavorCount, setPizzaFlavorCount] = useState(1);
+  const [pizzaSelectedFlavors, setPizzaSelectedFlavors] = useState([]);
+
   const API_URL = 'https://zenixfood-backend.onrender.com';
   const searchParams = useSearchParams();
 
@@ -181,7 +187,7 @@ function HomeContent({ storeSlug }) {
         handleFullscreen();
         clearTimeout(timeout);
         timeout = setTimeout(() => {
-          setCart([]); setTotemName(''); setView('menu'); setShowUpsellModal(false); setPixInfo(null); setSelectedProductModal(null);
+          setCart([]); setTotemName(''); setView('menu'); setShowUpsellModal(false); setPixInfo(null); setSelectedProductModal(null); setShowPizzaModal(false);
         }, 120000); 
     };
     window.addEventListener('mousemove', handleInteraction);
@@ -313,7 +319,61 @@ function HomeContent({ storeSlug }) {
     setSelectedProductModal(null);
   };
 
-  const handleOpenProductModal = (product) => { setSelectedProductModal(product); };
+  // 🍕 LÓGICA DE ABERTURA DOS PRODUTOS
+  const handleOpenProductModal = (product) => { 
+    if (product.isPizza && product.maxFlavors > 1) {
+      setPizzaBase(product);
+      setPizzaFlavorCount(1);
+      setPizzaSelectedFlavors([product]);
+      setShowPizzaModal(true);
+    } else {
+      setSelectedProductModal(product); 
+    }
+  };
+
+  // 🍕 LÓGICA DE MONTAGEM DE PIZZA
+  const togglePizzaFlavor = (flavorProd) => {
+    if (pizzaSelectedFlavors.find(f => f.id === flavorProd.id)) {
+      setPizzaSelectedFlavors(prev => prev.filter(f => f.id !== flavorProd.id));
+    } else {
+      if (pizzaSelectedFlavors.length < pizzaFlavorCount) {
+        setPizzaSelectedFlavors(prev => [...prev, flavorProd]);
+      }
+    }
+  };
+
+  const getPizzaPricePreview = () => {
+    if (!pizzaBase || pizzaSelectedFlavors.length === 0) return 0;
+    if (pizzaBase.pricingStrategy === 'AVERAGE') {
+      const sum = pizzaSelectedFlavors.reduce((acc, f) => acc + Number(f.price), 0);
+      return sum / pizzaSelectedFlavors.length;
+    } else {
+      return Math.max(...pizzaSelectedFlavors.map(f => Number(f.price))); 
+    }
+  };
+
+  const confirmBuiltPizza = () => {
+    const finalPrice = getPizzaPricePreview();
+    const customId = `${pizzaBase.id}-` + pizzaSelectedFlavors.map(f => f.id).sort().join('-');
+    const customName = `🍕 ${pizzaFlavorCount} Sabores: ` + pizzaSelectedFlavors.map(f => f.name).join(' / ');
+    
+    setCart((prev) => {
+      const existing = prev.find((item) => item.id === customId);
+      if (existing) return prev.map((item) => item === existing ? { ...item, quantity: item.quantity + 1 } : item);
+      return [...prev, { 
+         id: customId,
+         productId: pizzaBase.id, 
+         name: customName, 
+         price: finalPrice, 
+         quantity: 1, 
+         observation: '',
+         flavors: pizzaSelectedFlavors.map(f => ({ productId: f.id, name: f.name }))
+      }];
+    });
+    
+    setShowPizzaModal(false);
+    setPizzaBase(null);
+  };
 
   const addToCart = (product, quantity = 1, observation = '') => {
     if (product.name.toLowerCase().includes('costela')) {
@@ -325,9 +385,9 @@ function HomeContent({ storeSlug }) {
       return;
     }
     setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product.id && item.observation === observation);
+      const existing = prev.find((item) => (item.productId === product.id || item.id === product.id) && item.observation === observation && !item.flavors);
       if (existing) return prev.map((item) => item === existing ? { ...item, quantity: item.quantity + quantity } : item);
-      return [...prev, { productId: product.id, name: product.name, price: Number(product.price), quantity, observation }];
+      return [...prev, { id: product.id, productId: product.id, name: product.name, price: Number(product.price), quantity, observation }];
     });
   };
 
@@ -347,8 +407,8 @@ function HomeContent({ storeSlug }) {
     setShowCostelaModal(false); setCostelaProduct(null);
   };
 
-  const removeFromCart = (productId) => {
-    setCart((prev) => prev.filter(item => item.productId !== productId));
+  const removeFromCart = (idOuProductId) => {
+    setCart((prev) => prev.filter(item => item.id !== idOuProductId && item.productId !== idOuProductId));
     if (cart.length === 1) setView('menu');
   };
 
@@ -514,6 +574,15 @@ function HomeContent({ storeSlug }) {
     } catch (error) {}
   };
 
+  // 🎯 PREPARADOR DE CARRINHO PARA O BACKEND
+  const buildItemsPayload = () => cart.map(item => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      price: item.price,
+      observation: item.observation,
+      flavors: item.flavors ? JSON.stringify(item.flavors) : undefined
+  }));
+
   const handleCheckoutBtnClick = async (e, customFullAddress) => {
     if (e) e.preventDefault();
     if (isSubmittingOrder) return;
@@ -528,7 +597,7 @@ function HomeContent({ storeSlug }) {
     try {
       const res = await fetchWithStore(`${API_URL}/api/orders`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: isTotemMode ? 'TOTEM_MODE' : user.id, items: cart, address: customFullAddress, paymentMethod, total: cartTotal, useCashback, couponCode: appliedCoupon?.code || null, client: { name: isTotemMode ? totemName : user?.name, cpf: cpfNaNota } })
+        body: JSON.stringify({ clientId: isTotemMode ? 'TOTEM_MODE' : user.id, items: buildItemsPayload(), address: customFullAddress, paymentMethod, total: cartTotal, useCashback, couponCode: appliedCoupon?.code || null, client: { name: isTotemMode ? totemName : user?.name, cpf: cpfNaNota } })
       });
       const data = await res.json();
       if (data.success) {
@@ -574,7 +643,7 @@ function HomeContent({ storeSlug }) {
       try {
         const res = await fetchWithStore(`${API_URL}/api/orders`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId: user.id, items: cart, address: fullAddress, paymentMethod: 'CREDIT_CARD_ONLINE', total: cartTotal, useCashback, mpData: formData, couponCode: appliedCoupon?.code || null, client: { name: user?.name, cpf: cpfNaNota } })
+          body: JSON.stringify({ clientId: user.id, items: buildItemsPayload(), address: fullAddress, paymentMethod: 'CREDIT_CARD_ONLINE', total: cartTotal, useCashback, mpData: formData, couponCode: appliedCoupon?.code || null, client: { name: user?.name, cpf: cpfNaNota } })
         });
         const data = await res.json();
         if (data.success) {
@@ -614,10 +683,19 @@ function HomeContent({ storeSlug }) {
     return mapping[status] || { label: status, color: 'text-slate-800 dark:text-white' };
   };
 
-  const renderProductBadges = (name) => {
+  // 🎯 ETIQUETAS DO CARDÁPIO (Aprimoradas para receber o objeto todo ou só o nome)
+  const renderProductBadges = (productOrName) => {
     const badges = [];
-    if (name.toLowerCase().includes('vegano') || name.toLowerCase().includes('aveia')) badges.push(<span key="veg" className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider border border-emerald-200 dark:border-transparent">🌱 Vegano</span>);
-    if (name.toLowerCase().includes('pimenta') || name.toLowerCase().includes('jalapeño')) badges.push(<span key="spi" className="bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider border border-red-200 dark:border-transparent">🌶️ Picante</span>);
+    const name = typeof productOrName === 'string' ? productOrName : productOrName?.name || '';
+    const isPizza = typeof productOrName === 'object' ? productOrName?.isPizza : false;
+    const isCombo = typeof productOrName === 'object' ? productOrName?.isCombo : false;
+
+    if (isPizza) badges.push(<span key="piz" className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider border border-amber-200 dark:border-transparent mr-1 mb-1 inline-block">🍕 Pizza</span>);
+    if (isCombo) badges.push(<span key="cmb" className="bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider border border-blue-200 dark:border-transparent mr-1 mb-1 inline-block">🍔 Combo</span>);
+    
+    if (name.toLowerCase().includes('vegano') || name.toLowerCase().includes('aveia')) badges.push(<span key="veg" className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider border border-emerald-200 dark:border-transparent mr-1 mb-1 inline-block">🌱 Vegano</span>);
+    if (name.toLowerCase().includes('pimenta') || name.toLowerCase().includes('jalapeño')) badges.push(<span key="spi" className="bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider border border-red-200 dark:border-transparent mr-1 mb-1 inline-block">🌶️ Picante</span>);
+    
     return badges;
   };
 
@@ -794,6 +872,7 @@ function HomeContent({ storeSlug }) {
 
         <FloatingCart cart={cart} view={view} cartTotal={cartTotal} handleVerSacola={handleVerSacola} />
         
+        {/* MODAL PADRÃO DE DETALHES DOS PRODUTOS */}
         <ProductDetailsModal 
             product={selectedProductModal} 
             onClose={() => setSelectedProductModal(null)} 
@@ -803,6 +882,79 @@ function HomeContent({ storeSlug }) {
             user={user}
             availableCashback={availableCashback}
         />
+
+        {/* 🍕 MODAL: CONSTRUTOR DE PIZZA (CARDÁPIO DIGITAL) */}
+        {showPizzaModal && pizzaBase && (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in-up">
+            <div className="bg-white dark:bg-[#121212] rounded-[2rem] shadow-2xl p-6 w-full max-w-2xl flex flex-col max-h-[90vh] border border-slate-200 dark:border-white/10">
+              <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-white/10 pb-4 shrink-0">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-800 dark:text-white">Montar Pizza</h2>
+                  <p className="text-slate-500 dark:text-zinc-400 font-bold text-sm">{pizzaBase?.name}</p>
+                </div>
+                <button onClick={() => setShowPizzaModal(false)} className="bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-zinc-300 w-10 h-10 rounded-full font-black text-lg hover:bg-slate-200 dark:hover:bg-white/20 transition-colors">X</button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-2 hide-scrollbar">
+                <h3 className="font-black text-slate-700 dark:text-zinc-300 mb-2 text-sm uppercase tracking-wider">Quantos sabores?</h3>
+                <div className="flex gap-3 mb-6">
+                  {[1, 2, 3].map(num => {
+                    if (num > (pizzaBase?.maxFlavors || 1)) return null;
+                    return (
+                      <button 
+                        key={num} 
+                        onClick={() => { setPizzaFlavorCount(num); setPizzaSelectedFlavors([pizzaBase]); }}
+                        className={`flex-1 py-3 rounded-2xl font-black text-base border-2 transition-all ${pizzaFlavorCount === num ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' : 'border-slate-200 bg-slate-50 text-slate-400 dark:border-white/10 dark:bg-black/50 dark:text-zinc-500 hover:border-amber-300'}`}
+                      >
+                        {num} {num === 1 ? 'Sabor' : 'Sabores'}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="bg-amber-100 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 p-3 rounded-xl mb-6 flex items-center justify-between font-bold border border-amber-200 dark:border-amber-500/20 shadow-inner">
+                  <span className="text-sm">Selecionados ({pizzaSelectedFlavors.length}/{pizzaFlavorCount}):</span>
+                  <span className="text-xs">{pizzaSelectedFlavors.map(f => f.name).join(' + ')}</span>
+                </div>
+
+                <h3 className="font-black text-slate-700 dark:text-zinc-300 mb-3 text-sm uppercase tracking-wider">Escolha as metades</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {menu.flatMap(cat => cat.products).filter(p => p.isPizza).map((flavor, index, self) => {
+                    // Evita exibir o mesmo sabor duplicado caso ele esteja em mais de uma categoria
+                    if (self.findIndex(t => t.id === flavor.id) !== index) return null;
+
+                    const isSelected = pizzaSelectedFlavors.find(f => f.id === flavor.id);
+                    const isFull = !isSelected && pizzaSelectedFlavors.length >= pizzaFlavorCount;
+                    
+                    return (
+                      <button 
+                        key={flavor.id}
+                        disabled={isFull}
+                        onClick={() => togglePizzaFlavor(flavor)}
+                        className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center text-center ${isSelected ? 'border-amber-500 bg-amber-50 dark:bg-amber-500/10' : isFull ? 'border-slate-100 bg-slate-100 dark:border-white/5 dark:bg-white/5 opacity-50 cursor-not-allowed' : 'border-slate-200 bg-white dark:bg-black/50 dark:border-white/10 hover:border-amber-300'}`}
+                      >
+                        {flavor.imageUrl ? <img src={flavor.imageUrl} className="w-16 h-16 object-cover rounded-full mb-2 shadow-sm" /> : <div className="w-16 h-16 bg-slate-200 dark:bg-white/10 rounded-full mb-2 flex items-center justify-center text-2xl">🍕</div>}
+                        <span className="font-bold text-slate-800 dark:text-zinc-200 text-[10px] leading-tight line-clamp-2 min-h-[28px]">{flavor.name}</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-black text-[10px] mt-1">+ R$ {Number(flavor.price).toFixed(2)}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 dark:border-white/10 shrink-0 mt-4">
+                <button 
+                  onClick={confirmBuiltPizza}
+                  disabled={pizzaSelectedFlavors.length !== pizzaFlavorCount}
+                  className="w-full bg-amber-500 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed hover:bg-amber-600 text-black py-4 rounded-xl font-black text-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  Adicionar Pizza - R$ {getPizzaPricePreview().toFixed(2)}
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
 
         <ReviewModal reviewOrder={reviewOrder} setReviewOrder={setReviewOrder} reviewRating={reviewRating} setReviewRating={setReviewRating} reviewComment={reviewComment} setReviewComment={setReviewComment} isSubmittingReview={isSubmittingReview} handleSubmitReview={handleSubmitReview} />
         <CostelaModal showCostelaModal={showCostelaModal} setShowCostelaModal={setShowCostelaModal} costelaProduct={costelaProduct} costelaSize={costelaSize} setCostelaSize={setCostelaSize} costelaTime={costelaTime} setCostelaTime={setCostelaTime} confirmCostelaOrder={confirmCostelaOrder} />

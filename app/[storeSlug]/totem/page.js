@@ -20,12 +20,18 @@ export default function TotemModerno() {
   const [isIdle, setIsIdle] = useState(true);
   const [lang, setLanguage] = useState('pt');
   
-  //ESTADOS PARA O PAGAMENTO E NOME
+  // ESTADOS PARA O PAGAMENTO E NOME
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccessData, setOrderSuccessData] = useState(null);
+
+  // 🍕 ESTADOS DO CONSTRUTOR DE PIZZAS
+  const [pizzaBuilderOpen, setPizzaBuilderOpen] = useState(false);
+  const [pizzaBase, setPizzaBase] = useState(null);
+  const [pizzaFlavorCount, setPizzaFlavorCount] = useState(1);
+  const [pizzaSelectedFlavors, setPizzaSelectedFlavors] = useState([]);
 
   // Traduções Dinâmicas
   const i18n = {
@@ -35,7 +41,8 @@ export default function TotemModerno() {
       checkout: "FINALIZAR PEDIDO", selectCategory: "Selecione uma categoria",
       namePrompt: "Como quer ser chamado?", payMethodPrompt: "Como você prefere pagar?", payNow: "Confirmar Pedido",
       payMachine: "Máquina de Cartão", payPix: "Pix", payCash: "Pagamento no Caixa", insertingOrder: "Enviando para a cozinha...",
-      orderSuccessTitle: "Pedido Confirmado!", orderSuccessSub: "Aguarde o seu nome ou número no painel.", passwordIs: "Sua Senha:"
+      orderSuccessTitle: "Pedido Confirmado!", orderSuccessSub: "Aguarde o seu nome ou número no painel.", passwordIs: "Sua Senha:",
+      buildPizza: "Montar Pizza", howManyFlavors: "Quantos sabores?", chooseFlavors: "Escolha suas metades", confirmPizza: "Confirmar Pizza"
     },
     en: {
       touchToStart: "Touch to Start", selectLanguage: "Select your language", cancelOrder: "Cancel Order",
@@ -43,7 +50,8 @@ export default function TotemModerno() {
       checkout: "CHECKOUT", selectCategory: "Select a category",
       namePrompt: "What's your name?", payMethodPrompt: "How would you like to pay?", payNow: "Confirm Order",
       payMachine: "Credit/Debit Card", payPix: "Pix", payCash: "Pay at Counter", insertingOrder: "Sending to kitchen...",
-      orderSuccessTitle: "Order Confirmed!", orderSuccessSub: "Wait for your name or number on the screen.", passwordIs: "Your Password:"
+      orderSuccessTitle: "Order Confirmed!", orderSuccessSub: "Wait for your name or number on the screen.", passwordIs: "Your Password:",
+      buildPizza: "Build Pizza", howManyFlavors: "How many flavors?", chooseFlavors: "Choose your flavors", confirmPizza: "Confirm Pizza"
     },
     es: {
       touchToStart: "Toca para Empezar", selectLanguage: "Selecciona tu idioma", cancelOrder: "Cancelar Pedido",
@@ -51,7 +59,8 @@ export default function TotemModerno() {
       checkout: "FINALIZAR PEDIDO", selectCategory: "Selecciona una categoría",
       namePrompt: "¿Cómo te llamas?", payMethodPrompt: "¿Cómo prefieres pagar?", payNow: "Confirmar Pedido",
       payMachine: "Tarjeta (Débito/Crédito)", payPix: "Pix", payCash: "Pagar en Caja", insertingOrder: "Enviando a la cocina...",
-      orderSuccessTitle: "¡Pedido Confirmado!", orderSuccessSub: "Espera tu nombre o número en la pantalla.", passwordIs: "Tu Contraseña:"
+      orderSuccessTitle: "¡Pedido Confirmado!", orderSuccessSub: "Espera tu nombre o número en la pantalla.", passwordIs: "Tu Contraseña:",
+      buildPizza: "Armar Pizza", howManyFlavors: "¿Cuántos sabores?", chooseFlavors: "Elige tus sabores", confirmPizza: "Confirmar Pizza"
     }
   };
 
@@ -81,7 +90,7 @@ export default function TotemModerno() {
       if (!isIdle && !orderSuccessData) {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
-          setIsIdle(true); setCart([]); setIsCheckoutOpen(false);
+          setIsIdle(true); setCart([]); setIsCheckoutOpen(false); setPizzaBuilderOpen(false);
           if (menu.length > 0) setActiveCategory(menu[0].id);
         }, 60000); 
       }
@@ -96,7 +105,6 @@ export default function TotemModerno() {
     };
   }, [isIdle, menu, orderSuccessData]);
 
-  // Se a tela de sucesso abrir, volta pra tela inicial em 10 segundos
   useEffect(() => {
     if (orderSuccessData) {
       const timer = setTimeout(() => {
@@ -114,11 +122,12 @@ export default function TotemModerno() {
     }
   };
 
-  const addToCart = (product) => {
+  // 🎯 LÓGICA DE CARRINHO (Suporta Produtos Normais, Combos e Pizzas Montadas)
+  const addToCart = (productToAdd) => {
     setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
-      return [...prev, { ...product, quantity: 1 }];
+      const existing = prev.find(item => item.id === productToAdd.id);
+      if (existing) return prev.map(item => item.id === productToAdd.id ? { ...item, quantity: item.quantity + 1 } : item);
+      return [...prev, { ...productToAdd, quantity: 1 }];
     });
   };
 
@@ -126,7 +135,59 @@ export default function TotemModerno() {
     setCart(prev => prev.map(item => item.id === id ? { ...item, quantity: item.quantity + delta } : item).filter(i => i.quantity > 0));
   };
 
-  //FUNÇÃO QUE ENVIA O PEDIDO PARA A COZINHA E TELA DO CLIENTE
+  // 🍕 LÓGICA DO CONSTRUTOR DE PIZZAS
+  const handleProductClick = (prod) => {
+    if (prod.isPizza && prod.maxFlavors > 1) {
+      setPizzaBase(prod);
+      setPizzaFlavorCount(1);
+      setPizzaSelectedFlavors([prod]); // O primeiro sabor selecionado é o que ele clicou
+      setPizzaBuilderOpen(true);
+    } else {
+      addToCart(prod); // Combos e produtos normais vão direto
+    }
+  };
+
+  const togglePizzaFlavor = (flavorProd) => {
+    if (pizzaSelectedFlavors.find(f => f.id === flavorProd.id)) {
+      setPizzaSelectedFlavors(prev => prev.filter(f => f.id !== flavorProd.id)); // Remove
+    } else {
+      if (pizzaSelectedFlavors.length < pizzaFlavorCount) {
+        setPizzaSelectedFlavors(prev => [...prev, flavorProd]); // Adiciona
+      }
+    }
+  };
+
+  const getPizzaPricePreview = () => {
+    if (!pizzaBase || pizzaSelectedFlavors.length === 0) return 0;
+    if (pizzaBase.pricingStrategy === 'AVERAGE') {
+      const sum = pizzaSelectedFlavors.reduce((acc, f) => acc + Number(f.price), 0);
+      return sum / pizzaSelectedFlavors.length;
+    } else {
+      return Math.max(...pizzaSelectedFlavors.map(f => Number(f.price))); // HIGHEST (Padrão de mercado)
+    }
+  };
+
+  const confirmBuiltPizza = () => {
+    const finalPrice = getPizzaPricePreview();
+    const customId = `${pizzaBase.id}-` + pizzaSelectedFlavors.map(f => f.id).sort().join('-');
+    const customName = `🍕 ${pizzaFlavorCount} Sabores: ` + pizzaSelectedFlavors.map(f => f.name).join(' / ');
+    
+    const cartItem = {
+      ...pizzaBase,
+      id: customId,             // ID único no carrinho para não misturar pizzas diferentes
+      productId: pizzaBase.id,  // ID real para o banco de dados
+      name: customName,
+      price: finalPrice,
+      flavors: pizzaSelectedFlavors.map(f => ({ productId: f.id, name: f.name })) // Enviado para o backend abater o estoque fracionado
+    };
+
+    addToCart(cartItem);
+    setPizzaBuilderOpen(false);
+  };
+
+  // ==========================================
+  // FINALIZAÇÃO DE PEDIDO
+  // ==========================================
   const handleFinalizeOrder = async () => {
     if (!customerName.trim() || !paymentMethod) return alert("Preencha seu nome e a forma de pagamento.");
     setIsSubmitting(true);
@@ -135,7 +196,12 @@ export default function TotemModerno() {
         customerName: customerName,
         paymentMethod: paymentMethod,
         total: totalCart,
-        items: cart.map(item => ({ productId: item.id, quantity: item.quantity, price: item.price }))
+        items: cart.map(item => ({ 
+          productId: item.productId || item.id, 
+          quantity: item.quantity, 
+          price: item.price,
+          flavors: item.flavors ? JSON.stringify(item.flavors) : null // Envia os sabores fracionados para o Backend
+        }))
       };
 
       const res = await fetch(`${API_URL}/api/orders/public/${storeSlug}`, {
@@ -149,7 +215,6 @@ export default function TotemModerno() {
         setOrderSuccessData(data.order);
         setCart([]); setCustomerName(''); setPaymentMethod(''); setIsCheckoutOpen(false);
       } else {
-        // REJEIÇÃO EXATA DO BANCO DE DADOS NA TELA
         alert(`Erro do Banco de Dados:\n\n${data.details || data.error}`);
       }
     } catch (e) { alert("Erro de conexão."); }
@@ -183,7 +248,7 @@ export default function TotemModerno() {
   }
 
   // ==========================================
-  // TELA DE SUCESSO (COM SENHA GIGANTE)
+  // TELA DE SUCESSO
   // ==========================================
   if (orderSuccessData) {
     return (
@@ -244,9 +309,15 @@ export default function TotemModerno() {
         <div className="flex-1 overflow-y-auto p-6 pb-40">
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
             {menu.find(c => c.id === activeCategory)?.products?.filter(p => p.isActive !== false).map(prod => (
-              <button key={prod.id} onClick={() => addToCart(prod)} className="bg-white rounded-3xl p-4 shadow-sm flex flex-col items-center text-center transform transition-transform active:scale-95 border border-slate-200 hover:border-amber-400">
+              <button key={prod.id} onClick={() => handleProductClick(prod)} className="bg-white rounded-3xl p-4 shadow-sm flex flex-col items-center text-center transform transition-transform active:scale-95 border border-slate-200 hover:border-amber-400 relative">
+                {prod.isPizza && <span className="absolute top-2 left-2 bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase">🍕 Pizza</span>}
+                {prod.isCombo && <span className="absolute top-2 left-2 bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase">🍔 Combo</span>}
+                
                 {prod.imageUrl ? <img src={prod.imageUrl} alt={prod.name} className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-2xl mb-4 shadow-sm" /> : <div className="w-32 h-32 md:w-40 md:h-40 bg-slate-100 rounded-2xl mb-4 flex items-center justify-center text-4xl">🍽️</div>}
-                <h3 className="font-black text-slate-800 text-sm md:text-base leading-tight mb-2 line-clamp-2 min-h-[40px]">{prod.name}</h3>
+                
+                <h3 className="font-black text-slate-800 text-sm md:text-base leading-tight mb-1 line-clamp-2 min-h-[40px]">{prod.name}</h3>
+                {prod.isCombo && <p className="text-[9px] text-slate-400 line-clamp-2 leading-tight mb-2">Combo especial com acompanhamentos.</p>}
+                
                 <span className="mt-auto font-black text-emerald-600 text-lg md:text-xl">R$ {Number(prod.price).toFixed(2)}</span>
               </button>
             ))}
@@ -264,7 +335,7 @@ export default function TotemModerno() {
                      <button onClick={() => updateQuantity(item.id, -1)} className="w-8 h-6 bg-slate-100 text-slate-700 font-black flex items-center justify-center">-</button>
                    </div>
                    <div className="pr-2 max-w-[120px]">
-                     <p className="text-xs font-bold text-slate-800 truncate">{item.name}</p>
+                     <p className="text-xs font-bold text-slate-800 truncate" title={item.name}>{item.name}</p>
                      <p className="text-[10px] font-black text-emerald-600">R$ {(item.price * item.quantity).toFixed(2)}</p>
                    </div>
                  </div>
@@ -276,13 +347,83 @@ export default function TotemModerno() {
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{t.totalToPay}</p>
                 <p className="text-3xl md:text-4xl font-black text-slate-900 leading-none">R$ {totalCart.toFixed(2)}</p>
               </div>
-              {/* 🎯 BOTÃO FINALIZAR AGORA ABRE O MODAL */}
               <button onClick={() => setIsCheckoutOpen(true)} disabled={cart.length === 0} className="bg-emerald-500 disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-emerald-600 text-white px-8 py-5 md:py-6 rounded-[2rem] font-black text-xl md:text-2xl shadow-xl transition-all active:scale-95 flex items-center gap-3">
                 {t.checkout} ➔
               </button>
            </div>
         </div>
       </main>
+
+      {/* 🍕 MODAL: CONSTRUTOR DE PIZZA */}
+      {pizzaBuilderOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-6 animate-fade-in-up">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 w-full max-w-4xl flex flex-col h-[85vh]">
+            
+            <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4 shrink-0">
+              <div>
+                 <h2 className="text-3xl font-black text-slate-800">{t.buildPizza}</h2>
+                 <p className="text-slate-500 font-bold">{pizzaBase?.name}</p>
+              </div>
+              <button onClick={() => setPizzaBuilderOpen(false)} className="bg-slate-100 text-slate-500 w-12 h-12 rounded-full font-black text-xl hover:bg-slate-200">X</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2">
+                <h3 className="font-black text-slate-700 mb-3">{t.howManyFlavors}</h3>
+                <div className="flex gap-4 mb-8">
+                    {[1, 2, 3].map(num => {
+                        if (num > (pizzaBase?.maxFlavors || 1)) return null;
+                        return (
+                            <button 
+                                key={num} 
+                                onClick={() => { setPizzaFlavorCount(num); setPizzaSelectedFlavors([pizzaBase]); }}
+                                className={`flex-1 py-4 rounded-2xl font-black text-xl border-4 transition-all ${pizzaFlavorCount === num ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-amber-300'}`}
+                            >
+                                {num} {num === 1 ? 'Sabor' : 'Sabores'}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                <div className="bg-amber-100 text-amber-800 p-4 rounded-2xl mb-6 flex items-center justify-between font-bold border border-amber-200 shadow-inner">
+                    <span>Selecionados ({pizzaSelectedFlavors.length}/{pizzaFlavorCount}):</span>
+                    <span className="text-sm">{pizzaSelectedFlavors.map(f => f.name).join(' + ')}</span>
+                </div>
+
+                <h3 className="font-black text-slate-700 mb-3">{t.chooseFlavors}</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {menu.find(c => c.id === activeCategory)?.products?.filter(p => p.isPizza).map(flavor => {
+                        const isSelected = pizzaSelectedFlavors.find(f => f.id === flavor.id);
+                        const isFull = !isSelected && pizzaSelectedFlavors.length >= pizzaFlavorCount;
+                        
+                        return (
+                            <button 
+                                key={flavor.id}
+                                disabled={isFull}
+                                onClick={() => togglePizzaFlavor(flavor)}
+                                className={`p-4 rounded-2xl border-4 transition-all flex flex-col items-center text-center ${isSelected ? 'border-amber-500 bg-amber-50' : isFull ? 'border-slate-100 bg-slate-100 opacity-50 cursor-not-allowed' : 'border-slate-100 bg-white hover:border-amber-300'}`}
+                            >
+                                {flavor.imageUrl ? <img src={flavor.imageUrl} className="w-20 h-20 object-cover rounded-full mb-2 shadow-sm" /> : <div className="w-20 h-20 bg-slate-200 rounded-full mb-2 flex items-center justify-center text-2xl">🍕</div>}
+                                <span className="font-bold text-slate-800 text-sm leading-tight">{flavor.name}</span>
+                                <span className="text-emerald-600 font-black text-xs mt-1">+ R$ {Number(flavor.price).toFixed(2)}</span>
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+
+            <div className="pt-6 border-t border-slate-100 shrink-0 mt-4">
+               <button 
+                  onClick={confirmBuiltPizza}
+                  disabled={pizzaSelectedFlavors.length !== pizzaFlavorCount}
+                  className="w-full bg-amber-500 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed hover:bg-amber-600 text-black py-6 rounded-2xl font-black text-2xl shadow-xl active:scale-95 transition-all flex items-center justify-center gap-4"
+               >
+                  {t.confirmPizza} - R$ {getPizzaPricePreview().toFixed(2)}
+               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* 🎯 MODAL DE CHECKOUT (NOME E PAGAMENTO) */}
       {isCheckoutOpen && (
@@ -295,7 +436,6 @@ export default function TotemModerno() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* NOME */}
               <div>
                 <label className="text-sm font-black text-slate-500 uppercase tracking-widest mb-3 block">{t.namePrompt}</label>
                 <input 
@@ -307,7 +447,6 @@ export default function TotemModerno() {
                 />
               </div>
 
-              {/* FORMA DE PAGAMENTO */}
               <div>
                 <label className="text-sm font-black text-slate-500 uppercase tracking-widest mb-3 block">{t.payMethodPrompt}</label>
                 <div className="flex flex-col gap-3">

@@ -47,6 +47,12 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeSourceTabNumber, setMergeSourceTabNumber] = useState('');
 
+  // 🍕 ESTADOS DO CONSTRUTOR DE PIZZAS
+  const [pizzaBuilderOpen, setPizzaBuilderOpen] = useState(false);
+  const [pizzaBase, setPizzaBase] = useState(null);
+  const [pizzaFlavorCount, setPizzaFlavorCount] = useState(1);
+  const [pizzaSelectedFlavors, setPizzaSelectedFlavors] = useState([]);
+
   //Helper para injetar o x-store-id e o Token JWT automaticamente
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
@@ -63,7 +69,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
     //SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
-        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+        window.location.href = '/bloqueado'; 
       }
     }
 
@@ -236,18 +242,92 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
     } catch (e) { alert('Erro de comunicação.'); }
   };
 
-  const handleProductClick = (prod) => { addToCart(prod); };
-  const addToCart = (product) => { setCart(prev => [...(prev || []), { productId: product.id, name: product.name, price: Number(product.price), quantity: 1, isScheduled: false }]); };
+  // ==============================================================
+  // 🎯 LÓGICA DE CARRINHO (Suporta Pizzas e Combos)
+  // ==============================================================
+  const handleProductClick = (prod) => {
+    if (prod.isPizza && prod.maxFlavors > 1) {
+      setPizzaBase(prod);
+      setPizzaFlavorCount(1);
+      setPizzaSelectedFlavors([prod]); // Primeiro sabor pré-selecionado
+      setPizzaBuilderOpen(true);
+    } else {
+      addToCart({ ...prod, productId: prod.id });
+    }
+  };
+
+  const addToCart = (product) => { 
+    setCart(prev => {
+        // Verifica duplicidade baseada no ID customizado (usado para pizzas fracionadas)
+        const existingIdx = (prev || []).findIndex(item => item.id === (product.id || product.productId));
+        if (existingIdx >= 0 && !loadedTab) {
+            const newCart = [...prev];
+            newCart[existingIdx].quantity += 1;
+            return newCart;
+        }
+        return [...(prev || []), { 
+            id: product.id || product.productId, 
+            productId: product.productId || product.id, 
+            name: product.name, 
+            price: Number(product.price), 
+            quantity: 1, 
+            isScheduled: false,
+            flavors: product.flavors || null
+        }];
+    }); 
+  };
+  
   const updateQty = (idx, delta) => { setCart(prev => { const newCart = [...(prev || [])]; if (newCart[idx].quantity + delta > 0) newCart[idx].quantity += delta; else newCart.splice(idx, 1); return newCart; }); };
   const removeFromCart = (idx) => { setCart(prev => (prev || []).filter((_, i) => i !== idx)); };
 
+  // 🍕 LÓGICA DO CONSTRUTOR DE PIZZAS (PDV)
+  const togglePizzaFlavor = (flavorProd) => {
+    if (pizzaSelectedFlavors.find(f => f.id === flavorProd.id)) {
+      setPizzaSelectedFlavors(prev => prev.filter(f => f.id !== flavorProd.id)); 
+    } else {
+      if (pizzaSelectedFlavors.length < pizzaFlavorCount) {
+        setPizzaSelectedFlavors(prev => [...prev, flavorProd]); 
+      }
+    }
+  };
+
+  const getPizzaPricePreview = () => {
+    if (!pizzaBase || pizzaSelectedFlavors.length === 0) return 0;
+    if (pizzaBase.pricingStrategy === 'AVERAGE') {
+      const sum = pizzaSelectedFlavors.reduce((acc, f) => acc + Number(f.price), 0);
+      return sum / pizzaSelectedFlavors.length;
+    } else {
+      return Math.max(...pizzaSelectedFlavors.map(f => Number(f.price))); // HIGHEST (Maior valor)
+    }
+  };
+
+  const confirmBuiltPizza = () => {
+    const finalPrice = getPizzaPricePreview();
+    const customId = `${pizzaBase.id}-` + pizzaSelectedFlavors.map(f => f.id).sort().join('-');
+    const customName = `🍕 ${pizzaFlavorCount} Sabores: ` + pizzaSelectedFlavors.map(f => f.name).join(' / ');
+    
+    const cartItem = {
+      id: customId,             
+      productId: pizzaBase.id,  
+      name: customName,
+      price: finalPrice,
+      flavors: pizzaSelectedFlavors.map(f => ({ productId: f.id, name: f.name })) 
+    };
+
+    addToCart(cartItem);
+    setPizzaBuilderOpen(false);
+  };
+
+  // ==============================================================
+  // FINALIZAÇÃO DE VENDA
+  // ==============================================================
   const subtotal = (cart || []).reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
   
   let calculatedDiscountValue = discountValue;
   let calculatedDiscountType = discountType;
   if (isEmployeePurchase && selectedEmployeeBuyer) {
-     calculatedDiscountType = '%';
-     calculatedDiscountValue = selectedEmployeeBuyer.discountPercent || 0;
+       calculatedDiscountType = '%';
+       calculatedDiscountValue = selectedEmployeeBuyer.discountPercent || 0;
   }
 
   const subtotalComDesconto = Math.max(0, subtotal - (calculatedDiscountValue ? (calculatedDiscountType === 'R$' ? Number(calculatedDiscountValue) : subtotal * (Number(calculatedDiscountValue)/100)) : 0));
@@ -287,10 +367,26 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       return;
     }
 
+    // 🎯 VENDA BALCÃO (Direta) COM MAPEAMENTO DE SABORES DE PIZZA
     try {
       const payload = {
-          clientId: selectedCustomer?.id || 'TOTEM_MODE', employeeBuyerId: selectedEmployeeBuyer?.id, client: { name: finalClientName },
-          items: currentCart, address: 'Venda Balcão (PDV)', paymentMethod, total: subtotal, pdvDiscount: calculatedDiscountValue || 0, origin: 'PDV', registerId: registerInfo?.id, shiftId,
+          clientId: selectedCustomer?.id || 'TOTEM_MODE', 
+          employeeBuyerId: selectedEmployeeBuyer?.id, 
+          client: { name: finalClientName },
+          // Envia o carrinho extraindo a coluna "flavors" para baixa de estoque
+          items: currentCart.map(item => ({
+             productId: item.productId || item.id,
+             quantity: item.quantity,
+             price: item.price,
+             flavors: item.flavors ? JSON.stringify(item.flavors) : undefined
+          })), 
+          address: 'Venda Balcão (PDV)', 
+          paymentMethod, 
+          total: subtotal, 
+          pdvDiscount: calculatedDiscountValue || 0, 
+          origin: 'PDV', 
+          registerId: registerInfo?.id, 
+          shiftId,
           managerAuth: overrideAuth
       };
 
@@ -356,9 +452,12 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
                    <h4 className="font-black text-slate-500 uppercase tracking-widest text-xs mb-4">{cat.name}</h4>
                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                       {cat.products.map(prod => (
-                        <button key={prod.id} onClick={() => handleProductClick(prod)} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center hover:border-amber-500 cursor-pointer">
-                          <span className="text-3xl mb-2 block">🍔</span>
-                          <p className="font-bold text-xs text-slate-700 truncate">{prod.name}</p>
+                        <button key={prod.id} onClick={() => handleProductClick(prod)} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center hover:border-amber-500 cursor-pointer relative overflow-hidden transition-all active:scale-95">
+                          {prod.isPizza && <span className="absolute top-0 left-0 w-full bg-amber-100 text-amber-700 text-[9px] font-black py-1 uppercase tracking-widest">🍕 Pizza</span>}
+                          {prod.isCombo && <span className="absolute top-0 left-0 w-full bg-blue-100 text-blue-700 text-[9px] font-black py-1 uppercase tracking-widest">🍔 Combo</span>}
+                          
+                          <span className={`text-3xl block ${prod.isPizza || prod.isCombo ? 'mt-4 mb-1' : 'mb-2'}`}>🍽️</span>
+                          <p className="font-bold text-xs text-slate-700 truncate mt-1">{prod.name}</p>
                           <p className="text-amber-600 font-black mt-1">R$ {Number(prod.price).toFixed(2)}</p>
                         </button>
                       ))}
@@ -454,10 +553,14 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
             {(cart || []).map((item, idx) => (
               <div key={idx} className="flex flex-col bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-sm relative">
                 <div className="flex justify-between items-start mb-1">
-                  <p className="text-xs font-bold text-slate-800 leading-tight"><span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}</p>
-                  <span className="font-black text-slate-800 text-sm whitespace-nowrap pl-2">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                  <p className="text-xs font-bold text-slate-800 leading-tight pr-2"><span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}</p>
+                  <span className="font-black text-slate-800 text-sm whitespace-nowrap">R$ {(item.price * item.quantity).toFixed(2)}</span>
                 </div>
+                {/* 🍕 Mostra as metades escolhidas no carrinho */}
+                {item.flavors && <p className="text-[9px] text-slate-500 font-bold leading-tight mt-0.5">{item.flavors.map(f => f.name).join(' + ')}</p>}
+                
                 {item.seatLabel && <p className="text-[9px] text-blue-500 font-black uppercase mt-0.5">{item.seatLabel}</p>}
+                
                 {!loadedTab && (
                   <div className="flex justify-between items-center mt-2 border-t border-slate-200 pt-2">
                     <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1">
@@ -501,6 +604,77 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
           </div>
         </div>
       </div>
+
+      {/* 🍕 MODAL: CONSTRUTOR DE PIZZA (PDV) */}
+      {pizzaBuilderOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6 animate-fade-in-up">
+          <div className="bg-white rounded-[2rem] shadow-2xl p-6 w-full max-w-3xl flex flex-col max-h-[90vh]">
+            
+            <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4 shrink-0">
+              <div>
+                 <h2 className="text-2xl font-black text-slate-800">Montar Pizza</h2>
+                 <p className="text-slate-500 font-bold text-sm">{pizzaBase?.name}</p>
+              </div>
+              <button onClick={() => setPizzaBuilderOpen(false)} className="bg-slate-100 text-slate-500 w-10 h-10 rounded-full font-black text-lg hover:bg-slate-200">X</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2">
+                <h3 className="font-black text-slate-700 mb-2 text-sm uppercase tracking-wider">Quantos sabores?</h3>
+                <div className="flex gap-4 mb-6">
+                    {[1, 2, 3].map(num => {
+                        if (num > (pizzaBase?.maxFlavors || 1)) return null;
+                        return (
+                            <button 
+                                key={num} 
+                                onClick={() => { setPizzaFlavorCount(num); setPizzaSelectedFlavors([pizzaBase]); }}
+                                className={`flex-1 py-3 rounded-2xl font-black text-lg border-2 transition-all ${pizzaFlavorCount === num ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-amber-300'}`}
+                            >
+                                {num} {num === 1 ? 'Sabor' : 'Sabores'}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                <div className="bg-amber-100 text-amber-800 p-3 rounded-xl mb-6 flex items-center justify-between font-bold border border-amber-200 shadow-inner">
+                    <span className="text-sm">Selecionados ({pizzaSelectedFlavors.length}/{pizzaFlavorCount}):</span>
+                    <span className="text-xs">{pizzaSelectedFlavors.map(f => f.name).join(' + ')}</span>
+                </div>
+
+                <h3 className="font-black text-slate-700 mb-3 text-sm uppercase tracking-wider">Escolha as metades</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {allProducts.filter(p => p.isPizza).map(flavor => {
+                        const isSelected = pizzaSelectedFlavors.find(f => f.id === flavor.id);
+                        const isFull = !isSelected && pizzaSelectedFlavors.length >= pizzaFlavorCount;
+                        
+                        return (
+                            <button 
+                                key={flavor.id}
+                                disabled={isFull}
+                                onClick={() => togglePizzaFlavor(flavor)}
+                                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center text-center ${isSelected ? 'border-amber-500 bg-amber-50' : isFull ? 'border-slate-100 bg-slate-100 opacity-50 cursor-not-allowed' : 'border-slate-100 bg-white hover:border-amber-300'}`}
+                            >
+                                <span className="text-2xl mb-1">🍕</span>
+                                <span className="font-bold text-slate-800 text-[10px] leading-tight line-clamp-2 min-h-[28px]">{flavor.name}</span>
+                                <span className="text-emerald-600 font-black text-[10px] mt-1">+ R$ {Number(flavor.price).toFixed(2)}</span>
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 shrink-0 mt-4">
+               <button 
+                  onClick={confirmBuiltPizza}
+                  disabled={pizzaSelectedFlavors.length !== pizzaFlavorCount}
+                  className="w-full bg-amber-500 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed hover:bg-amber-600 text-black py-4 rounded-xl font-black text-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+               >
+                  Confirmar Pizza - R$ {getPizzaPricePreview().toFixed(2)}
+               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/*MODAL AUTORIZAÇÃO DE LIMITE */}
       {showLimitOverrideModal && (

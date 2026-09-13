@@ -65,6 +65,12 @@ export default function LancamentosPage() {
   const [readyAlerts, setReadyAlerts] = useState([]);
   const [alertedItemsSet, setAlertedItemsSet] = useState(new Set());
 
+  // 🍕 ESTADOS DO CONSTRUTOR DE PIZZAS
+  const [pizzaBuilderOpen, setPizzaBuilderOpen] = useState(false);
+  const [pizzaBase, setPizzaBase] = useState(null);
+  const [pizzaFlavorCount, setPizzaFlavorCount] = useState(1);
+  const [pizzaSelectedFlavors, setPizzaSelectedFlavors] = useState([]);
+
   // Identifica e valida a loja pelo slug da URL
   useEffect(() => {
     if (!storeSlug) return;
@@ -439,7 +445,16 @@ export default function LancamentosPage() {
     } catch (e) { alert('Erro na transferência.'); }
   };
 
+  // 🍕 LÓGICA DO CONSTRUTOR DE PIZZAS (GARÇOM) E INTERCEPTAÇÃO DE CLIQUES
   const handleProductInteraction = (product) => {
+    if (product.isPizza && product.maxFlavors > 1) {
+      setPizzaBase(product);
+      setPizzaFlavorCount(1);
+      setPizzaSelectedFlavors([product]);
+      setPizzaBuilderOpen(true);
+      return; // Interrompe para abrir o modal da pizza
+    }
+
     if (clickTimeout.current) {
       clearTimeout(clickTimeout.current); clickTimeout.current = null;
       let targetTabId = selectedTab.id;
@@ -453,6 +468,50 @@ export default function LancamentosPage() {
     }
   };
 
+  const togglePizzaFlavor = (flavorProd) => {
+    if (pizzaSelectedFlavors.find(f => f.id === flavorProd.id)) {
+      setPizzaSelectedFlavors(prev => prev.filter(f => f.id !== flavorProd.id));
+    } else {
+      if (pizzaSelectedFlavors.length < pizzaFlavorCount) {
+        setPizzaSelectedFlavors(prev => [...prev, flavorProd]);
+      }
+    }
+  };
+
+  const getPizzaPricePreview = () => {
+    if (!pizzaBase || pizzaSelectedFlavors.length === 0) return 0;
+    if (pizzaBase.pricingStrategy === 'AVERAGE') {
+      const sum = pizzaSelectedFlavors.reduce((acc, f) => acc + Number(f.price), 0);
+      return sum / pizzaSelectedFlavors.length;
+    } else {
+      return Math.max(...pizzaSelectedFlavors.map(f => Number(f.price))); 
+    }
+  };
+
+  const confirmBuiltPizza = () => {
+    const finalPrice = getPizzaPricePreview();
+    const customId = `${pizzaBase.id}-` + pizzaSelectedFlavors.map(f => f.id).sort().join('-');
+    const customName = `🍕 ${pizzaFlavorCount} Sabores: ` + pizzaSelectedFlavors.map(f => f.name).join(' / ');
+
+    const virtualProduct = {
+        ...pizzaBase,
+        id: customId,
+        productId: pizzaBase.id,
+        name: customName,
+        price: finalPrice,
+        flavors: pizzaSelectedFlavors.map(f => ({ productId: f.id, name: f.name }))
+    };
+
+    setPizzaBuilderOpen(false);
+    
+    // 🎯 Em vez de jogar direto no carrinho, abre a tela de posição da mesa pro garçom!
+    setSelectedProduct(virtualProduct);
+    setItemQuantity(1);
+    setItemObservation('');
+    setSeatPosition('Lugar 1');
+    setCustomSeatName('');
+  };
+
   const confirmAddToCart = () => {
     if (!selectedProduct) return;
     let targetTabId = selectedTab.id;
@@ -463,7 +522,17 @@ export default function LancamentosPage() {
        if (cTab) { targetTabId = cTab.id; finalSeatLabel = 'Titular da Comanda'; }
     } else if (selectedTab.number >= 1000) { finalSeatLabel = 'Titular da Comanda'; }
     
-    const newItem = { productId: selectedProduct.id, name: selectedProduct.name, price: Number(selectedProduct.price), quantity: itemQuantity, observation: itemObservation, seatLabel: finalSeatLabel, targetTabId: targetTabId, originalSeatName: seatPosition };
+    const newItem = { 
+        productId: selectedProduct.productId || selectedProduct.id, 
+        name: selectedProduct.name, 
+        price: Number(selectedProduct.price), 
+        quantity: itemQuantity, 
+        observation: itemObservation, 
+        seatLabel: finalSeatLabel, 
+        targetTabId: targetTabId, 
+        originalSeatName: seatPosition,
+        flavors: selectedProduct.flavors // Garante que as metades desçam para a cozinha
+    };
     processCartAddition(newItem); setSelectedProduct(null);
   };
 
@@ -486,6 +555,7 @@ export default function LancamentosPage() {
 
   const removeCartItem = (index) => { setCart(prev => (prev || []).filter((_, i) => i !== index)); };
 
+  // 🎯 DISPARO PARA A COZINHA E MOTOR DE ESTOQUE
   const handleSendToKitchen = async (overrideAuth = null) => {
     if ((cart || []).length === 0 || !selectedTab) return;
     setLoadingData(true);
@@ -496,10 +566,17 @@ export default function LancamentosPage() {
       }, {});
       
       for (const [tId, itemsOfTab] of Object.entries(grouped)) {
+         
+         // 🎯 Garante que a coluna de flavors seja enviada tratada pro backend
+         const payloadItems = itemsOfTab.map(i => ({
+             ...i,
+             flavors: i.flavors ? JSON.stringify(i.flavors) : undefined
+         }));
+
          const res = await fetchWithStore(`${API_URL}/api/salao/tabs/${tId}/items`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ items: itemsOfTab, managerAuth: overrideAuth }) 
+            body: JSON.stringify({ items: payloadItems, managerAuth: overrideAuth }) 
          });
          const data = await res.json();
          if (!data.success) {
@@ -576,6 +653,12 @@ export default function LancamentosPage() {
   const comandas = (tabs || []).filter(t => t.type === 'TAB');
   const visibleProducts = getVisibleProducts();
 
+  // Constroi a lista de pizzas disponíveis para a montagem de sabores (busca todos os produtos que são isPizza)
+  const allPizzaFlavors = [];
+  menu.forEach(cat => cat.products.forEach(p => {
+      if (p.isPizza && !allPizzaFlavors.find(x => x.id === p.id)) allPizzaFlavors.push(p);
+  }));
+
   let seatOptions = ['Lugar 1', 'Lugar 2', 'Lugar 3', 'Lugar 4', 'Lugar 5', 'Lugar 6'];
   if (selectedTab?.type === 'TABLE') {
      const extraSeats = comandas.filter(c => c.linkedTable === selectedTab.number).map(c => `Comanda ${c.number}`);
@@ -591,7 +674,7 @@ export default function LancamentosPage() {
   return (
     <div className={`min-h-screen ${bgBase} ${textMain} font-sans flex flex-col md:flex-row selection:bg-amber-500 selection:text-slate-950 transition-colors`}>
       
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none w-full px-4">
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex flex-col items-center gap-2 pointer-events-none w-full px-4">
         {readyAlerts.map((alert) => (
           <div key={alert.id} className="bg-emerald-500 text-white font-black px-6 py-3 rounded-2xl shadow-2xl animate-fade-in-up flex items-center gap-3 border border-emerald-400 pointer-events-auto">
             <span className="text-2xl">🔔</span><p className="text-sm">{alert.message}</p>
@@ -878,6 +961,9 @@ export default function LancamentosPage() {
                                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">
                                           <span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}
                                        </p>
+                                       {/* 🍕 Mostra Sabores Fracionados caso existam */}
+                                       {item.flavors && <p className="text-[9px] text-amber-600 font-bold mt-0.5">{item.flavors.map(f => f.name).join(' + ')}</p>}
+                                       
                                        {item.seatLabel && <span className="inline-block mt-1 bg-blue-500/10 text-blue-500 border border-blue-500/20 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">{item.seatLabel}</span>}
                                        {item.observation && <p className="text-[9px] text-red-500 font-bold mt-1 bg-red-500/10 px-1.5 py-0.5 inline-block rounded">Obs: {item.observation}</p>}
                                     </div>
@@ -919,6 +1005,9 @@ export default function LancamentosPage() {
                            <div key={idx} className={`${bgCard} border p-2.5 rounded-xl flex justify-between items-center shadow-sm`}>
                               <div className="flex-1 pr-2">
                                  <p className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate"><span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}</p>
+                                 {/* 🍕 Mostra Sabores Fracionados caso existam */}
+                                 {item.flavors && <p className="text-[8px] text-amber-600 font-bold mt-0.5 truncate">{item.flavors.map(f => f.name).join(' + ')}</p>}
+                                 
                                  {item.originalSeatName && <span className={`text-[8px] font-black mt-0.5 block ${item.originalSeatName.startsWith('Comanda') ? 'text-purple-500' : 'text-blue-500'}`}>{item.targetTabId !== selectedTab.id ? `➜ Envia p/: ${item.originalSeatName}` : item.originalSeatName}</span>}
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
@@ -968,8 +1057,12 @@ export default function LancamentosPage() {
                      ) : (
                         visibleProducts.map(prod => (
                            <button key={prod.id} onClick={() => handleProductInteraction(prod)} className={`border p-4 rounded-2xl flex flex-col justify-between text-left cursor-pointer transition-all hover:border-amber-500 hover:shadow-md active:scale-95 group relative overflow-hidden ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'}`}>
+                              <div className="absolute top-0 left-0 w-full flex gap-1 p-2">
+                                  {prod.isPizza && <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest border border-amber-200/50">🍕 Pizza</span>}
+                                  {prod.isCombo && <span className="bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest border border-blue-200/50">🍔 Combo</span>}
+                              </div>
                               <div className="absolute -top-6 -right-6 w-16 h-16 bg-amber-500/10 rounded-full group-hover:scale-150 transition-transform"></div>
-                              <p className="font-black text-xs text-slate-800 dark:text-slate-200 mb-2 leading-tight relative z-10 line-clamp-3">{prod.name}</p>
+                              <p className={`font-black text-xs text-slate-800 dark:text-slate-200 mb-2 leading-tight relative z-10 line-clamp-3 ${prod.isPizza || prod.isCombo ? 'mt-4' : ''}`}>{prod.name}</p>
                               <div className="flex items-center justify-between w-full mt-auto relative z-10 pt-2 border-t border-slate-100 dark:border-slate-800">
                                  <span className="text-amber-600 dark:text-amber-500 font-black text-sm">R$ {Number(prod.price).toFixed(2)}</span>
                                  <span className="w-6 h-6 rounded-md bg-amber-500 text-slate-950 flex items-center justify-center font-black text-sm shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">+</span>
@@ -983,6 +1076,77 @@ export default function LancamentosPage() {
           </div>
         )}
       </main>
+
+      {/* 🍕 MODAL: CONSTRUTOR DE PIZZA (GARÇOM) */}
+      {pizzaBuilderOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 w-full max-w-3xl flex flex-col max-h-[90vh] animate-fade-in-up`}>
+            
+            <div className={`flex justify-between items-center mb-6 border-b pb-4 shrink-0 ${borderSidebar}`}>
+              <div>
+                 <h2 className={`text-2xl font-black ${textMain}`}>Montar Pizza</h2>
+                 <p className={`${textMuted} font-bold text-sm`}>{pizzaBase?.name}</p>
+              </div>
+              <button onClick={() => setPizzaBuilderOpen(false)} className={`w-10 h-10 rounded-full ${bgInput} font-black text-lg hover:text-red-500 transition-colors`}>X</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2 hide-scrollbar">
+                <h3 className={`font-black ${textMain} mb-2 text-sm uppercase tracking-wider`}>Quantos sabores?</h3>
+                <div className="flex gap-3 mb-6">
+                    {[1, 2, 3].map(num => {
+                        if (num > (pizzaBase?.maxFlavors || 1)) return null;
+                        return (
+                            <button 
+                                key={num} 
+                                onClick={() => { setPizzaFlavorCount(num); setPizzaSelectedFlavors([pizzaBase]); }}
+                                className={`flex-1 py-3 rounded-2xl font-black text-base border-2 transition-all ${pizzaFlavorCount === num ? 'border-amber-500 bg-amber-500/10 text-amber-500' : `${bgInput} text-slate-500 border-slate-200 dark:border-slate-800 hover:border-amber-500/50`}`}
+                            >
+                                {num} {num === 1 ? 'Sabor' : 'Sabores'}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                <div className="bg-amber-500/10 text-amber-500 p-3 rounded-xl mb-6 flex items-center justify-between font-bold border border-amber-500/20 shadow-inner">
+                    <span className="text-sm">Selecionados ({pizzaSelectedFlavors.length}/{pizzaFlavorCount}):</span>
+                    <span className="text-xs">{pizzaSelectedFlavors.map(f => f.name).join(' + ')}</span>
+                </div>
+
+                <h3 className={`font-black ${textMain} mb-3 text-sm uppercase tracking-wider`}>Escolha as metades</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {allPizzaFlavors.map(flavor => {
+                        const isSelected = pizzaSelectedFlavors.find(f => f.id === flavor.id);
+                        const isFull = !isSelected && pizzaSelectedFlavors.length >= pizzaFlavorCount;
+                        
+                        return (
+                            <button 
+                                key={flavor.id}
+                                disabled={isFull}
+                                onClick={() => togglePizzaFlavor(flavor)}
+                                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center text-center ${isSelected ? 'border-amber-500 bg-amber-500/10' : isFull ? `${bgInput} opacity-30 cursor-not-allowed` : `${bgInput} hover:border-amber-500/50`}`}
+                            >
+                                <span className="text-2xl mb-1">🍕</span>
+                                <span className={`font-bold ${textMain} text-[10px] leading-tight line-clamp-2 min-h-[28px]`}>{flavor.name}</span>
+                                <span className="text-emerald-500 font-black text-[10px] mt-1">+ R$ {Number(flavor.price).toFixed(2)}</span>
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+
+            <div className={`pt-4 border-t ${borderSidebar} shrink-0 mt-4`}>
+               <button 
+                  onClick={confirmBuiltPizza}
+                  disabled={pizzaSelectedFlavors.length !== pizzaFlavorCount}
+                  className="w-full bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-amber-600 text-slate-950 py-4 rounded-xl font-black text-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+               >
+                  Confirmar Metades
+               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {showLimitOverrideModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
