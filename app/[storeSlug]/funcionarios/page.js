@@ -494,16 +494,51 @@ function FuncionariosPortal({ storeSlug }) {
     e.preventDefault();
     if (!newProduct.categoryId) return alert("Crie uma categoria primeiro!");
     try {
-      const payload = { ...newProduct, costPrice: newProduct.costPrice ? Number(newProduct.costPrice) : 0, groupId: newProduct.groupId || null };
+      // 🎯 PACOTE BLINDADO: Garante que os dados da Pizza e do Combo vão no formato exato que o Backend exige
+      const payload = { 
+        ...newProduct, 
+        costPrice: newProduct.costPrice ? Number(newProduct.costPrice) : 0, 
+        groupId: newProduct.groupId || null,
+        
+        isPizza: Boolean(newProduct.isPizza),
+        maxFlavors: newProduct.maxFlavors ? Number(newProduct.maxFlavors) : 1,
+        pricingStrategy: newProduct.pricingStrategy || 'HIGHEST',
+        sizeMultiplier: newProduct.sizeMultiplier !== undefined ? Number(newProduct.sizeMultiplier) : 1.0,
+        
+        isCombo: Boolean(newProduct.isCombo),
+        comboItems: newProduct.comboItems || []
+      };
+
       const res = await fetchWithStore(`${API_URL}/api/products`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if ((await res.json()).success) { setNewProduct({ name: '', description: '', price: '', price700g: '', price1kg: '', costPrice: '', categoryId: menu[0]?.id || '', imageUrl: '', regraFiscalId: '', ncm: '', ean: '', groupId: '' }); setIsCreatingProduct(false); fetchProducts(); fetchMenu(); }
+      if ((await res.json()).success) {
+        // Zera o formulário incluindo as novas variáveis de Pizza e Combo
+        setNewProduct({ 
+          name: '', description: '', price: '', price700g: '', price1kg: '', costPrice: '', categoryId: menu[0]?.id || '', imageUrl: '', regraFiscalId: '', ncm: '', ean: '', groupId: '',
+          isPizza: false, maxFlavors: 1, pricingStrategy: 'HIGHEST', sizeMultiplier: 1.0, isCombo: false, comboItems: []
+        });
+        setIsCreatingProduct(false); fetchProducts(); fetchMenu(); 
+      }
     } catch (error) {}
   };
 
   const handleEditProduct = async (e) => {
     e.preventDefault();
     try {
-      const payload = { ...editingProduct, costPrice: editingProduct.costPrice ? Number(editingProduct.costPrice) : 0, groupId: editingProduct.groupId || null };
+      // 🎯 PACOTE BLINDADO DE EDIÇÃO: Transforma "comboItemsAsParent" no "comboItems" que o backend entende
+      const payload = { 
+        ...editingProduct, 
+        costPrice: editingProduct.costPrice ? Number(editingProduct.costPrice) : 0, 
+        groupId: editingProduct.groupId || null,
+
+        isPizza: Boolean(editingProduct.isPizza),
+        maxFlavors: editingProduct.maxFlavors ? Number(editingProduct.maxFlavors) : 1,
+        pricingStrategy: editingProduct.pricingStrategy || 'HIGHEST',
+        sizeMultiplier: editingProduct.sizeMultiplier !== undefined ? Number(editingProduct.sizeMultiplier) : 1.0,
+        
+        isCombo: Boolean(editingProduct.isCombo),
+        comboItems: editingProduct.comboItems || editingProduct.comboItemsAsParent || []
+      };
+
       const res = await fetchWithStore(`${API_URL}/api/products/${editingProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if ((await res.json()).success) { setEditingProduct(null); fetchProducts(); fetchMenu(); }
     } catch (error) {}
@@ -511,7 +546,13 @@ function FuncionariosPortal({ storeSlug }) {
 
   const toggleProductStatus = async (product) => {
     try {
-      const res = await fetchWithStore(`${API_URL}/api/products/${product.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...product, isActive: !product.isActive }) });
+      // 🎯 PREVINE APAGAR O COMBO AO ATIVAR/DESATIVAR PRODUTO
+      const payload = { 
+        ...product, 
+        isActive: !product.isActive,
+        comboItems: product.comboItems || product.comboItemsAsParent || []
+      };
+      const res = await fetchWithStore(`${API_URL}/api/products/${product.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if ((await res.json()).success) { fetchProducts(); fetchMenu(); }
     } catch (error) {}
   };
@@ -519,7 +560,7 @@ function FuncionariosPortal({ storeSlug }) {
   const toggleFeatureProduct = async (product) => {
     const isCurrentlyFeatured = product.isFeatured;
     const currentHighlightsCount = allProducts.filter(p => p.isFeatured).length;
-    if (!isCurrentlyFeatured && currentHighlightsCount >= 5) { alert("Limite atingido."); return; }
+    if (!isCurrentlyFeatured && currentHighlightsCount >= 5) { alert("Limite de destaques atingido."); return; }
     try {
       const res = await fetchWithStore(`${API_URL}/api/products/${product.id}/feature`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isFeatured: !isCurrentlyFeatured }) });
       if ((await res.json()).success) fetchProducts(); 
