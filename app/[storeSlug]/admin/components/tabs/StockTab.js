@@ -291,7 +291,6 @@ export default function StockTab({
              </div>
           </div>
 
-          {/* 🎯 CORREÇÃO: TELA DA IA ADAPTADA PARA LER QUALQUER TEXTO PERFEITAMENTE */}
           {financeAnalysis && (
              <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl mb-8 animate-fade-in-up relative">
                 <button 
@@ -434,44 +433,89 @@ export default function StockTab({
         </section>
       )}
 
-      {estoqueSubTab === 'movimentacoes' && (
-        <section className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-1">
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-              <h2 className="text-lg font-black text-slate-900 mb-4">Ajuste Manual</h2>
-              <form onSubmit={handleMovimentacaoManual} className="space-y-4">
-                <div><label className="text-xs text-slate-500 block mb-1">Insumo</label><select required value={novaMovimentacao.insumoId} onChange={(e) => setNovaMovimentacao({...novaMovimentacao, insumoId: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500"><option value="">Selecione...</option>{insumos.map(i => <option key={i.id} value={i.id}>{i.name} (Atual: {Number(i.stock).toFixed(2)})</option>)}</select></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="text-xs text-slate-500 block mb-1">Tipo</label><select required value={novaMovimentacao.type} onChange={(e) => setNovaMovimentacao({...novaMovimentacao, type: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-amber-500"><option value="IN">Entrada (+)</option><option value="OUT">Saída (-)</option></select></div>
-                  <div><label className="text-xs text-slate-500 block mb-1">Quantidade</label><input type="number" step="0.001" required value={novaMovimentacao.quantity} onChange={(e) => setNovaMovimentacao({...novaMovimentacao, quantity: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" /></div>
-                </div>
-                <div><label className="text-xs text-slate-500 block mb-1">Motivo / Justificativa</label><input type="text" required value={novaMovimentacao.reason} onChange={(e) => setNovaMovimentacao({...novaMovimentacao, reason: e.target.value})} placeholder="Ex: Quebra, Vencimento..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" /></div>
-                <button type="submit" className="w-full bg-slate-800 hover:bg-black text-white font-black py-3 rounded-xl transition-all shadow-md">Registrar Movimentação</button>
-              </form>
+      {estoqueSubTab === 'movimentacoes' && (() => {
+        const notasImportadas = Object.values(
+          movimentacoes.filter(m => m.xmlRef).reduce((acc, mov) => {
+            if (!acc[mov.xmlRef]) {
+               acc[mov.xmlRef] = { chave: mov.xmlRef, data: mov.createdAt, qtdItens: 0 };
+            }
+            acc[mov.xmlRef].qtdItens += 1;
+            return acc;
+          }, {})
+        ).sort((a, b) => new Date(b.data) - new Date(a.data));
+
+        return (
+          <section className="space-y-6 animate-fade-in-up">
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                <h2 className="text-lg font-black text-slate-900 mb-4">Ajuste Manual</h2>
+                <form onSubmit={handleMovimentacaoManual} className="space-y-4">
+                  <div><label className="text-xs text-slate-500 block mb-1">Insumo</label><select required value={novaMovimentacao.insumoId} onChange={(e) => setNovaMovimentacao({...novaMovimentacao, insumoId: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500"><option value="">Selecione...</option>{insumos.map(i => <option key={i.id} value={i.id}>{i.name} (Atual: {Number(i.stock).toFixed(2)})</option>)}</select></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><label className="text-xs text-slate-500 block mb-1">Tipo</label><select required value={novaMovimentacao.type} onChange={(e) => setNovaMovimentacao({...novaMovimentacao, type: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-amber-500"><option value="IN">Entrada (+)</option><option value="OUT">Saída (-)</option></select></div>
+                    <div><label className="text-xs text-slate-500 block mb-1">Quantidade</label><input type="number" step="0.001" required value={novaMovimentacao.quantity} onChange={(e) => setNovaMovimentacao({...novaMovimentacao, quantity: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" /></div>
+                  </div>
+                  <div><label className="text-xs text-slate-500 block mb-1">Motivo / Justificativa</label><input type="text" required value={novaMovimentacao.reason} onChange={(e) => setNovaMovimentacao({...novaMovimentacao, reason: e.target.value})} placeholder="Ex: Quebra, Vencimento..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" /></div>
+                  <button type="submit" className="w-full bg-slate-800 hover:bg-black text-white font-black py-3 rounded-xl transition-all shadow-md">Registrar Movimentação</button>
+                </form>
+              </div>
+
+              <div className="lg:col-span-2 bg-white rounded-3xl border border-blue-200 shadow-sm overflow-hidden flex flex-col">
+                 <div className="p-6 border-b border-blue-50 bg-blue-50/30 flex justify-between items-center">
+                    <div>
+                       <h2 className="text-lg font-black text-blue-900">🧾 Notas Fiscais Importadas</h2>
+                       <p className="text-xs text-slate-500 mt-1">Histórico de NFe (XML) que já deram entrada no estoque.</p>
+                    </div>
+                 </div>
+                 <div className="overflow-x-auto flex-1">
+                   <table className="w-full text-left text-sm text-slate-700">
+                     <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                        <tr><th className="px-6 py-4">Data de Entrada</th><th className="px-6 py-4">Chave da NFe</th><th className="px-6 py-4 text-center">Itens Processados</th><th className="px-6 py-4 text-right">Status</th></tr>
+                     </thead>
+                     <tbody>
+                        {notasImportadas.length === 0 && <tr><td colSpan="4" className="text-center py-8 text-slate-400">Nenhuma NFe importada ainda.</td></tr>}
+                        {notasImportadas.map(nota => (
+                          <tr key={nota.chave} className="border-b border-slate-100 hover:bg-blue-50/20">
+                            <td className="px-6 py-4 font-bold text-slate-700">{new Date(nota.data).toLocaleString('pt-BR')}</td>
+                            <td className="px-6 py-4">
+                               <span className="font-mono text-[10px] sm:text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-100 block break-all w-max max-w-[200px] sm:max-w-full">{nota.chave}</span>
+                            </td>
+                            <td className="px-6 py-4 text-center font-black text-slate-800">{nota.qtdItens}</td>
+                            <td className="px-6 py-4 text-right"><span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-[10px] font-black tracking-widest">OK</span></td>
+                          </tr>
+                        ))}
+                     </tbody>
+                   </table>
+                 </div>
+              </div>
+
             </div>
-          </div>
-          <div className="lg:col-span-3 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h2 className="text-lg font-black text-slate-900">Extrato de Movimentações</h2></div>
-             <div className="overflow-x-auto">
-               <table className="w-full text-left text-sm text-slate-700">
-                 <thead className="bg-slate-50 text-xs text-slate-500 uppercase"><tr><th className="px-6 py-4">Data/Hora</th><th className="px-6 py-4">Tipo</th><th className="px-6 py-4">Insumo</th><th className="px-6 py-4 text-right">Qtd</th><th className="px-6 py-4">Motivo</th></tr></thead>
-                 <tbody>
-                   {movimentacoes.length === 0 && <tr><td colSpan="5" className="text-center py-8 text-slate-400">Nenhuma movimentação.</td></tr>}
-                   {movimentacoes.map(mov => (
-                     <tr key={mov.id} className="border-b border-slate-100 hover:bg-slate-50">
-                       <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">{new Date(mov.createdAt).toLocaleString('pt-BR')}</td>
-                       <td className="px-6 py-4"><span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${mov.type === 'IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{mov.type === 'IN' ? 'ENTRADA' : 'SAÍDA'}</span></td>
-                       <td className="px-6 py-4 font-bold text-slate-900">{mov.insumo?.name}</td>
-                       <td className={`px-6 py-4 text-right font-black ${mov.type === 'IN' ? 'text-emerald-600' : 'text-red-600'}`}>{mov.type === 'IN' ? '+' : '-'}{Number(mov.quantity).toFixed(3)} {mov.insumo?.unit}</td>
-                       <td className="px-6 py-4 text-xs text-slate-600">{mov.reason} {mov.xmlRef && <span className="block mt-1 text-[9px] text-blue-500 font-mono">NFe: {mov.xmlRef.substring(0, 20)}...</span>}</td>
-                     </tr>
-                   ))}
-                 </tbody>
-               </table>
-             </div>
-          </div>
-        </section>
-      )}
+
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mt-6">
+               <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h2 className="text-lg font-black text-slate-900">Extrato Detalhado de Movimentações (Item a Item)</h2></div>
+               <div className="overflow-x-auto">
+                 <table className="w-full text-left text-sm text-slate-700">
+                   <thead className="bg-slate-50 text-xs text-slate-500 uppercase"><tr><th className="px-6 py-4">Data/Hora</th><th className="px-6 py-4">Tipo</th><th className="px-6 py-4">Insumo</th><th className="px-6 py-4 text-right">Qtd</th><th className="px-6 py-4">Motivo</th></tr></thead>
+                   <tbody>
+                     {movimentacoes.length === 0 && <tr><td colSpan="5" className="text-center py-8 text-slate-400">Nenhuma movimentação.</td></tr>}
+                     {movimentacoes.map(mov => (
+                       <tr key={mov.id} className="border-b border-slate-100 hover:bg-slate-50">
+                         <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">{new Date(mov.createdAt).toLocaleString('pt-BR')}</td>
+                         <td className="px-6 py-4"><span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${mov.type === 'IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{mov.type === 'IN' ? 'ENTRADA' : 'SAÍDA'}</span></td>
+                         <td className="px-6 py-4 font-bold text-slate-900">{mov.insumo?.name}</td>
+                         <td className={`px-6 py-4 text-right font-black ${mov.type === 'IN' ? 'text-emerald-600' : 'text-red-600'}`}>{mov.type === 'IN' ? '+' : '-'}{Number(mov.quantity).toFixed(3)} {mov.insumo?.unit}</td>
+                         <td className="px-6 py-4 text-xs text-slate-600">{mov.reason}</td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+          </section>
+        );
+      })()}
 
       {editingInsumo && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
