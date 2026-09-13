@@ -1,3 +1,5 @@
+import { useState, useEffect, useCallback } from 'react';
+
 export default function ProductsTab({
   allProducts, searchProduct, setSearchProduct, filteredProducts,
   setIsCreatingProduct, isCreatingProduct, newProduct, setNewProduct, handleAddProduct,
@@ -39,7 +41,11 @@ export default function ProductsTab({
                 <tr key={product.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-6 py-4">{product.imageUrl ? <img src={product.imageUrl} alt={product.name} className="w-12 h-12 rounded-lg object-cover border border-slate-200" /> : <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] text-center text-slate-500">SEM FOTO</div>}</td>
                   <td className="px-6 py-4">
-                    <p className="font-bold text-slate-900 line-clamp-1">{product.name}</p>
+                    <p className="font-bold text-slate-900 flex items-center flex-wrap gap-2">
+                        {product.name}
+                        {product.isPizza && <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-black uppercase tracking-wider border border-amber-200">🍕 Pizza</span>}
+                        {product.isCombo && <span className="text-[9px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black uppercase tracking-wider border border-blue-200">🍔 Combo</span>}
+                    </p>
                     <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{product.category?.name || 'Sem Categoria'}</p>
                   </td>
                   <td className="px-6 py-4 font-black text-emerald-600 text-base">R$ {Number(product.price).toFixed(2)}</td>
@@ -56,7 +62,7 @@ export default function ProductsTab({
 
       {/* MODAL: CRIAR PRODUTO */}
       {isCreatingProduct && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white border border-slate-200 p-6 rounded-3xl w-full max-w-2xl shadow-2xl my-8">
             <h3 className="text-xl font-black text-slate-900 mb-4">Adicionar Novo Produto</h3>
             <form onSubmit={handleAddProduct} className="space-y-4">
@@ -64,6 +70,90 @@ export default function ProductsTab({
               <textarea required value={newProduct.description} onChange={(e) => setNewProduct({...newProduct, description: e.target.value})} placeholder="Descrição do Cardápio" rows="2" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500 resize-none"></textarea>
               <input type="url" value={newProduct.imageUrl} onChange={(e) => setNewProduct({...newProduct, imageUrl: e.target.value})} placeholder="Link Foto (URL)" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500" />
               
+              {/* 🍕 CONFIGURAÇÃO DE PIZZARIA */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-900 mb-2 cursor-pointer">
+                    <input type="checkbox" checked={newProduct.isPizza || false} onChange={(e) => setNewProduct({...newProduct, isPizza: e.target.checked, isCombo: false})} className="w-4 h-4 text-amber-500 rounded border-slate-300 focus:ring-amber-500 cursor-pointer" />
+                    🍕 Este produto é uma Pizza (Múltiplos Sabores)?
+                </label>
+                
+                {newProduct.isPizza && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-amber-50 p-4 rounded-xl border border-amber-200 animate-fade-in-up">
+                        <div>
+                            <label className="text-[10px] text-amber-800 uppercase font-bold block mb-1">Máx. de Sabores</label>
+                            <select value={newProduct.maxFlavors || 1} onChange={(e) => setNewProduct({...newProduct, maxFlavors: parseInt(e.target.value)})} className="w-full bg-white border border-amber-300 rounded-lg p-2 text-sm font-bold text-slate-800 outline-none">
+                                <option value={1}>1 Sabor</option>
+                                <option value={2}>Até 2 Sabores</option>
+                                <option value={3}>Até 3 Sabores</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-amber-800 uppercase font-bold block mb-1">Regra de Preço</label>
+                            <select value={newProduct.pricingStrategy || 'HIGHEST'} onChange={(e) => setNewProduct({...newProduct, pricingStrategy: e.target.value})} className="w-full bg-white border border-amber-300 rounded-lg p-2 text-sm font-bold text-slate-800 outline-none">
+                                <option value="HIGHEST">Pelo Maior Valor</option>
+                                <option value="AVERAGE">Pela Média (Soma/Qtd)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-amber-800 uppercase font-bold block mb-1">Mult. de Tamanho da Ficha</label>
+                            <input type="number" step="0.1" value={newProduct.sizeMultiplier !== undefined ? newProduct.sizeMultiplier : 1.0} onChange={(e) => setNewProduct({...newProduct, sizeMultiplier: parseFloat(e.target.value)})} placeholder="Ex: 1.0 ou 0.5" className="w-full bg-white border border-amber-300 rounded-lg p-2 text-sm font-bold text-slate-800 outline-none" />
+                        </div>
+                    </div>
+                )}
+              </div>
+
+              {/* 🍔 CONFIGURAÇÃO DE COMBOS ANINHADOS */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-900 mb-2 cursor-pointer">
+                    <input type="checkbox" checked={newProduct.isCombo || false} onChange={(e) => setNewProduct({...newProduct, isCombo: e.target.checked, isPizza: false})} className="w-4 h-4 text-blue-500 rounded border-slate-300 focus:ring-blue-500 cursor-pointer" />
+                    🍔🍟🥤 Este produto é um Combo (Pacote de Produtos)?
+                </label>
+                
+                {newProduct.isCombo && (
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 animate-fade-in-up space-y-3">
+                        <p className="text-[10px] text-blue-800 uppercase font-bold">Monte os itens do pacote (Sub-produtos que baixarão estoque):</p>
+                        
+                        <div className="space-y-2">
+                            {(newProduct.comboItems || []).map((item, idx) => {
+                                const pRef = allProducts.find(p => p.id === item.productId);
+                                return (
+                                    <div key={idx} className="flex justify-between items-center bg-white border border-blue-100 p-2 rounded-lg shadow-sm">
+                                        <span className="text-sm font-bold text-slate-800">{pRef?.name || 'Produto Excluído'}</span>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-1 rounded">Qtd: {item.quantity}</span>
+                                            <button type="button" onClick={() => {
+                                                const novosItems = [...(newProduct.comboItems || [])];
+                                                novosItems.splice(idx, 1);
+                                                setNewProduct({...newProduct, comboItems: novosItems});
+                                            }} className="text-red-500 hover:text-red-700 font-bold px-1">✕</button>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                        <div className="flex gap-2 items-center bg-white p-2 rounded-lg border border-blue-300 shadow-inner">
+                            <select id="new-combo-prod" className="flex-1 bg-transparent text-sm font-bold text-slate-800 outline-none">
+                                <option value="">Adicionar item ao combo...</option>
+                                {allProducts.filter(p => !p.isCombo && !p.isPizza).map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                            <input type="number" id="new-combo-qty" defaultValue="1" min="1" className="w-16 bg-slate-50 border border-slate-200 rounded text-center text-sm font-bold outline-none p-1" />
+                            <button type="button" onClick={() => {
+                                const pId = document.getElementById('new-combo-prod').value;
+                                const pQty = parseInt(document.getElementById('new-combo-qty').value);
+                                if (pId && pQty > 0) {
+                                    setNewProduct({...newProduct, comboItems: [...(newProduct.comboItems || []), { productId: pId, quantity: pQty }]});
+                                    document.getElementById('new-combo-prod').value = "";
+                                    document.getElementById('new-combo-qty').value = 1;
+                                }
+                            }} className="bg-blue-600 hover:bg-blue-700 text-white font-black px-4 py-1.5 rounded-lg transition-colors">+</button>
+                        </div>
+                    </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço Base/500g</label><input type="number" step="0.01" required value={newProduct.price} onChange={(e) => setNewProduct({...newProduct, price: e.target.value})} placeholder="Ex: 35.00" className="w-full bg-white border border-emerald-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 font-bold" /></div>
                 <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço 700g</label><input type="number" step="0.01" value={newProduct.price700g} onChange={(e) => setNewProduct({...newProduct, price700g: e.target.value})} placeholder="Opcional" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-emerald-600 focus:outline-none focus:border-emerald-500 font-bold" /></div>
@@ -118,7 +208,7 @@ export default function ProductsTab({
 
       {/* MODAL: EDITAR PRODUTO */}
       {editingProduct && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white border border-slate-200 p-6 rounded-3xl w-full max-w-2xl shadow-2xl my-8">
             <h3 className="text-xl font-black text-slate-900 mb-4">Editar Produto</h3>
             <form onSubmit={handleEditProduct} className="space-y-4">
@@ -126,6 +216,93 @@ export default function ProductsTab({
               <textarea required value={editingProduct.description} onChange={(e) => setEditingProduct({...editingProduct, description: e.target.value})} rows="2" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500 resize-none"></textarea>
               <input type="url" value={editingProduct.imageUrl || ''} onChange={(e) => setEditingProduct({...editingProduct, imageUrl: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500" />
               
+              {/* 🍕 CONFIGURAÇÃO DE PIZZARIA (EDITAR) */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-900 mb-2 cursor-pointer">
+                    <input type="checkbox" checked={editingProduct.isPizza || false} onChange={(e) => setEditingProduct({...editingProduct, isPizza: e.target.checked, isCombo: false})} className="w-4 h-4 text-amber-500 rounded border-slate-300 focus:ring-amber-500 cursor-pointer" />
+                    🍕 Este produto é uma Pizza (Múltiplos Sabores)?
+                </label>
+                
+                {editingProduct.isPizza && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-amber-50 p-4 rounded-xl border border-amber-200 animate-fade-in-up">
+                        <div>
+                            <label className="text-[10px] text-amber-800 uppercase font-bold block mb-1">Máx. de Sabores</label>
+                            <select value={editingProduct.maxFlavors || 1} onChange={(e) => setEditingProduct({...editingProduct, maxFlavors: parseInt(e.target.value)})} className="w-full bg-white border border-amber-300 rounded-lg p-2 text-sm font-bold text-slate-800 outline-none">
+                                <option value={1}>1 Sabor</option>
+                                <option value={2}>Até 2 Sabores</option>
+                                <option value={3}>Até 3 Sabores</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-amber-800 uppercase font-bold block mb-1">Regra de Preço</label>
+                            <select value={editingProduct.pricingStrategy || 'HIGHEST'} onChange={(e) => setEditingProduct({...editingProduct, pricingStrategy: e.target.value})} className="w-full bg-white border border-amber-300 rounded-lg p-2 text-sm font-bold text-slate-800 outline-none">
+                                <option value="HIGHEST">Pelo Maior Valor</option>
+                                <option value="AVERAGE">Pela Média (Soma/Qtd)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-amber-800 uppercase font-bold block mb-1">Mult. de Tamanho da Ficha</label>
+                            <input type="number" step="0.1" value={editingProduct.sizeMultiplier !== undefined ? editingProduct.sizeMultiplier : 1.0} onChange={(e) => setEditingProduct({...editingProduct, sizeMultiplier: parseFloat(e.target.value)})} placeholder="Ex: 1.0 ou 0.5" className="w-full bg-white border border-amber-300 rounded-lg p-2 text-sm font-bold text-slate-800 outline-none" />
+                        </div>
+                    </div>
+                )}
+              </div>
+
+              {/* 🍔 CONFIGURAÇÃO DE COMBOS ANINHADOS (EDITAR) */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-900 mb-2 cursor-pointer">
+                    <input type="checkbox" checked={editingProduct.isCombo || false} onChange={(e) => setEditingProduct({...editingProduct, isCombo: e.target.checked, isPizza: false})} className="w-4 h-4 text-blue-500 rounded border-slate-300 focus:ring-blue-500 cursor-pointer" />
+                    🍔🍟🥤 Este produto é um Combo (Pacote de Produtos)?
+                </label>
+                
+                {editingProduct.isCombo && (
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 animate-fade-in-up space-y-3">
+                        <p className="text-[10px] text-blue-800 uppercase font-bold">Monte os itens do pacote (Sub-produtos que baixarão estoque):</p>
+                        
+                        <div className="space-y-2">
+                            {(editingProduct.comboItems || editingProduct.comboItemsAsParent || []).map((item, idx) => {
+                                const pRef = allProducts.find(p => p.id === item.productId);
+                                return (
+                                    <div key={idx} className="flex justify-between items-center bg-white border border-blue-100 p-2 rounded-lg shadow-sm">
+                                        <span className="text-sm font-bold text-slate-800">{pRef?.name || item.product?.name || 'Produto Excluído'}</span>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-1 rounded">Qtd: {item.quantity}</span>
+                                            <button type="button" onClick={() => {
+                                                const arrayBase = editingProduct.comboItems || editingProduct.comboItemsAsParent || [];
+                                                const novosItems = [...arrayBase];
+                                                novosItems.splice(idx, 1);
+                                                setEditingProduct({...editingProduct, comboItems: novosItems, comboItemsAsParent: novosItems});
+                                            }} className="text-red-500 hover:text-red-700 font-bold px-1">✕</button>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                        <div className="flex gap-2 items-center bg-white p-2 rounded-lg border border-blue-300 shadow-inner">
+                            <select id="edit-combo-prod" className="flex-1 bg-transparent text-sm font-bold text-slate-800 outline-none">
+                                <option value="">Adicionar item ao combo...</option>
+                                {allProducts.filter(p => !p.isCombo && !p.isPizza && p.id !== editingProduct.id).map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                            <input type="number" id="edit-combo-qty" defaultValue="1" min="1" className="w-16 bg-slate-50 border border-slate-200 rounded text-center text-sm font-bold outline-none p-1" />
+                            <button type="button" onClick={() => {
+                                const pId = document.getElementById('edit-combo-prod').value;
+                                const pQty = parseInt(document.getElementById('edit-combo-qty').value);
+                                if (pId && pQty > 0) {
+                                    const arrayAtual = editingProduct.comboItems || editingProduct.comboItemsAsParent || [];
+                                    const novosItems = [...arrayAtual, { productId: pId, quantity: pQty }];
+                                    setEditingProduct({...editingProduct, comboItems: novosItems, comboItemsAsParent: novosItems});
+                                    document.getElementById('edit-combo-prod').value = "";
+                                    document.getElementById('edit-combo-qty').value = 1;
+                                }
+                            }} className="bg-blue-600 hover:bg-blue-700 text-white font-black px-4 py-1.5 rounded-lg transition-colors">+</button>
+                        </div>
+                    </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço Base/500g</label><input type="number" step="0.01" required value={editingProduct.price} onChange={(e) => setEditingProduct({...editingProduct, price: e.target.value})} className="w-full bg-white border border-emerald-300 rounded-xl p-3 text-sm text-emerald-600 font-bold focus:outline-none focus:border-emerald-500" /></div>
                 <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço 700g</label><input type="number" step="0.01" value={editingProduct.price700g || ''} onChange={(e) => setEditingProduct({...editingProduct, price700g: e.target.value})} placeholder="Opcional" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-emerald-600 font-bold focus:outline-none focus:border-emerald-500" /></div>
