@@ -521,10 +521,9 @@ function FuncionariosPortal({ storeSlug }) {
     } catch (error) {}
   };
 
-  const handleEditProduct = async (e) => {
+ const handleEditProduct = async (e) => {
     e.preventDefault();
     try {
-      // 🎯 PACOTE BLINDADO DE EDIÇÃO: Transforma "comboItemsAsParent" no "comboItems" que o backend entende
       const payload = { 
         ...editingProduct, 
         costPrice: editingProduct.costPrice ? Number(editingProduct.costPrice) : 0, 
@@ -540,10 +539,20 @@ function FuncionariosPortal({ storeSlug }) {
       };
 
       const res = await fetchWithStore(`${API_URL}/api/products/${editingProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if ((await res.json()).success) { setEditingProduct(null); fetchProducts(); fetchMenu(); }
-    } catch (error) {}
+      const data = await res.json();
+      
+      if (data.success) { 
+          setEditingProduct(null); 
+          fetchProducts(); 
+          fetchMenu(); 
+          alert("✅ Produto atualizado com sucesso!");
+      } else {
+          alert("❌ ERRO DO SERVIDOR: " + data.error + "\n\nDetalhes: " + (data.details || ''));
+      }
+    } catch (error) {
+      alert("❌ ERRO DE CONEXÃO: " + error.message);
+    }
   };
-
   const toggleProductStatus = async (product) => {
     try {
       // 🎯 PREVINE APAGAR O COMBO AO ATIVAR/DESATIVAR PRODUTO

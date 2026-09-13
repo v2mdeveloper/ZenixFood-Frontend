@@ -711,16 +711,16 @@ export default function AdminDashboard() {
     } catch (error) {}
   };
 
- const handleAddProduct = async (e) => {
+const handleAddProduct = async (e) => {
     e.preventDefault();
     if (!newProduct.categoryId) return alert("Crie uma categoria primeiro!");
     try {
-      // 🎯 PACOTE BLINDADO: Garante que os dados da Pizza e do Combo vão no formato exato que o Backend exige
+      // 🎯 PACOTE BLINDADO DE CRIAÇÃO (Inclui suporte completo a Pizzas e Combos)
       const payload = { 
         ...newProduct, 
         costPrice: newProduct.costPrice ? Number(newProduct.costPrice) : 0, 
         groupId: newProduct.groupId || null,
-        
+
         isPizza: Boolean(newProduct.isPizza),
         maxFlavors: newProduct.maxFlavors ? Number(newProduct.maxFlavors) : 1,
         pricingStrategy: newProduct.pricingStrategy || 'HIGHEST',
@@ -731,21 +731,29 @@ export default function AdminDashboard() {
       };
 
       const res = await fetchWithStore(`${API_URL}/api/products`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if ((await res.json()).success) {
-        // Zera o formulário incluindo as novas variáveis de Pizza e Combo
+      const data = await res.json();
+
+      if (data.success) {
+        // Reseta o formulário limpando também as opções de pizza e combo
         setNewProduct({ 
           name: '', description: '', price: '', price700g: '', price1kg: '', costPrice: '', categoryId: menu[0]?.id || '', imageUrl: '', regraFiscalId: '', ncm: '', ean: '', groupId: '',
-          isPizza: false, maxFlavors: 1, pricingStrategy: 'HIGHEST', sizeMultiplier: 1.0, isCombo: false, comboItems: []
+          isPizza: false, maxFlavors: 1, pricingStrategy: 'HIGHEST', sizeMultiplier: 1.0, isCombo: false, comboItems: [] 
         });
-        setIsCreatingProduct(false); fetchProducts(); fetchMenu(); 
+        setIsCreatingProduct(false); 
+        fetchProducts(); 
+        fetchMenu(); 
+        alert("✅ Produto criado com sucesso!");
+      } else {
+        alert("❌ Erro ao criar produto: " + (data.error || 'Erro desconhecido'));
       }
-    } catch (error) {}
+    } catch (error) {
+      alert("❌ Erro de conexão: " + error.message);
+    }
   };
 
   const handleEditProduct = async (e) => {
     e.preventDefault();
     try {
-      // 🎯 PACOTE BLINDADO DE EDIÇÃO: Transforma "comboItemsAsParent" no "comboItems" que o backend entende
       const payload = { 
         ...editingProduct, 
         costPrice: editingProduct.costPrice ? Number(editingProduct.costPrice) : 0, 
@@ -761,19 +769,24 @@ export default function AdminDashboard() {
       };
 
       const res = await fetchWithStore(`${API_URL}/api/products/${editingProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if ((await res.json()).success) { setEditingProduct(null); fetchProducts(); fetchMenu(); }
-    } catch (error) {}
+      const data = await res.json();
+      
+      if (data.success) { 
+          setEditingProduct(null); 
+          fetchProducts(); 
+          fetchMenu(); 
+          alert("✅ Produto atualizado com sucesso!");
+      } else {
+          alert("❌ ERRO DO SERVIDOR: " + data.error + "\n\nDetalhes: " + (data.details || ''));
+      }
+    } catch (error) {
+      alert("❌ ERRO DE CONEXÃO: " + error.message);
+    }
   };
 
   const toggleProductStatus = async (product) => {
     try {
-      // 🎯 PREVINE APAGAR O COMBO AO ATIVAR/DESATIVAR PRODUTO
-      const payload = { 
-        ...product, 
-        isActive: !product.isActive,
-        comboItems: product.comboItems || product.comboItemsAsParent || []
-      };
-      const res = await fetchWithStore(`${API_URL}/api/products/${product.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetchWithStore(`${API_URL}/api/products/${product.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...product, isActive: !product.isActive }) });
       if ((await res.json()).success) { fetchProducts(); fetchMenu(); }
     } catch (error) {}
   };
