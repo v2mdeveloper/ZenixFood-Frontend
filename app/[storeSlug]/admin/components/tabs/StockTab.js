@@ -21,7 +21,6 @@ export default function StockTab({
   const [isAnalyzingFinance, setIsAnalyzingFinance] = useState(false);
   const [financeAnalysis, setFinanceAnalysis] = useState(null);
 
-  //Helper local para garantir o envio do x-store-id e Token JWT
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
@@ -34,17 +33,15 @@ export default function StockTab({
 
     const response = await fetch(url, { ...options, headers });
 
-    //SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
-        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
+        window.location.href = '/bloqueado'; 
       }
     }
 
     return response;
   };
 
-  // Função robusta para puxar receitas
   const fetchRecipes = useCallback(async () => {
     setLoadingRecipes(true);
     try {
@@ -59,7 +56,6 @@ export default function StockTab({
     setLoadingRecipes(false);
   }, [API_URL]);
 
-  // Sempre que a aba mudar para "receitas", puxa a lista!
   useEffect(() => {
     if (estoqueSubTab === 'receitas') {
       fetchRecipes();
@@ -91,7 +87,7 @@ export default function StockTab({
       if (data.success) {
         alert(`🎉 Receita Aprovada e Salva!\n\n${data.insumosCriados} novos insumos foram cadastrados no estoque!`);
         setAiResult(null); setAiPrompt('');
-        fetchRecipes(); // Atualiza a lista automaticamente após salvar!
+        fetchRecipes(); 
       } else alert(data.error);
     } catch (e) { alert('Erro ao salvar.'); }
   };
@@ -295,38 +291,23 @@ export default function StockTab({
              </div>
           </div>
 
+          {/* 🎯 CORREÇÃO: TELA DA IA ADAPTADA PARA LER QUALQUER TEXTO PERFEITAMENTE */}
           {financeAnalysis && (
-             <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl mb-8 animate-fade-in-up">
+             <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl mb-8 animate-fade-in-up relative">
+                <button 
+                   onClick={() => setFinanceAnalysis(null)} 
+                   className="absolute top-4 right-4 bg-amber-200 text-amber-800 hover:bg-amber-300 w-8 h-8 rounded-full font-bold flex items-center justify-center transition-colors"
+                >
+                   ✕
+                </button>
                 <div className="flex items-center gap-3 mb-4">
                    <span className="text-3xl">🧠</span>
                    <h3 className="text-xl font-black text-amber-900">Análise do Conselheiro IA</h3>
                 </div>
                 
-                <p className="text-amber-800 text-sm leading-relaxed mb-6 italic border-l-4 border-amber-400 pl-4">
-                  "{financeAnalysis.resumo}"
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <div className="bg-white p-4 rounded-xl shadow-sm border border-red-100">
-                      <h4 className="font-bold text-red-600 mb-3 flex items-center gap-2">⚠️ Alertas Vermelhos</h4>
-                      <ul className="space-y-2">
-                         {financeAnalysis.alertas?.map((alerta, idx) => (
-                           <li key={idx} className="text-sm text-slate-700 flex items-start gap-2">
-                             <span className="text-red-500 font-bold">•</span> <span>{alerta}</span>
-                           </li>
-                         ))}
-                      </ul>
-                   </div>
-                   
-                   <div className="bg-white p-4 rounded-xl shadow-sm border border-emerald-100">
-                      <h4 className="font-bold text-emerald-600 mb-3 flex items-center gap-2">💡 Oportunidades de Ouro</h4>
-                      <ul className="space-y-2">
-                         {financeAnalysis.oportunidades?.map((dica, idx) => (
-                           <li key={idx} className="text-sm text-slate-700 flex items-start gap-2">
-                             <span className="text-emerald-500 font-bold">✨</span> <span>{dica}</span>
-                           </li>
-                         ))}
-                      </ul>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-amber-100">
+                   <div className="text-slate-800 text-sm leading-relaxed whitespace-pre-wrap font-medium">
+                      {typeof financeAnalysis === 'string' ? financeAnalysis : financeAnalysis.resumo || "Não foi possível carregar a análise. Tente novamente."}
                    </div>
                 </div>
              </div>
