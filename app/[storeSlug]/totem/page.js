@@ -126,7 +126,7 @@ export default function TotemModerno() {
     setCart(prev => prev.map(item => item.id === id ? { ...item, quantity: item.quantity + delta } : item).filter(i => i.quantity > 0));
   };
 
-  // 🎯 FUNÇÃO QUE ENVIA O PEDIDO PARA A COZINHA E TELA DO CLIENTE
+  //FUNÇÃO QUE ENVIA O PEDIDO PARA A COZINHA E TELA DO CLIENTE
   const handleFinalizeOrder = async () => {
     if (!customerName.trim() || !paymentMethod) return alert("Preencha seu nome e a forma de pagamento.");
     setIsSubmitting(true);
@@ -146,10 +146,11 @@ export default function TotemModerno() {
       const data = await res.json();
       
       if (data.success) {
-        setOrderSuccessData(data.order); // Salva o número gerado
+        setOrderSuccessData(data.order);
         setCart([]); setCustomerName(''); setPaymentMethod(''); setIsCheckoutOpen(false);
       } else {
-        alert("Erro ao realizar o pedido.");
+        // REJEIÇÃO EXATA DO BANCO DE DADOS NA TELA
+        alert(`Erro do Banco de Dados:\n\n${data.details || data.error}`);
       }
     } catch (e) { alert("Erro de conexão."); }
     setIsSubmitting(false);
