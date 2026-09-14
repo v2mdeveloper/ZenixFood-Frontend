@@ -165,7 +165,7 @@ export default function KdsClientePage() {
     return true;
   });
 
-  // 🎯 LÓGICA DE ANÚNCIO ATUALIZADA PARA USAR A VOZ ESCOLHIDA
+  // 🎯 LÓGICA DE ANÚNCIO ATUALIZADA PARA USAR A VOZ ESCOLHIDA (COM CORREÇÃO DO SHORTID)
   useEffect(() => {
     readyOrders.forEach(order => {
       if (!announcedOrders.current.has(order.id)) {
@@ -173,8 +173,8 @@ export default function KdsClientePage() {
         
         if ('speechSynthesis' in window) {
           const nomeCliente = extractFirstName(order);
-          // Adiciona espaços entre as letras do Short ID para o robô soletrar pausadamente
-          const shortIdFalado = order.shortId.split('').join(' '); 
+          // CORREÇÃO AQUI: Garante que o shortId é convertido para String antes de fazer o split
+          const shortIdFalado = String(order.shortId || '').split('').join(' '); 
           const text = `Pedido ${shortIdFalado}, ${nomeCliente}. Pronto para retirada.`;
           
           const utterance = new SpeechSynthesisUtterance(text);
