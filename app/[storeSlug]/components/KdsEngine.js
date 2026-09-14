@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 
-//Renderizador Inteligente (Lê as frações do banco, mantém o nome original [Grande/Broto] e formata como lista)
+// Renderizador Inteligente (Lê as frações do banco, mantém o nome original [Grande/Broto] e formata como lista)
 const FormattedItemName = ({ item, baseClassName }) => {
   const quantity = item.quantity || 1;
   const baseProductName = item.product?.name || item.name || 'Item Sem Nome';
@@ -67,7 +67,7 @@ const FormattedItemName = ({ item, baseClassName }) => {
   );
 };
 
-//COMPONENTE PARA EXIBIR COMBOS E OBSERVAÇÕES
+// COMPONENTE PARA EXIBIR COMBOS E OBSERVAÇÕES
 const ItemExtras = ({ item }) => {
   let comboItems = [];
   if (item.comboItems) {
@@ -355,8 +355,19 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                      <span className="font-black text-slate-800 text-base">#{order.shortId}</span>
                      <button onClick={(e) => { e.stopPropagation(); triggerManualPrint(order); }} className="text-slate-400 hover:text-blue-500 text-lg cursor-pointer">🖨️</button>
                   </div>
-                  <p className="text-xs font-bold text-slate-700">{extractName(order)}</p>
-                  <p className="text-xs font-black text-emerald-600 mt-1">R$ {Number(order.total).toFixed(2)}</p>
+                  <p className="text-xs font-bold text-slate-700 mb-2">Cliente: {extractName(order)}</p>
+
+                  {/* ITENS DO PEDIDO PENDENTE */}
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-2 mb-3 shadow-inner">
+                    {order.items.map(i => (
+                      <div key={i.id} className="border-b border-slate-100 last:border-0 pb-1 last:pb-0">
+                        <FormattedItemName item={i} baseClassName="text-xs font-bold text-slate-800" />
+                        <ItemExtras item={i} />
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-xs font-black text-emerald-600 mt-1 text-right">R$ {Number(order.total).toFixed(2)}</p>
                   <button onClick={(e) => { e.stopPropagation(); updateOrderStatus(order.id, 'CANCELED'); }} className="mt-3 w-full bg-red-100 hover:bg-red-200 text-red-700 py-1.5 rounded-lg text-xs font-black cursor-pointer transition-colors">
                     Cancelar Pedido
                   </button>
@@ -386,10 +397,10 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                      <span className="font-black text-slate-800 text-base">#{order.shortId}</span>
                      <button onClick={(e) => { e.stopPropagation(); triggerManualPrint(order); }} className="text-slate-400 hover:text-blue-500 text-lg cursor-pointer">🖨️</button>
                   </div>
-                  <p className="text-xs font-bold text-slate-700">{extractName(order)}</p>
+                  <p className="text-xs font-bold text-slate-700 mb-2">Cliente: {extractName(order)}</p>
                   
-                  {/* Itens do Pedido Agendado */}
-                  <div className="my-2 space-y-2 bg-white p-2 rounded-lg border border-slate-100">
+                  {/* ITENS DO PEDIDO AGENDADO */}
+                  <div className="my-2 space-y-2 bg-white p-2 rounded-lg border border-slate-100 shadow-inner">
                     {order.items.map(i => (
                       <div key={i.id} className="border-b border-slate-50 last:border-0 pb-1 last:pb-0">
                         <FormattedItemName item={i} baseClassName="text-xs font-bold text-slate-800" />
@@ -440,7 +451,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   </div>
                   <p className="text-xs font-bold text-slate-700 mb-2">Cliente: {extractName(order)}</p>
                   
-                  {/* Itens Delivery em Preparo */}
+                  {/* ITENS DELIVERY EM PREPARO */}
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-2 mb-3 shadow-inner">
                     {order.items.map(i => (
                       <div key={i.id} className="border-b border-slate-100 last:border-0 pb-1 last:pb-0">
@@ -517,8 +528,19 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                    <span className="font-black text-slate-900 text-base">#{order.shortId}</span>
                    <button onClick={(e) => { e.stopPropagation(); triggerManualPrint(order); }} className="text-slate-400 hover:text-blue-500 text-lg cursor-pointer">🖨️</button>
                 </div>
-                <p className="text-xs font-bold text-slate-700 mt-1">Cliente: {extractName(order)}</p>
-                <p className="text-[10px] text-emerald-700 font-black uppercase mt-1">Disponível na Expedição e Rotas</p>
+                <p className="text-xs font-bold text-slate-700 mb-2">Cliente: {extractName(order)}</p>
+
+                {/* ITENS AGUARDANDO ROTA (EXPEDIÇÃO) */}
+                <div className="bg-white/70 p-2.5 rounded-lg border border-emerald-100 space-y-2 mb-2 shadow-inner">
+                  {order.items.map(i => (
+                    <div key={i.id} className="border-b border-emerald-50 last:border-0 pb-1 last:pb-0">
+                      <FormattedItemName item={i} baseClassName="text-xs font-bold text-slate-800" />
+                      <ItemExtras item={i} />
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-[10px] text-emerald-700 font-black uppercase mt-1 text-center bg-emerald-100/50 py-1 rounded">Disponível na Expedição</p>
               </div>
             ))}
 
@@ -560,7 +582,17 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                      <span className="font-black text-slate-900 text-base">#{order.shortId}</span>
                      <button onClick={(e) => { e.stopPropagation(); triggerManualPrint(order); }} className="text-slate-400 hover:text-blue-500 text-lg cursor-pointer">🖨️</button>
                   </div>
-                  <p className="text-xs font-bold text-slate-700">Cliente: {extractName(order)}</p>
+                  <p className="text-xs font-bold text-slate-700 mb-1">Cliente: {extractName(order)}</p>
+
+                  {/* ITENS EM ROTA */}
+                  <div className="bg-white/70 p-2.5 rounded-lg border border-blue-100 space-y-2 mb-1 shadow-inner">
+                    {order.items.map(i => (
+                      <div key={i.id} className="border-b border-blue-50 last:border-0 pb-1 last:pb-0">
+                        <FormattedItemName item={i} baseClassName="text-xs font-bold text-slate-800" />
+                        <ItemExtras item={i} />
+                      </div>
+                    ))}
+                  </div>
                   
                   <div className="flex gap-2 mt-2">
                      <button onClick={(e) => { e.stopPropagation(); updateOrderStatus(order.id, 'DELIVERED'); }} className="flex-1 bg-slate-800 hover:bg-black text-white py-2 rounded-lg text-[10px] font-black uppercase shadow-sm cursor-pointer transition-colors">
@@ -592,7 +624,14 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                    <span className="font-bold text-slate-800 text-sm">#{order.shortId} - Entregue 🏠</span>
                    <button onClick={(e) => { e.stopPropagation(); triggerManualPrint(order); }} className="text-slate-400 hover:text-blue-500 text-sm cursor-pointer">🖨️</button>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-0.5">{extractName(order)}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5 mb-2">{extractName(order)}</p>
+                
+                {/* RESUMO DOS ITENS ENTREGUES */}
+                <div className="space-y-0.5 pl-1 border-l-2 border-slate-200">
+                  {order.items.map(i => (
+                    <FormattedItemName key={i.id} item={i} baseClassName="text-[9px] text-slate-500 font-bold" />
+                  ))}
+                </div>
               </div>
             ))}
 
