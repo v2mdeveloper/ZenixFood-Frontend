@@ -2,23 +2,38 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 
-// Renderizador Inteligente (Lê as frações do banco, mantém o nome original [Grande/Broto] e formata como lista)
+// 🎯 Renderizador Inteligente "Rastreador Agressivo" (Busca sabores em qualquer campo possível)
 const FormattedItemName = ({ item, baseClassName }) => {
   const quantity = item.quantity || 1;
   const baseProductName = item.product?.name || item.name || 'Item Sem Nome';
-  const cartName = item.name || ''; // Onde fica salva a string "3 Sabores: X / Y" que vem do carrinho
+  const cartName = item.name || ''; 
 
-  // 1. Tenta extrair os sabores REAIS salvos no JSON do pedido
-  let flavors = [];
-  if (item.flavors) {
-    try { flavors = typeof item.flavors === 'string' ? JSON.parse(item.flavors) : item.flavors; } catch (e) {}
+  // 1. FORÇA O EMOJI DA PIZZA MESMO SE NÃO ACHAR A LISTA DE SABORES
+  let displayTitle = baseProductName;
+  const isPizza = item.isPizza || item.product?.isPizza || displayTitle.toUpperCase().includes('PIZZA') || displayTitle.toUpperCase().includes('SABORES');
+  
+  if (isPizza && !displayTitle.includes('🍕')) {
+    displayTitle = `🍕 ${displayTitle}`;
   }
 
-  // Se tiver array de sabores JSON no banco, formata com o Nome Pai
-  if (flavors && flavors.length > 0) {
-    let displayTitle = baseProductName;
-    if (!displayTitle.includes('🍕')) displayTitle = `🍕 ${displayTitle}`;
+  // 2. BUSCA AGRESSIVA: Vasculha todos os lugares possíveis onde o Delivery pode ter escondido os sabores
+  let flavors = [];
+  const possibleFields = [item.flavors, item.sabores, item.subItems, item.options, item.extras, item.adicionais];
+  
+  for (let field of possibleFields) {
+    if (field) {
+      try { 
+        const parsed = typeof field === 'string' ? JSON.parse(field) : field; 
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          flavors = parsed;
+          break; // Achou! Para a busca.
+        }
+      } catch (e) {}
+    }
+  }
 
+  // 3. SE ACHOU A LISTA: Renderiza as bolinhas uma embaixo da outra
+  if (flavors.length > 0) {
     return (
       <div className={`flex flex-col w-full ${baseClassName}`}>
         <p className="flex items-start gap-1">
@@ -26,43 +41,40 @@ const FormattedItemName = ({ item, baseClassName }) => {
           <span>{displayTitle}:</span>
         </p>
         <ul className="pl-6 mt-1 text-[11px] font-bold text-slate-700 list-disc space-y-0.5">
-          {flavors.map((flavor, i) => (
-            <li key={i}>{flavor.name || flavor.productName || 'Sabor'}</li>
-          ))}
+          {flavors.map((flavor, i) => {
+             const fName = typeof flavor === 'string' ? flavor : (flavor.name || flavor.productName || flavor.descricao || 'Sabor');
+             return <li key={i}>{fName}</li>
+          })}
         </ul>
       </div>
     );
   }
 
-  // 2. Fallback: Captura a string de sabores concatenados gerada pelo front-end ("3 Sabores: Sabor 1 / Sabor 2")
-  if (cartName.includes(':') && cartName.includes('/')) {
+  // 4. FALLBACK: String concatenada do Carrinho ("3 Sabores: Sabor 1 / Sabor 2")
+  if (cartName.includes(':') && (cartName.includes('/') || cartName.includes(','))) {
     const parts = cartName.split(':');
     if (parts.length > 1) {
-      let displayTitle = baseProductName;
-      if (!displayTitle.includes('🍕')) displayTitle = `🍕 ${displayTitle}`;
-      
-      const stringFlavors = parts[1].split('/').map(f => f.trim()).filter(f => f);
-      
-      return (
-        <div className={`flex flex-col w-full ${baseClassName}`}>
-          <p className="flex items-start gap-1">
-            <span className="text-amber-600 font-black mr-1">{quantity}x</span> 
-            <span>{displayTitle}:</span>
-          </p>
-          <ul className="pl-6 mt-1 text-[11px] font-bold text-slate-700 list-disc space-y-0.5">
-            {stringFlavors.map((flavor, i) => (
-              <li key={i}>{flavor}</li>
-            ))}
-          </ul>
-        </div>
-      );
+      const stringFlavors = parts[1].split(/[\/,]+/).map(f => f.trim()).filter(f => f);
+      if (stringFlavors.length > 0) {
+          return (
+            <div className={`flex flex-col w-full ${baseClassName}`}>
+              <p className="flex items-start gap-1">
+                <span className="text-amber-600 font-black mr-1">{quantity}x</span> 
+                <span>{displayTitle}:</span>
+              </p>
+              <ul className="pl-6 mt-1 text-[11px] font-bold text-slate-700 list-disc space-y-0.5">
+                {stringFlavors.map((flavor, i) => <li key={i}>{flavor}</li>)}
+              </ul>
+            </div>
+          );
+      }
     }
   }
 
-  // 3. Renderização Padrão para Produtos Comuns (Lanches, Bebidas, Pizzas de 1 sabor sem quebra, etc)
+  // 5. RENDERIZAÇÃO PADRÃO: Caso o pedido realmente tenha vindo vazio de sabores do Site de Delivery
   return (
     <p className={baseClassName}>
-      <span className="text-amber-600 font-black mr-1">{quantity}x</span> {baseProductName}
+      <span className="text-amber-600 font-black mr-1">{quantity}x</span> {displayTitle}
     </p>
   );
 };
@@ -528,7 +540,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                    <span className="font-black text-slate-900 text-base">#{order.shortId}</span>
                    <button onClick={(e) => { e.stopPropagation(); triggerManualPrint(order); }} className="text-slate-400 hover:text-blue-500 text-lg cursor-pointer">🖨️</button>
                 </div>
-                <p className="text-xs font-bold text-slate-700 mb-2">Cliente: {extractName(order)}</p>
+                <p className="text-xs font-bold text-slate-700 mt-1">Cliente: {extractName(order)}</p>
 
                 {/* ITENS AGUARDANDO ROTA (EXPEDIÇÃO) */}
                 <div className="bg-white/70 p-2.5 rounded-lg border border-emerald-100 space-y-2 mb-2 shadow-inner">
