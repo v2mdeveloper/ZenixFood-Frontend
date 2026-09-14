@@ -46,9 +46,16 @@ export default function ContasTab({ API_URL }) {
         const data = await res.json();
         const contasAtualizadas = data.map((c) => {
           let statusAtual = c.status;
+          
+          // 🎯 NORMALIZADOR DE STATUS (Corrige divergências de Banco de Dados vs Interface)
+          if (statusAtual === "PAID" || statusAtual === "PAGO") statusAtual = "PAGA";
+          if (statusAtual === "PENDING") statusAtual = "PENDENTE";
+
+          // Lógica de atraso
           if (statusAtual === "PENDENTE" && new Date(c.dataVencimento) < new Date(new Date().setHours(0,0,0,0))) {
             statusAtual = "ATRASADA";
           }
+          
           return { ...c, status: statusAtual };
         });
         setContas(contasAtualizadas);
