@@ -11,13 +11,13 @@ export default function ProductsTab({
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState({ total: 0, current: 0, errors: [] });
+  const [importProgress, setImportProgress] = useState({ total: 0, current: 0, errors: [], statusText: '' });
 
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
 
-  //Função para baixar o Modelo de Planilha com Pizzas e Combos
+  // Função para baixar o Modelo de Planilha com Pizzas e Combos
   const downloadCsvTemplate = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
       + "Categoria,Produto,Descricao,Preco,E_Pizza(S/N),Max_Sabores,Mult_Tamanho,E_Combo(S/N)\n"
@@ -35,22 +35,21 @@ export default function ProductsTab({
     document.body.removeChild(link);
   };
 
-  //Função que processa e envia a Planilha para o Banco de Dados
+  // 🚀 Função que processa a Planilha, CRIA CATEGORIAS e envia para o Banco
   const handleProcessImport = async () => {
     if (!importFile) return alert("Selecione um arquivo CSV primeiro!");
     setIsImporting(true);
+    setImportProgress({ total: 0, current: 0, errors: [], statusText: 'Lendo arquivo...' });
 
     const reader = new FileReader();
     reader.onload = async (e) => {
       const text = e.target.result;
-      // Separa as linhas ignorando linhas vazias
       const rows = text.split('\n').filter(row => row.trim() !== '');
       if (rows.length < 2) {
         setIsImporting(false);
         return alert("O arquivo parece estar vazio ou sem produtos.");
       }
 
-      // Separa as colunas preservando vírgulas dentro de aspas
       const splitRegex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
       const headers = rows[0].split(splitRegex).map(h => h.trim().toLowerCase());
       
@@ -63,19 +62,61 @@ export default function ProductsTab({
       const multIdx = headers.findIndex(h => h.includes('mult'));
       const comboIdx = headers.findIndex(h => h.includes('combo'));
 
+      const cleanText = (str) => str ? str.replace(/^"|"$/g, '').trim() : '';
+
+      const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
+      const storeId = window.location.pathname.split('/')[1];
+
+      // ==============================================================
+      // 1️⃣ ETAPA DE INTELIGÊNCIA: VERIFICAR E CRIAR CATEGORIAS FALTANTES
+      // ==============================================================
+      setImportProgress(prev => ({ ...prev, statusText: 'Verificando categorias...' }));
+      
+      const uniqueCatNames = [...new Set(rows.slice(1).map(row => {
+          const cols = row.split(splitRegex);
+          return cols[catIdx] ? cleanText(cols[catIdx]) : '';
+      }).filter(Boolean))];
+
+      let updatedMenu = [...menu];
+      let createdAnyCat = false;
+
+      for (const catName of uniqueCatNames) {
+          const exists = updatedMenu.find(c => c.name.toLowerCase() === catName.toLowerCase());
+          if (!exists) {
+              try {
+                  await fetch(`${API_URL}/api/categories`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'x-loja-slug': storeId },
+                      body: JSON.stringify({ name: catName, isDrink: false })
+                  });
+                  createdAnyCat = true;
+              } catch (err) { console.error("Erro ao criar categoria automática:", err); }
+          }
+      }
+
+      // Se o robô criou categorias novas, buscamos o menu atualizado
+      if (createdAnyCat) {
+          try {
+              const menuRes = await fetch(`${API_URL}/api/menu?_=${Date.now()}`, {
+                  headers: { 'Authorization': `Bearer ${token}`, 'x-loja-slug': storeId }
+              });
+              if (menuRes.ok) updatedMenu = await menuRes.json();
+          } catch(err) { console.error("Erro ao recarregar menu"); }
+      }
+
+      // ==============================================================
+      // 2️⃣ ETAPA: PREPARAR OS PRODUTOS VINCULANDO AOS IDs CORRETOS
+      // ==============================================================
+      setImportProgress(prev => ({ ...prev, statusText: 'Preparando produtos...' }));
       const productsToImport = [];
 
       for (let i = 1; i < rows.length; i++) {
         const columns = rows[i].split(splitRegex);
         if (!columns[nameIdx]) continue;
 
-        // Limpa as aspas extras de textos com vírgula
-        const cleanText = (str) => str ? str.replace(/^"|"$/g, '').trim() : '';
-
-        // Tenta achar a categoria pelo nome digitado na planilha. Se não achar, vincula à primeira existente
         const rowCat = cleanText(columns[catIdx]);
-        const matchedCat = menu.find(c => c.name.toLowerCase() === rowCat.toLowerCase());
-        const categoryId = matchedCat ? matchedCat.id : (menu[0]?.id || '');
+        const matchedCat = updatedMenu.find(c => c.name.toLowerCase() === rowCat.toLowerCase());
+        const categoryId = matchedCat ? matchedCat.id : (updatedMenu[0]?.id || '');
 
         const isPizzaVal = cleanText(columns[pizzaIdx]).toUpperCase();
         const isComboVal = comboIdx >= 0 ? cleanText(columns[comboIdx]).toUpperCase() : 'N';
@@ -88,24 +129,24 @@ export default function ProductsTab({
           description: cleanText(columns[descIdx]),
           price: Number(cleanText(columns[priceIdx]).replace(',', '.') || 0),
           categoryId: categoryId,
-          isPizza: isPizza && !isCombo, // Previne que seja Pizza e Combo ao mesmo tempo
+          isPizza: isPizza && !isCombo,
           maxFlavors: isPizza ? Number(cleanText(columns[saboresIdx]) || 1) : 1,
           sizeMultiplier: isPizza ? Number(cleanText(columns[multIdx]).replace(',', '.') || 1.0) : 1.0,
           isCombo: isCombo && !isPizza,
-          comboItems: [], // Deixamos vazio para vincular os IDs reais de forma segura depois no Painel
+          comboItems: [], 
           isActive: true,
           pricingStrategy: 'HIGHEST'
         });
       }
 
-      setImportProgress({ total: productsToImport.length, current: 0, errors: [] });
+      // ==============================================================
+      // 3️⃣ ETAPA: SALVAR NO BANCO DE DADOS
+      // ==============================================================
+      setImportProgress({ total: productsToImport.length, current: 0, errors: [], statusText: 'Salvando no banco de dados...' });
       
-      const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
-      const storeId = window.location.pathname.split('/')[1];
       let currentCount = 0;
       let errorList = [];
 
-      // Envia os produtos 1 por 1 para o Backend
       for (const prod of productsToImport) {
         try {
           const res = await fetch(`${API_URL}/api/products`, {
@@ -122,15 +163,14 @@ export default function ProductsTab({
           errorList.push(prod.name);
         }
         currentCount++;
-        setImportProgress({ total: productsToImport.length, current: currentCount, errors: errorList });
+        setImportProgress(prev => ({ ...prev, current: currentCount, errors: errorList }));
       }
 
       setIsImporting(false);
-      alert(`✅ Importação Concluída!\n\n${currentCount - errorList.length} Produtos salvos com sucesso.\n${errorList.length} Erros.`);
+      alert(`✅ Importação Concluída!\n\n${currentCount - errorList.length} Produtos salvos com sucesso.\nCategorias ajustadas automaticamente.\n${errorList.length} Erros.`);
       setShowImportModal(false);
       setImportFile(null);
       
-      // Recarrega a página para puxar todos os novos produtos do banco
       window.location.reload();
     };
 
@@ -149,7 +189,6 @@ export default function ProductsTab({
           <div className="flex w-full md:w-auto gap-3">
             <input type="text" placeholder="Buscar produto..." value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} className="w-full md:w-56 bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500" />
             
-            {/* BOTÃO DE IMPORTAÇÃO */}
             <button onClick={() => setShowImportModal(true)} className="bg-slate-800 hover:bg-slate-900 text-white font-black px-5 py-3 rounded-xl whitespace-nowrap transition-all shadow-sm flex items-center gap-2">
               <span>📥</span> Planilha
             </button>
@@ -162,6 +201,8 @@ export default function ProductsTab({
             <thead className="text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
               <tr>
                 <th className="px-6 py-4 font-bold">Foto</th>
+                {/* 🎯 NOVA COLUNA CÓDIGO */}
+                <th className="px-6 py-4 font-bold">Código</th>
                 <th className="px-6 py-4 font-bold">Produto</th>
                 <th className="px-6 py-4 font-bold">Preço Base</th>
                 <th className="px-6 py-4 font-bold">Custo Un.</th>
@@ -174,10 +215,20 @@ export default function ProductsTab({
               {filteredProducts.map(product => {
                 const cmv = calculateCmv(product.costPrice, product.price);
                 const cmvColor = getCmvColor(cmv);
+                // Gera o código amigável cortando os últimos 6 caracteres do ID
+                const friendlyCode = product.id ? product.id.slice(-6).toUpperCase() : '000000';
                 
                 return (
                 <tr key={product.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-6 py-4">{product.imageUrl ? <img src={product.imageUrl} alt={product.name} className="w-12 h-12 rounded-lg object-cover border border-slate-200" /> : <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] text-center text-slate-500">SEM FOTO</div>}</td>
+                  
+                  {/* 🎯 EXIBIÇÃO DO CÓDIGO AMIGÁVEL */}
+                  <td className="px-6 py-4">
+                    <span className="font-mono text-xs font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
+                      #{friendlyCode}
+                    </span>
+                  </td>
+
                   <td className="px-6 py-4">
                     <p className="font-bold text-slate-900 flex items-center flex-wrap gap-2">
                         {product.name}
@@ -213,7 +264,7 @@ export default function ProductsTab({
         </div>
       </main>
 
-      {/*MODAL DE IMPORTAÇÃO DE PLANILHA */}
+      {/* 🚀 MODAL DE IMPORTAÇÃO DE PLANILHA */}
       {showImportModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-8 rounded-3xl w-full max-w-xl shadow-2xl animate-fade-in-up text-center">
@@ -251,11 +302,12 @@ export default function ProductsTab({
             ) : (
               <div className="py-8">
                 <span className="text-6xl animate-bounce block mb-4">🚀</span>
-                <h4 className="text-lg font-black text-slate-800 mb-2">Cadastrando Produtos...</h4>
+                <h4 className="text-lg font-black text-slate-800 mb-1">{importProgress.statusText}</h4>
+                <p className="text-xs text-slate-500 font-bold mb-3">Por favor, não feche esta janela.</p>
                 <div className="w-full bg-slate-200 rounded-full h-4 mb-2 overflow-hidden">
-                  <div className="bg-emerald-500 h-4 transition-all duration-300" style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}></div>
+                  <div className="bg-emerald-500 h-4 transition-all duration-300" style={{ width: `${(importProgress.current / (importProgress.total || 1)) * 100}%` }}></div>
                 </div>
-                <p className="text-sm font-bold text-slate-600">{importProgress.current} de {importProgress.total} processados</p>
+                {importProgress.total > 0 && <p className="text-sm font-bold text-slate-600">{importProgress.current} de {importProgress.total} processados</p>}
                 {importProgress.errors.length > 0 && <p className="text-xs text-red-500 font-bold mt-2">{importProgress.errors.length} erro(s) encontrado(s)</p>}
               </div>
             )}
@@ -306,7 +358,7 @@ export default function ProductsTab({
                 )}
               </div>
 
-              {/*CONFIGURAÇÃO DE COMBOS ANINHADOS */}
+              {/* 🍔 CONFIGURAÇÃO DE COMBOS ANINHADOS */}
               <div className="pt-2 border-t border-slate-100">
                 <label className="flex items-center gap-2 text-sm font-bold text-slate-900 mb-2 cursor-pointer">
                     <input type="checkbox" checked={newProduct.isCombo || false} onChange={(e) => setNewProduct({...newProduct, isCombo: e.target.checked, isPizza: false})} className="w-4 h-4 text-blue-500 rounded border-slate-300 focus:ring-blue-500 cursor-pointer" />
@@ -339,7 +391,8 @@ export default function ProductsTab({
                         <div className="flex gap-2 items-center bg-white p-2 rounded-lg border border-blue-300 shadow-inner">
                             <select id="new-combo-prod" className="flex-1 bg-transparent text-sm font-bold text-slate-800 outline-none">
                                 <option value="">Adicionar item ao combo...</option>
-                                {allProducts.filter(p => !p.isCombo && !p.isPizza).map(p => (
+                                {/* 🎯 FILTRO CORRIGIDO: Agora permite adicionar Pizzas nos Combos (apenas remove outros combos) */}
+                                {allProducts.filter(p => !p.isCombo).map(p => (
                                     <option key={p.id} value={p.id}>{p.name}</option>
                                 ))}
                             </select>
@@ -481,7 +534,8 @@ export default function ProductsTab({
                         <div className="flex gap-2 items-center bg-white p-2 rounded-lg border border-blue-300 shadow-inner">
                             <select id="edit-combo-prod" className="flex-1 bg-transparent text-sm font-bold text-slate-800 outline-none">
                                 <option value="">Adicionar item ao combo...</option>
-                                {allProducts.filter(p => !p.isCombo && !p.isPizza && p.id !== editingProduct.id).map(p => (
+                                {/* 🎯 FILTRO CORRIGIDO: Agora permite adicionar Pizzas nos Combos (apenas remove outros combos e ele mesmo) */}
+                                {allProducts.filter(p => !p.isCombo && p.id !== editingProduct.id).map(p => (
                                     <option key={p.id} value={p.id}>{p.name}</option>
                                 ))}
                             </select>
