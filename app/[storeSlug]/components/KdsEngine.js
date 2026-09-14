@@ -5,7 +5,8 @@ import { useParams } from 'next/navigation';
 //Renderizador Inteligente (Lê as frações do banco, mantém o nome original [Grande/Broto] e formata como lista)
 const FormattedItemName = ({ item, baseClassName }) => {
   const quantity = item.quantity || 1;
-  const safeName = item.product?.name || item.name || 'Item Sem Nome';
+  const baseProductName = item.product?.name || item.name || 'Item Sem Nome';
+  const cartName = item.name || ''; // Onde fica salva a string "3 Sabores: X / Y" que vem do carrinho
 
   // 1. Tenta extrair os sabores REAIS salvos no JSON do pedido
   let flavors = [];
@@ -13,12 +14,10 @@ const FormattedItemName = ({ item, baseClassName }) => {
     try { flavors = typeof item.flavors === 'string' ? JSON.parse(item.flavors) : item.flavors; } catch (e) {}
   }
 
-  // Se tiver sabores fracionados, constrói o visual de Pizza Perfeito com o Tamanho Real
+  // Se tiver array de sabores JSON no banco, formata com o Nome Pai
   if (flavors && flavors.length > 0) {
-    let displayTitle = safeName;
-    if (!displayTitle.includes('🍕')) {
-       displayTitle = `🍕 ${displayTitle}`;
-    }
+    let displayTitle = baseProductName;
+    if (!displayTitle.includes('🍕')) displayTitle = `🍕 ${displayTitle}`;
 
     return (
       <div className={`flex flex-col w-full ${baseClassName}`}>
@@ -35,19 +34,20 @@ const FormattedItemName = ({ item, baseClassName }) => {
     );
   }
 
-  // 2. Fallback caso seja um pedido muito antigo salvo como texto concatenado
-  if (safeName.includes('Sabores:')) {
-    const [titlePart, flavorsPart] = safeName.split(':');
-    if (flavorsPart) {
-      let title = titlePart.trim();
-      if (!title.includes('🍕')) title = `🍕 ${title}`;
-      const stringFlavors = flavorsPart.split('/').map(f => f.trim()).filter(f => f);
+  // 2. Fallback: Captura a string de sabores concatenados gerada pelo front-end ("3 Sabores: Sabor 1 / Sabor 2")
+  if (cartName.includes(':') && cartName.includes('/')) {
+    const parts = cartName.split(':');
+    if (parts.length > 1) {
+      let displayTitle = baseProductName;
+      if (!displayTitle.includes('🍕')) displayTitle = `🍕 ${displayTitle}`;
+      
+      const stringFlavors = parts[1].split('/').map(f => f.trim()).filter(f => f);
       
       return (
         <div className={`flex flex-col w-full ${baseClassName}`}>
           <p className="flex items-start gap-1">
             <span className="text-amber-600 font-black mr-1">{quantity}x</span> 
-            <span>{title}:</span>
+            <span>{displayTitle}:</span>
           </p>
           <ul className="pl-6 mt-1 text-[11px] font-bold text-slate-700 list-disc space-y-0.5">
             {stringFlavors.map((flavor, i) => (
@@ -59,10 +59,10 @@ const FormattedItemName = ({ item, baseClassName }) => {
     }
   }
 
-  // 3. Renderização Padrão para Produtos Comuns (Lanches, Bebidas, etc)
+  // 3. Renderização Padrão para Produtos Comuns (Lanches, Bebidas, Pizzas de 1 sabor sem quebra, etc)
   return (
     <p className={baseClassName}>
-      <span className="text-amber-600 font-black mr-1">{quantity}x</span> {safeName}
+      <span className="text-amber-600 font-black mr-1">{quantity}x</span> {baseProductName}
     </p>
   );
 };
@@ -99,7 +99,6 @@ const ItemExtras = ({ item }) => {
     </div>
   );
 };
-
 
 export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 'BEBIDAS'
   const params = useParams();
@@ -389,6 +388,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   </div>
                   <p className="text-xs font-bold text-slate-700">{extractName(order)}</p>
                   
+                  {/* Itens do Pedido Agendado */}
                   <div className="my-2 space-y-2 bg-white p-2 rounded-lg border border-slate-100">
                     {order.items.map(i => (
                       <div key={i.id} className="border-b border-slate-50 last:border-0 pb-1 last:pb-0">
@@ -440,6 +440,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   </div>
                   <p className="text-xs font-bold text-slate-700 mb-2">Cliente: {extractName(order)}</p>
                   
+                  {/* Itens Delivery em Preparo */}
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-2 mb-3 shadow-inner">
                     {order.items.map(i => (
                       <div key={i.id} className="border-b border-slate-100 last:border-0 pb-1 last:pb-0">
