@@ -2,6 +2,61 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 
+//COMPONENTE INTELIGENTE PARA RENDERIZAR SABORES, COMBOS E OBSERVAÇÕES NO KDS
+const ItemExtras = ({ item }) => {
+  let flavors = [];
+  if (item.flavors) {
+    try { flavors = typeof item.flavors === 'string' ? JSON.parse(item.flavors) : item.flavors; } catch (e) {}
+  }
+
+  let comboItems = [];
+  if (item.comboItems) {
+    try { comboItems = typeof item.comboItems === 'string' ? JSON.parse(item.comboItems) : item.comboItems; } catch (e) {}
+  }
+
+  const hasFlavors = flavors && flavors.length > 0;
+  const hasCombo = comboItems && comboItems.length > 0;
+  const hasObs = item.observation;
+
+  if (!hasFlavors && !hasCombo && !hasObs) return null;
+
+  return (
+    <div className="mt-1 flex flex-col gap-1.5 pl-2">
+      {hasFlavors && (
+        <div className="text-[10.5px] text-amber-900 bg-amber-100/80 p-2 rounded-lg border border-amber-200 shadow-sm">
+          <span className="font-black uppercase tracking-wider">🍕 Sabores Escolhidos:</span>
+          <ul className="list-disc list-inside mt-1 font-bold">
+            {flavors.map((s, idx) => (
+              <li key={idx}>
+                {s.name || s.productName || 'Sabor'} 
+                {flavors.length > 1 ? <span className="text-amber-700"> ({(1 / flavors.length * 100).toFixed(0)}%)</span> : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      
+      {hasCombo && (
+        <div className="text-[10.5px] text-blue-900 bg-blue-100/80 p-2 rounded-lg border border-blue-200 shadow-sm">
+          <span className="font-black uppercase tracking-wider">🍔 Itens do Combo:</span>
+          <ul className="list-disc list-inside mt-1 font-bold">
+            {comboItems.map((c, idx) => (
+              <li key={idx}>{c.quantity}x {c.name || c.product?.name || 'Item'}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {hasObs && (
+        <div className="text-[10.5px] font-black text-red-700 bg-red-100/80 p-2 rounded-lg border border-red-200 shadow-sm">
+          ⚠️ OBS: {item.observation}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 'BEBIDAS'
   const params = useParams();
   const storeSlug = params.storeSlug;
@@ -17,15 +72,12 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
   
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
 
-  // Valida e identifica a loja pelo slug da URL
   useEffect(() => {
     if (!storeSlug) return;
-
     const identifyStore = async () => {
       try {
         const res = await fetch(`${API_URL || 'https://zenixfood-backend.onrender.com'}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
         const data = await res.json();
-
         if (data.success) {
           localStorage.setItem('zenix_store_id', data.store.id);
           setStoreStatus('FOUND');
@@ -36,11 +88,9 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
         setStoreStatus('NOT_FOUND');
       }
     };
-
     identifyStore();
   }, [storeSlug]);
 
-  // Helper local para garantir o envio do x-store-id e Token JWT
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
@@ -52,13 +102,9 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
     };
 
     const response = await fetch(url, { ...options, headers });
-
     if (response.status === 402) {
-      if (typeof window !== 'undefined') {
-        window.location.href = `/${storeSlug}/bloqueado`;
-      }
+      if (typeof window !== 'undefined') window.location.href = `/${storeSlug}/bloqueado`;
     }
-
     return response;
   };
 
@@ -74,7 +120,6 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
 
   useEffect(() => {
     if (storeStatus !== 'FOUND') return;
-
     fetchKdsData();
     const interval = setInterval(fetchKdsData, 4000);
     const clock = setInterval(() => setNow(Date.now()), 1000);
@@ -299,8 +344,15 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                      <button onClick={(e) => { e.stopPropagation(); triggerManualPrint(order); }} className="text-slate-400 hover:text-blue-500 text-lg cursor-pointer">🖨️</button>
                   </div>
                   <p className="text-xs font-bold text-slate-700">{extractName(order)}</p>
-                  <div className="my-2 space-y-1 bg-white p-2 rounded-lg border border-slate-100">
-                    {order.items.map(i => <p key={i.id} className="text-xs font-medium">• {i.quantity}x {i.product?.name}</p>)}
+                  
+                  {/* Itens do Pedido Agendado */}
+                  <div className="my-2 space-y-2 bg-white p-2 rounded-lg border border-slate-100">
+                    {order.items.map(i => (
+                      <div key={i.id} className="border-b border-slate-50 last:border-0 pb-1 last:pb-0">
+                        <p className="text-xs font-medium">• {i.quantity}x {i.product?.name || i.name}</p>
+                        <ItemExtras item={i} />
+                      </div>
+                    ))}
                   </div>
                   
                   {order.status === 'PENDING' && (
@@ -344,9 +396,17 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                     </div>
                   </div>
                   <p className="text-xs font-bold text-slate-700 mb-2">Cliente: {extractName(order)}</p>
-                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1 mb-3">
-                    {order.items.map(i => <p key={i.id} className="text-xs font-bold text-slate-800">• {i.quantity}x {i.product?.name}</p>)}
+                  
+                  {/* Itens Delivery em Preparo */}
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-2 mb-3 shadow-inner">
+                    {order.items.map(i => (
+                      <div key={i.id} className="border-b border-slate-100 last:border-0 pb-1 last:pb-0">
+                        <p className="text-xs font-bold text-slate-800">• {i.quantity}x {i.product?.name || i.name}</p>
+                        <ItemExtras item={i} />
+                      </div>
+                    ))}
                   </div>
+
                   <button onClick={(e) => { e.stopPropagation(); updateOrderStatus(order.id, 'READY'); }} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-xs font-black cursor-pointer shadow-sm">
                     Pronto (Aguardando Rota) ✅
                   </button>
@@ -360,8 +420,13 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   <span className="font-black text-slate-900 text-sm">🪑 Mesa/Comanda #{item.tab?.number}</span>
                   {item.seatLabel && <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded">{item.seatLabel}</span>}
                 </div>
-                <p className="text-sm font-black text-slate-800 my-1"><span className="text-amber-600 mr-1">{item.quantity}x</span> {item.name}</p>
-                {item.observation && <p className="text-xs font-bold text-red-600 bg-red-50 p-1.5 rounded-lg mb-2">⚠️ {item.observation}</p>}
+                
+                <p className="text-sm font-black text-slate-800 my-1">
+                  <span className="text-amber-600 mr-1">{item.quantity}x</span> {item.product?.name || item.name}
+                </p>
+                <div className="mb-3">
+                  <ItemExtras item={item} />
+                </div>
                 
                 <button onClick={(e) => { e.stopPropagation(); updateTabItemStatus(item.id, 'READY'); }} className="mt-2 w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-xs font-black cursor-pointer shadow-sm">
                   Item Pronto ✅
@@ -376,11 +441,16 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   <span className="bg-pink-100 text-pink-700 text-[10px] font-black px-2 py-0.5 rounded">Totem</span>
                 </div>
                 <p className="text-xs font-bold text-slate-700 mb-2">{extractName(order)}</p>
-                <div className="bg-white p-2 rounded-lg border border-slate-200 space-y-1 mb-3">
+                
+                <div className="bg-white p-2 rounded-lg border border-slate-200 space-y-2 mb-3 shadow-inner">
                   {order.items.filter(i => (mode === 'BEBIDAS' ? i.product?.category?.isDrink : !i.product?.category?.isDrink)).map(i => (
-                    <p key={i.id} className="text-xs font-bold text-slate-800">• {i.quantity}x {i.product?.name}</p>
+                    <div key={i.id} className="border-b border-slate-100 last:border-0 pb-1 last:pb-0">
+                      <p className="text-xs font-bold text-slate-800">• {i.quantity}x {i.product?.name || i.name}</p>
+                      <ItemExtras item={i} />
+                    </div>
                   ))}
                 </div>
+
                 <button onClick={(e) => { e.stopPropagation(); updateOrderStatus(order.id, 'READY'); }} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-xs font-black cursor-pointer shadow-sm">
                   Pedido Totem Pronto ✅
                 </button>
@@ -415,7 +485,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
               <div key={item.id} className="bg-emerald-50/40 border border-emerald-200 p-4 rounded-xl shadow-xs flex justify-between items-center">
                  <div>
                     <span className="font-black text-slate-900 text-sm">🪑 Mesa/Comanda #{item.tab?.number}</span>
-                    <p className="text-xs font-bold text-slate-700 mt-1">{item.quantity}x {item.name}</p>
+                    <p className="text-xs font-bold text-slate-700 mt-1">{item.quantity}x {item.product?.name || item.name}</p>
                  </div>
                  <span className="text-2xl animate-bounce" title="Aguardando Retirada">🏃</span>
               </div>
@@ -457,7 +527,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                      </button>
                      {order.client?.phone && (
                         <button onClick={(e) => { e.stopPropagation(); handleWhatsApp(order.client?.phone, extractName(order), order.shortId); }} className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-2 rounded-lg text-[10px] border border-emerald-200 font-black uppercase shadow-sm cursor-pointer transition-colors flex items-center justify-center gap-1">
-                            <span>💬</span> Whats
+                           <span>💬</span> Whats
                         </button>
                      )}
                   </div>
@@ -488,7 +558,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
             {mode !== 'DELIVERY' && salaoCompleted.map(item => (
               <div key={item.id} className="bg-slate-50 border border-slate-200 p-3 rounded-xl opacity-60">
                 <span className="font-bold text-slate-800 text-sm">Mesa/Comanda #{item.tab?.number} ✅</span>
-                <p className="text-[10px] text-slate-500 mt-0.5">{item.quantity}x {item.name}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">{item.quantity}x {item.product?.name || item.name}</p>
               </div>
             ))}
 
@@ -503,6 +573,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
 
       </div>
 
+      {/* MODAL DE DETALHES DO PEDIDO COM SUPORTE A SABORES */}
       {selectedOrderDetails && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
            <div className="bg-white p-6 rounded-3xl w-full max-w-md shadow-2xl relative animate-fade-in-up border border-slate-200 max-h-[90vh] flex flex-col">
@@ -529,14 +600,17 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                     )}
                  </div>
 
-                 <div className="space-y-2 mb-4">
+                 <div className="space-y-3 mb-4">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Itens do Pedido</p>
                     {selectedOrderDetails.items?.map(item => (
-                       <div key={item.id} className="flex justify-between items-center bg-slate-50 border border-slate-100 p-3 rounded-xl">
-                          <p className="text-xs font-bold text-slate-700">
-                             <span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name || item.product?.name}
-                          </p>
-                          <span className="text-xs font-black text-slate-900">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                       <div key={item.id} className="flex flex-col bg-white border border-slate-200 p-3 rounded-xl shadow-sm">
+                          <div className="flex justify-between items-center mb-1">
+                             <p className="text-xs font-bold text-slate-800">
+                                <span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name || item.product?.name}
+                             </p>
+                             <span className="text-xs font-black text-slate-900">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                          </div>
+                          <ItemExtras item={item} />
                        </div>
                     ))}
                  </div>
