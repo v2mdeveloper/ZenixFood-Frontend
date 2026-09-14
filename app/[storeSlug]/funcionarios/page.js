@@ -523,18 +523,32 @@ function FuncionariosPortal({ storeSlug }) {
 
  const handleEditProduct = async (e) => {
     e.preventDefault();
+    if (!editingProduct) return;
     try {
+      //FORÇA A LEITURA DOS DADOS VINDO DO ESTADO DO MODAL DE EDIÇÃO
       const payload = { 
-        ...editingProduct, 
-        costPrice: editingProduct.costPrice ? Number(editingProduct.costPrice) : 0, 
+        name: editingProduct.name,
+        description: editingProduct.description || '',
+        price: Number(editingProduct.price) || 0,
+        price700g: editingProduct.price700g ? Number(editingProduct.price700g) : null,
+        price1kg: editingProduct.price1kg ? Number(editingProduct.price1kg) : null,
+        costPrice: editingProduct.costPrice ? Number(editingProduct.costPrice) : 0,
+        categoryId: editingProduct.categoryId,
+        imageUrl: editingProduct.imageUrl || '',
+        isActive: Boolean(editingProduct.isActive),
+        isFeatured: Boolean(editingProduct.isFeatured),
+        regraFiscalId: editingProduct.regraFiscalId || '',
+        ncm: editingProduct.ncm || '',
+        ean: editingProduct.ean || '',
         groupId: editingProduct.groupId || null,
 
-        // 🎯 FORÇA O ENVIO DOS DADOS DE PIZZA E COMBO DA TELA
+        // 🍕 Configurações de Pizza garantidas
         isPizza: Boolean(editingProduct.isPizza),
         maxFlavors: editingProduct.maxFlavors ? Number(editingProduct.maxFlavors) : 1,
         pricingStrategy: editingProduct.pricingStrategy || 'HIGHEST',
         sizeMultiplier: editingProduct.sizeMultiplier !== undefined ? Number(editingProduct.sizeMultiplier) : 1.0,
         
+        // 🍔 Configurações de Combo garantidas
         isCombo: Boolean(editingProduct.isCombo),
         comboItems: editingProduct.comboItems || editingProduct.comboItemsAsParent || []
       };
@@ -552,10 +566,10 @@ function FuncionariosPortal({ storeSlug }) {
           fetchMenu(); 
           alert("✅ Produto atualizado com sucesso!");
       } else {
-          alert("❌ Erro ao atualizar: " + data.error);
+          alert("❌ Erro ao atualizar: " + (data.error || 'Erro desconhecido'));
       }
     } catch (error) {
-      alert("❌ Erro de conexão ao editar.");
+      alert("❌ Erro de conexão ao editar: " + error.message);
     }
   };
 
