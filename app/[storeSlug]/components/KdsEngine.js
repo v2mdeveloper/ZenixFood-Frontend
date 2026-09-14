@@ -2,40 +2,57 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 
-//COMPONENTE INTELIGENTE PARA RENDERIZAR SABORES, COMBOS E OBSERVAÇÕES NO KDS
-const ItemExtras = ({ item }) => {
-  let flavors = [];
-  if (item.flavors) {
-    try { flavors = typeof item.flavors === 'string' ? JSON.parse(item.flavors) : item.flavors; } catch (e) {}
+// 🎯 NOVO: Renderizador Inteligente do Nome do Item (Formata automaticamente as Pizzas e quebra as linhas)
+const FormattedItemName = ({ quantity, name, baseClassName }) => {
+  const safeName = name || 'Item Sem Nome';
+  
+  if (safeName.includes('Sabores:')) {
+    const [titlePart, flavorsPart] = safeName.split(':');
+    if (flavorsPart) {
+      let title = titlePart.trim();
+      // Garante que a palavra "Pizza" apareça após o ícone, se já não estiver escrita
+      if (!title.toLowerCase().includes('pizza')) {
+        title = title.replace('🍕', '🍕 Pizza');
+      }
+      // Quebra a string onde tem barras ( / ) e remove os espaços em branco
+      const flavors = flavorsPart.split('/').map(f => f.trim()).filter(f => f);
+
+      return (
+        <div className={`flex flex-col w-full ${baseClassName}`}>
+          <p>
+            <span className="text-amber-600 font-black mr-1">{quantity}x</span> {title}:
+          </p>
+          <ul className="pl-6 mt-1 text-xs font-bold text-slate-700 list-disc space-y-0.5">
+            {flavors.map((flavor, i) => (
+              <li key={i}>{flavor}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
   }
 
+  // Renderização padrão para os outros produtos (não pizzas ou 1 sabor)
+  return (
+    <p className={baseClassName}>
+      <span className="text-amber-600 font-black mr-1">{quantity}x</span> {safeName}
+    </p>
+  );
+};
+
+// 🎯 COMPONENTE PARA EXIBIR COMBOS E OBSERVAÇÕES
+const ItemExtras = ({ item }) => {
   let comboItems = [];
   if (item.comboItems) {
     try { comboItems = typeof item.comboItems === 'string' ? JSON.parse(item.comboItems) : item.comboItems; } catch (e) {}
   }
-
-  const hasFlavors = flavors && flavors.length > 0;
   const hasCombo = comboItems && comboItems.length > 0;
   const hasObs = item.observation;
 
-  if (!hasFlavors && !hasCombo && !hasObs) return null;
+  if (!hasCombo && !hasObs) return null;
 
   return (
-    <div className="mt-1 flex flex-col gap-1.5 pl-2">
-      {hasFlavors && (
-        <div className="text-[10.5px] text-amber-900 bg-amber-100/80 p-2 rounded-lg border border-amber-200 shadow-sm">
-          <span className="font-black uppercase tracking-wider">🍕 Sabores Escolhidos:</span>
-          <ul className="list-disc list-inside mt-1 font-bold">
-            {flavors.map((s, idx) => (
-              <li key={idx}>
-                {s.name || s.productName || 'Sabor'} 
-                {flavors.length > 1 ? <span className="text-amber-700"> ({(1 / flavors.length * 100).toFixed(0)}%)</span> : ''}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      
+    <div className="mt-1.5 flex flex-col gap-1.5 pl-6">
       {hasCombo && (
         <div className="text-[10.5px] text-blue-900 bg-blue-100/80 p-2 rounded-lg border border-blue-200 shadow-sm">
           <span className="font-black uppercase tracking-wider">🍔 Itens do Combo:</span>
@@ -55,7 +72,6 @@ const ItemExtras = ({ item }) => {
     </div>
   );
 };
-
 
 export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 'BEBIDAS'
   const params = useParams();
@@ -349,7 +365,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   <div className="my-2 space-y-2 bg-white p-2 rounded-lg border border-slate-100">
                     {order.items.map(i => (
                       <div key={i.id} className="border-b border-slate-50 last:border-0 pb-1 last:pb-0">
-                        <p className="text-xs font-medium">• {i.quantity}x {i.product?.name || i.name}</p>
+                        <FormattedItemName quantity={i.quantity} name={i.product?.name || i.name} baseClassName="text-xs font-bold text-slate-800" />
                         <ItemExtras item={i} />
                       </div>
                     ))}
@@ -401,7 +417,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-2 mb-3 shadow-inner">
                     {order.items.map(i => (
                       <div key={i.id} className="border-b border-slate-100 last:border-0 pb-1 last:pb-0">
-                        <p className="text-xs font-bold text-slate-800">• {i.quantity}x {i.product?.name || i.name}</p>
+                        <FormattedItemName quantity={i.quantity} name={i.product?.name || i.name} baseClassName="text-xs font-bold text-slate-800" />
                         <ItemExtras item={i} />
                       </div>
                     ))}
@@ -421,9 +437,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   {item.seatLabel && <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded">{item.seatLabel}</span>}
                 </div>
                 
-                <p className="text-sm font-black text-slate-800 my-1">
-                  <span className="text-amber-600 mr-1">{item.quantity}x</span> {item.product?.name || item.name}
-                </p>
+                <FormattedItemName quantity={item.quantity} name={item.product?.name || item.name} baseClassName="text-sm font-black text-slate-800 my-1" />
                 <div className="mb-3">
                   <ItemExtras item={item} />
                 </div>
@@ -445,7 +459,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                 <div className="bg-white p-2 rounded-lg border border-slate-200 space-y-2 mb-3 shadow-inner">
                   {order.items.filter(i => (mode === 'BEBIDAS' ? i.product?.category?.isDrink : !i.product?.category?.isDrink)).map(i => (
                     <div key={i.id} className="border-b border-slate-100 last:border-0 pb-1 last:pb-0">
-                      <p className="text-xs font-bold text-slate-800">• {i.quantity}x {i.product?.name || i.name}</p>
+                      <FormattedItemName quantity={i.quantity} name={i.product?.name || i.name} baseClassName="text-xs font-bold text-slate-800" />
                       <ItemExtras item={i} />
                     </div>
                   ))}
@@ -485,7 +499,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
               <div key={item.id} className="bg-emerald-50/40 border border-emerald-200 p-4 rounded-xl shadow-xs flex justify-between items-center">
                  <div>
                     <span className="font-black text-slate-900 text-sm">🪑 Mesa/Comanda #{item.tab?.number}</span>
-                    <p className="text-xs font-bold text-slate-700 mt-1">{item.quantity}x {item.product?.name || item.name}</p>
+                    <FormattedItemName quantity={item.quantity} name={item.product?.name || item.name} baseClassName="text-xs font-bold text-slate-700 mt-1" />
                  </div>
                  <span className="text-2xl animate-bounce" title="Aguardando Retirada">🏃</span>
               </div>
@@ -558,7 +572,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
             {mode !== 'DELIVERY' && salaoCompleted.map(item => (
               <div key={item.id} className="bg-slate-50 border border-slate-200 p-3 rounded-xl opacity-60">
                 <span className="font-bold text-slate-800 text-sm">Mesa/Comanda #{item.tab?.number} ✅</span>
-                <p className="text-[10px] text-slate-500 mt-0.5">{item.quantity}x {item.product?.name || item.name}</p>
+                <FormattedItemName quantity={item.quantity} name={item.product?.name || item.name} baseClassName="text-[10px] text-slate-500 mt-0.5" />
               </div>
             ))}
 
@@ -604,11 +618,9 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Itens do Pedido</p>
                     {selectedOrderDetails.items?.map(item => (
                        <div key={item.id} className="flex flex-col bg-white border border-slate-200 p-3 rounded-xl shadow-sm">
-                          <div className="flex justify-between items-center mb-1">
-                             <p className="text-xs font-bold text-slate-800">
-                                <span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name || item.product?.name}
-                             </p>
-                             <span className="text-xs font-black text-slate-900">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                          <div className="flex justify-between items-start mb-1">
+                             <FormattedItemName quantity={item.quantity} name={item.name || item.product?.name} baseClassName="text-xs font-bold text-slate-800 flex-1 pr-2" />
+                             <span className="text-xs font-black text-slate-900 shrink-0 mt-0.5">R$ {(item.price * item.quantity).toFixed(2)}</span>
                           </div>
                           <ItemExtras item={item} />
                        </div>
