@@ -52,7 +52,22 @@ export default function ProductsTab({
                   <td className="px-6 py-4 font-bold text-amber-600">R$ {Number(product.costPrice || 0).toFixed(2)}</td>
                   <td className="px-6 py-4 font-black"><span className={`px-2.5 py-1 rounded-lg ${cmvColor}`}>{cmv}%</span></td>
                   <td className="px-6 py-4"><button onClick={() => toggleProductStatus(product)} className={`text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors ${product.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{product.isActive ? '🟢 ATIVO' : '🔴 INATIVO'}</button></td>
-                  <td className="px-6 py-4 text-right"><button onClick={() => setEditingProduct(product)} className="text-amber-600 hover:text-amber-700 font-bold bg-amber-100 hover:bg-amber-200 px-4 py-2 rounded-lg transition-colors text-xs">Editar</button></td>
+                  <td className="px-6 py-4 text-right">
+                    <button 
+                      onClick={() => setEditingProduct({
+                        ...product,
+                        isPizza: Boolean(product.isPizza),
+                        maxFlavors: product.maxFlavors || 1,
+                        pricingStrategy: product.pricingStrategy || 'HIGHEST',
+                        sizeMultiplier: product.sizeMultiplier !== undefined ? product.sizeMultiplier : 1.0,
+                        isCombo: Boolean(product.isCombo),
+                        comboItems: product.comboItems || product.comboItemsAsParent || []
+                      })} 
+                      className="text-amber-600 hover:text-amber-700 font-bold bg-amber-100 hover:bg-amber-200 px-4 py-2 rounded-lg transition-colors text-xs"
+                    >
+                      Editar
+                    </button>
+                  </td>
                 </tr>
               )})}
             </tbody>

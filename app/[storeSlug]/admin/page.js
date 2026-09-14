@@ -751,7 +751,7 @@ const handleAddProduct = async (e) => {
     }
   };
 
-  const handleEditProduct = async (e) => {
+ const handleEditProduct = async (e) => {
     e.preventDefault();
     try {
       const payload = { 
@@ -759,6 +759,7 @@ const handleAddProduct = async (e) => {
         costPrice: editingProduct.costPrice ? Number(editingProduct.costPrice) : 0, 
         groupId: editingProduct.groupId || null,
 
+        // 🎯 FORÇA O ENVIO DOS DADOS DE PIZZA E COMBO DA TELA
         isPizza: Boolean(editingProduct.isPizza),
         maxFlavors: editingProduct.maxFlavors ? Number(editingProduct.maxFlavors) : 1,
         pricingStrategy: editingProduct.pricingStrategy || 'HIGHEST',
@@ -768,19 +769,23 @@ const handleAddProduct = async (e) => {
         comboItems: editingProduct.comboItems || editingProduct.comboItemsAsParent || []
       };
 
-      const res = await fetchWithStore(`${API_URL}/api/products/${editingProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const data = await res.json();
+      const res = await fetchWithStore(`${API_URL}/api/products/${editingProduct.id}`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(payload) 
+      });
       
+      const data = await res.json();
       if (data.success) { 
           setEditingProduct(null); 
           fetchProducts(); 
           fetchMenu(); 
           alert("✅ Produto atualizado com sucesso!");
       } else {
-          alert("❌ ERRO DO SERVIDOR: " + data.error + "\n\nDetalhes: " + (data.details || ''));
+          alert("❌ Erro ao atualizar: " + data.error);
       }
     } catch (error) {
-      alert("❌ ERRO DE CONEXÃO: " + error.message);
+      alert("❌ Erro de conexão ao editar.");
     }
   };
 
