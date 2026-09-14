@@ -16,6 +16,11 @@ export default function KdsClientePage() {
   const [now, setNow] = useState(Date.now());
   const announcedOrders = useRef(new Set());
 
+  // 🎯 NOVOS ESTADOS PARA O GERENCIAMENTO DE VOZ
+  const [voices, setVoices] = useState([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+
   // Identifica e valida a loja pelo slug da URL antes de liberar o painel
   useEffect(() => {
     if (!storeSlug) return;
@@ -93,6 +98,62 @@ export default function KdsClientePage() {
     setLoading(false);
   };
 
+  // 🎯 CARREGAMENTO E CONFIGURAÇÃO DE VOZES DA API DO NAVEGADOR
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    const loadVoices = () => {
+      const availableVoices = window.speechSynthesis.getVoices();
+      if (availableVoices.length === 0) return;
+
+      // Coloca as vozes em Português no topo da lista
+      const sortedVoices = [...availableVoices].sort((a, b) => {
+        if (a.lang.includes('pt') && !b.lang.includes('pt')) return -1;
+        if (!a.lang.includes('pt') && b.lang.includes('pt')) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      setVoices(sortedVoices);
+
+      // Carrega a voz preferida salva anteriormente
+      const savedVoice = localStorage.getItem('zenix_selectedVoice');
+      if (savedVoice) {
+        setSelectedVoiceURI(savedVoice);
+      } else {
+        const defaultPtBr = sortedVoices.find(v => v.lang.includes('pt'));
+        if (defaultPtBr) setSelectedVoiceURI(defaultPtBr.voiceURI);
+      }
+    };
+
+    loadVoices();
+    // Navegadores carregam vozes de forma assíncrona, então precisamos deste listener
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
+
+  const handleVoiceChange = (e) => {
+    const uri = e.target.value;
+    setSelectedVoiceURI(uri);
+    localStorage.setItem('zenix_selectedVoice', uri);
+  };
+
+  const testVoice = () => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance("Testando a voz do locutor. Pedido 1 0 5, pronto para retirada.");
+      if (selectedVoiceURI) {
+        const voice = voices.find(v => v.voiceURI === selectedVoiceURI);
+        if (voice) utterance.voice = voice;
+      } else {
+        utterance.lang = 'pt-BR';
+      }
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
   const TEMPO_LIMPEZA_MS = 60 * 60 * 1000;
 
   const preparingOrders = totemOrders.filter(o => o.status === 'PREPARING');
@@ -104,6 +165,7 @@ export default function KdsClientePage() {
     return true;
   });
 
+  // 🎯 LÓGICA DE ANÚNCIO ATUALIZADA PARA USAR A VOZ ESCOLHIDA
   useEffect(() => {
     readyOrders.forEach(order => {
       if (!announcedOrders.current.has(order.id)) {
@@ -111,15 +173,26 @@ export default function KdsClientePage() {
         
         if ('speechSynthesis' in window) {
           const nomeCliente = extractFirstName(order);
-          const text = `Pedido ${order.shortId}, ${nomeCliente}. Pronto para retirada.`;
+          // Adiciona espaços entre as letras do Short ID para o robô soletrar pausadamente
+          const shortIdFalado = order.shortId.split('').join(' '); 
+          const text = `Pedido ${shortIdFalado}, ${nomeCliente}. Pronto para retirada.`;
+          
           const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'pt-BR';
+          
+          // Aplica a voz selecionada se ela existir
+          if (selectedVoiceURI) {
+            const voice = voices.find(v => v.voiceURI === selectedVoiceURI);
+            if (voice) utterance.voice = voice;
+          } else {
+            utterance.lang = 'pt-BR';
+          }
+          
           utterance.rate = 0.9;
           window.speechSynthesis.speak(utterance);
         }
       }
     });
-  }, [readyOrders]);
+  }, [readyOrders, voices, selectedVoiceURI]);
 
   const handleFullscreen = () => {
     if (typeof document !== 'undefined') {
@@ -150,7 +223,7 @@ export default function KdsClientePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col overflow-hidden cursor-pointer selection:bg-transparent" onClick={handleFullscreen}>
+    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col overflow-hidden cursor-pointer selection:bg-transparent relative" onClick={handleFullscreen}>
       
       <header className="bg-white border-b border-slate-200 p-6 flex justify-between items-center shadow-sm shrink-0">
         <div className="flex items-center gap-4">
@@ -160,10 +233,52 @@ export default function KdsClientePage() {
             <p className="text-amber-600 font-bold tracking-widest uppercase text-sm mt-1">Acompanhe o seu Pedido</p>
           </div>
         </div>
-        <div className="text-right">
+        
+        <div className="text-right flex items-center gap-6">
+           {/* BOTÃO PARA ABRIR CONFIGURAÇÃO DE VOZ (Impede o clique de ativar a tela cheia) */}
+           <button 
+             onClick={(e) => { e.stopPropagation(); setShowVoiceSettings(!showVoiceSettings); }}
+             className="w-14 h-14 bg-slate-100 hover:bg-slate-200 text-3xl rounded-full flex items-center justify-center transition-colors cursor-pointer"
+             title="Configurar Voz do Locutor"
+           >
+             🗣️
+           </button>
            <p className="text-4xl font-black text-slate-700">{new Date(now).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
         </div>
       </header>
+
+      {/* MENU SUSPENSO DE CONFIGURAÇÃO DE VOZ */}
+      {showVoiceSettings && (
+        <div 
+          className="absolute top-28 right-8 bg-white border border-slate-200 shadow-2xl rounded-3xl p-6 z-50 w-[400px] animate-fade-in-up"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-black text-slate-800">🗣️ Voz do Locutor</h3>
+            <button onClick={() => setShowVoiceSettings(false)} className="text-slate-400 hover:text-red-500 font-bold text-xl cursor-pointer">✕</button>
+          </div>
+          
+          <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Selecione a Voz Desejada</label>
+          <select 
+            value={selectedVoiceURI} 
+            onChange={handleVoiceChange}
+            className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 text-sm text-slate-900 focus:outline-none focus:border-amber-500 font-bold cursor-pointer mb-4 shadow-inner"
+          >
+            {voices.map(voice => (
+              <option key={voice.voiceURI} value={voice.voiceURI}>
+                {voice.name} ({voice.lang})
+              </option>
+            ))}
+          </select>
+
+          <button 
+            onClick={testVoice}
+            className="w-full bg-amber-500 hover:bg-amber-600 text-black font-black py-4 rounded-xl transition-colors shadow-sm cursor-pointer text-lg flex items-center justify-center gap-2"
+          >
+            ▶️ Testar Locutor
+          </button>
+        </div>
+      )}
 
       <main className="flex-1 flex w-full">
         
