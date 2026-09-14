@@ -24,7 +24,7 @@ export default function PromotionsTab({
   });
 
   //Helper local para garantir o envio do x-store-id e Token JWT
- const fetchWithStore = async (url, options = {}) => {
+  const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
 
@@ -45,6 +45,7 @@ export default function PromotionsTab({
 
     return response;
   };
+  
   useEffect(() => {
     if (promoSubTab === 'upsell') {
       fetchUpsells();
@@ -274,15 +275,16 @@ export default function PromotionsTab({
             {upsells.length === 0 && <p className="col-span-full text-center text-slate-500 font-bold py-10">Nenhuma oferta de Upsell cadastrada.</p>}
           </div>
 
+          {/* 🔥 MODAL CORRIGIDO: Scroll movido para o overlay, resolvendo o bug de corte superior */}
           {showUpsellModal && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white border border-slate-200 p-8 rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
-                <div className="flex justify-between items-center mb-6 shrink-0">
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-center items-start p-4 md:p-8 overflow-y-auto">
+              <div className="bg-white border border-slate-200 p-6 md:p-8 rounded-3xl w-full max-w-2xl shadow-2xl mt-8 mb-8 shrink-0 relative">
+                <div className="flex justify-between items-center mb-6">
                   <h3 className="text-xl font-black text-slate-800">{editingId ? 'Editar Oferta' : 'Nova Oferta de Upsell'}</h3>
                   <button onClick={() => setShowUpsellModal(false)} className="text-slate-400 font-bold cursor-pointer text-xl">✕</button>
                 </div>
 
-                <form onSubmit={handleSaveUpsell} className="space-y-6 overflow-y-auto pr-2 flex-1 hide-scrollbar">
+                <form onSubmit={handleSaveUpsell} className="space-y-6">
                   
                   <div>
                     <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nome da Regra (Interno)</label>
@@ -306,7 +308,7 @@ export default function PromotionsTab({
 
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
                     <label className="text-xs font-bold text-amber-600 uppercase block mb-3">🍔 PRODUTOS GATILHO (Se o cliente adicionar...)</label>
-                    <div className="max-h-40 overflow-y-auto space-y-1 bg-white border border-slate-200 p-2 rounded-xl">
+                    <div className="max-h-56 overflow-y-auto space-y-1 bg-white border border-slate-200 p-2 rounded-xl">
                       {allProducts.map(p => (
                         <label key={p.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded cursor-pointer">
                           <input type="checkbox" checked={upsellForm.triggerProductIds.includes(p.id)} onChange={() => handleToggleTrigger(p.id)} className="accent-amber-500 w-4 h-4" />
