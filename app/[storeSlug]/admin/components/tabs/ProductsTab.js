@@ -7,7 +7,7 @@ export default function ProductsTab({
   toggleProductStatus, toggleFeatureProduct, calculateCmv, getCmvColor, productGroups
 }) {
   
-  // 🎯 ESTADOS PARA IMPORTAÇÃO DE PLANILHA
+  //ESTADOS PARA IMPORTAÇÃO DE PLANILHA
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -17,14 +17,14 @@ export default function ProductsTab({
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
 
-  // 📥 Função para baixar o Modelo de Planilha
+  //Função para baixar o Modelo de Planilha com Pizzas e Combos
   const downloadCsvTemplate = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
-      + "Categoria,Produto,Descricao,Preco,E_Pizza(S/N),Max_Sabores,Mult_Tamanho\n"
-      + "PIZZAS GRANDES,Pizza Grande 3 Sabores,Ate 3 sabores a sua escolha.,65.00,S,3,1.0\n"
-      + "PIZZAS GRANDES,Pizza de Calabresa,Mussarela e Calabresa,50.00,S,1,1.0\n"
-      + "PIZZAS BROTO,Pizza Broto 2 Sabores,Ate 2 sabores.,35.00,S,2,0.5\n"
-      + "BEBIDAS,Coca-Cola 2L,Refrigerante 2 Litros,15.00,N,1,1.0";
+      + "Categoria,Produto,Descricao,Preco,E_Pizza(S/N),Max_Sabores,Mult_Tamanho,E_Combo(S/N)\n"
+      + "PIZZAS GRANDES,Pizza Grande 3 Sabores,Ate 3 sabores a sua escolha.,65.00,S,3,1.0,N\n"
+      + "PIZZAS GRANDES,Pizza de Calabresa,Mussarela e Calabresa,50.00,S,1,1.0,N\n"
+      + "COMBOS,Combo Família,2 Pizzas + 1 Refri 2L,90.00,N,1,1.0,S\n"
+      + "BEBIDAS,Coca-Cola 2L,Refrigerante 2 Litros,15.00,N,1,1.0,N";
     
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -35,7 +35,7 @@ export default function ProductsTab({
     document.body.removeChild(link);
   };
 
-  // 🚀 Função que processa e envia a Planilha para o Banco de Dados
+  //Função que processa e envia a Planilha para o Banco de Dados
   const handleProcessImport = async () => {
     if (!importFile) return alert("Selecione um arquivo CSV primeiro!");
     setIsImporting(true);
@@ -61,6 +61,7 @@ export default function ProductsTab({
       const pizzaIdx = headers.findIndex(h => h.includes('pizza'));
       const saboresIdx = headers.findIndex(h => h.includes('sabores'));
       const multIdx = headers.findIndex(h => h.includes('mult'));
+      const comboIdx = headers.findIndex(h => h.includes('combo'));
 
       const productsToImport = [];
 
@@ -71,24 +72,27 @@ export default function ProductsTab({
         // Limpa as aspas extras de textos com vírgula
         const cleanText = (str) => str ? str.replace(/^"|"$/g, '').trim() : '';
 
-        // Tenta achar a categoria pelo nome digitado na planilha. Se não achar, vincula à primeira categoria existente
+        // Tenta achar a categoria pelo nome digitado na planilha. Se não achar, vincula à primeira existente
         const rowCat = cleanText(columns[catIdx]);
         const matchedCat = menu.find(c => c.name.toLowerCase() === rowCat.toLowerCase());
         const categoryId = matchedCat ? matchedCat.id : (menu[0]?.id || '');
 
         const isPizzaVal = cleanText(columns[pizzaIdx]).toUpperCase();
+        const isComboVal = comboIdx >= 0 ? cleanText(columns[comboIdx]).toUpperCase() : 'N';
+        
         const isPizza = isPizzaVal === 'S' || isPizzaVal === 'SIM';
+        const isCombo = isComboVal === 'S' || isComboVal === 'SIM';
 
         productsToImport.push({
           name: cleanText(columns[nameIdx]),
           description: cleanText(columns[descIdx]),
           price: Number(cleanText(columns[priceIdx]).replace(',', '.') || 0),
           categoryId: categoryId,
-          isPizza: isPizza,
+          isPizza: isPizza && !isCombo, // Previne que seja Pizza e Combo ao mesmo tempo
           maxFlavors: isPizza ? Number(cleanText(columns[saboresIdx]) || 1) : 1,
           sizeMultiplier: isPizza ? Number(cleanText(columns[multIdx]).replace(',', '.') || 1.0) : 1.0,
-          isCombo: false,
-          comboItems: [],
+          isCombo: isCombo && !isPizza,
+          comboItems: [], // Deixamos vazio para vincular os IDs reais de forma segura depois no Painel
           isActive: true,
           pricingStrategy: 'HIGHEST'
         });
@@ -145,7 +149,7 @@ export default function ProductsTab({
           <div className="flex w-full md:w-auto gap-3">
             <input type="text" placeholder="Buscar produto..." value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} className="w-full md:w-56 bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500" />
             
-            {/* NOVO BOTÃO DE IMPORTAÇÃO */}
+            {/* BOTÃO DE IMPORTAÇÃO */}
             <button onClick={() => setShowImportModal(true)} className="bg-slate-800 hover:bg-slate-900 text-white font-black px-5 py-3 rounded-xl whitespace-nowrap transition-all shadow-sm flex items-center gap-2">
               <span>📥</span> Planilha
             </button>
@@ -209,12 +213,12 @@ export default function ProductsTab({
         </div>
       </main>
 
-      {/* 🚀 MODAL DE IMPORTAÇÃO DE PLANILHA */}
+      {/*MODAL DE IMPORTAÇÃO DE PLANILHA */}
       {showImportModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-8 rounded-3xl w-full max-w-xl shadow-2xl animate-fade-in-up text-center">
             <h3 className="text-2xl font-black text-slate-900 mb-2">📥 Importação em Massa</h3>
-            <p className="text-sm text-slate-500 mb-6">Cadastre dezenas de Pizzas e Produtos de uma só vez usando o Excel.</p>
+            <p className="text-sm text-slate-500 mb-6">Cadastre dezenas de Pizzas e Combos de uma só vez usando o Excel.</p>
             
             {!isImporting ? (
               <>
@@ -228,6 +232,7 @@ export default function ProductsTab({
 
                 <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-left">
                   <h4 className="font-bold text-amber-800 text-sm mb-2">2º Passo: Enviar Planilha Preenchida</h4>
+                  <p className="text-[10px] text-amber-700 mb-3">Dica: Os sub-itens dos combos devem ser incluídos pelo botão "Editar" após a importação para garantir a baixa de estoque correta.</p>
                   <input 
                     type="file" 
                     accept=".csv"
@@ -301,7 +306,7 @@ export default function ProductsTab({
                 )}
               </div>
 
-              {/* 🍔 CONFIGURAÇÃO DE COMBOS ANINHADOS */}
+              {/*CONFIGURAÇÃO DE COMBOS ANINHADOS */}
               <div className="pt-2 border-t border-slate-100">
                 <label className="flex items-center gap-2 text-sm font-bold text-slate-900 mb-2 cursor-pointer">
                     <input type="checkbox" checked={newProduct.isCombo || false} onChange={(e) => setNewProduct({...newProduct, isCombo: e.target.checked, isPizza: false})} className="w-4 h-4 text-blue-500 rounded border-slate-300 focus:ring-blue-500 cursor-pointer" />
@@ -354,9 +359,9 @@ export default function ProductsTab({
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço Base/500g</label><input type="number" step="0.01" required value={newProduct.price} onChange={(e) => setNewProduct({...newProduct, price: e.target.value})} placeholder="Ex: 35.00" className="w-full bg-white border border-emerald-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 font-bold" /></div>
-                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço 700g</label><input type="number" step="0.01" value={newProduct.price700g} onChange={(e) => setNewProduct({...newProduct, price700g: e.target.value})} placeholder="Opcional" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-emerald-600 focus:outline-none focus:border-emerald-500 font-bold" /></div>
-                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço 1kg</label><input type="number" step="0.01" value={newProduct.price1kg} onChange={(e) => setNewProduct({...newProduct, price1kg: e.target.value})} placeholder="Opcional" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-emerald-600 focus:outline-none focus:border-emerald-500 font-bold" /></div>
+                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço Base</label><input type="number" step="0.01" required value={newProduct.price} onChange={(e) => setNewProduct({...newProduct, price: e.target.value})} placeholder="Ex: 35.00" className="w-full bg-white border border-emerald-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 font-bold" /></div>
+                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço 700g (Opci.)</label><input type="number" step="0.01" value={newProduct.price700g} onChange={(e) => setNewProduct({...newProduct, price700g: e.target.value})} placeholder="Opcional" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-emerald-600 focus:outline-none focus:border-emerald-500 font-bold" /></div>
+                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço 1kg (Opci.)</label><input type="number" step="0.01" value={newProduct.price1kg} onChange={(e) => setNewProduct({...newProduct, price1kg: e.target.value})} placeholder="Opcional" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-emerald-600 focus:outline-none focus:border-emerald-500 font-bold" /></div>
                 <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Custo Manual</label><input type="number" step="0.01" value={newProduct.costPrice} onChange={(e) => setNewProduct({...newProduct, costPrice: e.target.value})} placeholder="Opcional" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500" /></div>
               </div>
               
@@ -498,9 +503,9 @@ export default function ProductsTab({
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço Base/500g</label><input type="number" step="0.01" required value={editingProduct.price} onChange={(e) => setEditingProduct({...editingProduct, price: e.target.value})} className="w-full bg-white border border-emerald-300 rounded-xl p-3 text-sm text-emerald-600 font-bold focus:outline-none focus:border-emerald-500" /></div>
-                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço 700g</label><input type="number" step="0.01" value={editingProduct.price700g || ''} onChange={(e) => setEditingProduct({...editingProduct, price700g: e.target.value})} placeholder="Opcional" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-emerald-600 font-bold focus:outline-none focus:border-emerald-500" /></div>
-                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço 1kg</label><input type="number" step="0.01" value={editingProduct.price1kg || ''} onChange={(e) => setEditingProduct({...editingProduct, price1kg: e.target.value})} placeholder="Opcional" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-emerald-600 font-bold focus:outline-none focus:border-emerald-500" /></div>
+                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço Base</label><input type="number" step="0.01" required value={editingProduct.price} onChange={(e) => setEditingProduct({...editingProduct, price: e.target.value})} className="w-full bg-white border border-emerald-300 rounded-xl p-3 text-sm text-emerald-600 font-bold focus:outline-none focus:border-emerald-500" /></div>
+                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço 700g (Opci.)</label><input type="number" step="0.01" value={editingProduct.price700g || ''} onChange={(e) => setEditingProduct({...editingProduct, price700g: e.target.value})} placeholder="Opcional" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-emerald-600 font-bold focus:outline-none focus:border-emerald-500" /></div>
+                <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Preço 1kg (Opci.)</label><input type="number" step="0.01" value={editingProduct.price1kg || ''} onChange={(e) => setEditingProduct({...editingProduct, price1kg: e.target.value})} placeholder="Opcional" className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-emerald-600 font-bold focus:outline-none focus:border-emerald-500" /></div>
                 <div><label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Custo Manual</label><input type="number" step="0.01" value={editingProduct.costPrice || 0} onChange={(e) => setEditingProduct({...editingProduct, costPrice: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-amber-600 font-bold focus:outline-none focus:border-amber-500" /></div>
               </div>
               
