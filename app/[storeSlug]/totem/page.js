@@ -2,6 +2,22 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 
+// 🎯 FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
+const getCategoryIcon = (category) => {
+  const textToSearch = `${category.name || ''} ${category.description || ''}`.toLowerCase();
+  
+  if (/pizza/i.test(textToSearch)) return '🍕';
+  if (/bebida|drink|suco|refri|água|agua|chopp|cerveja/i.test(textToSearch)) return '🥤';
+  if (/lanche|hamburguer|burger|sanduiche|sanduíche|combo/i.test(textToSearch)) return '🍔';
+  if (/sobremesa|doce|sorvete|açai|açaí|acai|bolo/i.test(textToSearch)) return '🍦';
+  if (/prato|refeicao|refeição|marmita|almoço|almoco|janta|restaurante/i.test(textToSearch)) return '🍽️';
+  if (/porçao|porção|porcao|petisco|fritas/i.test(textToSearch)) return '🍟';
+  if (/salgado|pastel|coxinha/i.test(textToSearch)) return '🥟';
+  if (/cafe|café|cappuccino/i.test(textToSearch)) return '☕';
+
+  return '🍽️'; // Ícone Padrão caso não ache nenhuma palavra-chave
+};
+
 export default function TotemModerno() {
   const params = useParams();
   const storeSlug = params?.storeSlug || '';
@@ -200,6 +216,7 @@ export default function TotemModerno() {
           productId: item.productId || item.id, 
           quantity: item.quantity, 
           price: item.price,
+          name: item.name,
           flavors: item.flavors ? JSON.stringify(item.flavors) : null // Envia os sabores fracionados para o Backend
         }))
       };
@@ -289,7 +306,8 @@ export default function TotemModerno() {
           {menu.map(cat => (
             <button key={cat.id} onClick={() => setActiveCategory(cat.id)} className={`w-full flex flex-col items-center justify-center p-3 rounded-2xl transition-all ${activeCategory === cat.id ? 'bg-amber-500 text-slate-900 shadow-md transform scale-105' : 'bg-transparent text-slate-500 hover:bg-slate-100'}`}>
               <div className={`w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center mb-2 bg-white shadow-sm ${activeCategory === cat.id ? 'border-2 border-white' : ''}`}>
-                 <span className="text-xl md:text-2xl">🍔</span>
+                 {/* 🎯 AQUI ENTRA A FUNÇÃO INTELIGENTE DO ÍCONE */}
+                 <span className="text-xl md:text-2xl">{getCategoryIcon(cat)}</span>
               </div>
               <span className={`text-[10px] md:text-xs text-center leading-tight ${activeCategory === cat.id ? 'font-black' : 'font-bold'}`}>{cat.name}</span>
             </button>
@@ -299,7 +317,10 @@ export default function TotemModerno() {
 
       <main className="flex-1 flex flex-col relative bg-slate-100">
         <header className="h-20 bg-white shadow-sm flex items-center px-8 shrink-0 justify-between">
-          <h1 className="text-2xl font-black text-slate-800">{menu.find(c => c.id === activeCategory)?.name || t.selectCategory}</h1>
+          <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+             <span>{menu.find(c => c.id === activeCategory) ? getCategoryIcon(menu.find(c => c.id === activeCategory)) : ''}</span>
+             {menu.find(c => c.id === activeCategory)?.name || t.selectCategory}
+          </h1>
           <div className="flex items-center gap-4">
             <button onClick={() => setIsIdle(true)} className="bg-slate-100 text-slate-400 px-4 py-2 rounded-full font-bold text-sm hover:bg-slate-200">🔙</button>
             <button onClick={() => { setCart([]); setIsIdle(true); }} className="bg-red-50 text-red-500 border border-red-200 px-4 py-2 rounded-full font-bold text-sm hover:bg-red-100">{t.cancelOrder}</button>
@@ -310,8 +331,8 @@ export default function TotemModerno() {
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
             {menu.find(c => c.id === activeCategory)?.products?.filter(p => p.isActive !== false).map(prod => (
               <button key={prod.id} onClick={() => handleProductClick(prod)} className="bg-white rounded-3xl p-4 shadow-sm flex flex-col items-center text-center transform transition-transform active:scale-95 border border-slate-200 hover:border-amber-400 relative">
-                {prod.isPizza && <span className="absolute top-2 left-2 bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase">🍕 Pizza</span>}
-                {prod.isCombo && <span className="absolute top-2 left-2 bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase">🍔 Combo</span>}
+                {prod.isPizza && <span className="absolute top-2 left-2 bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase shadow-sm">🍕 Pizza</span>}
+                {prod.isCombo && <span className="absolute top-2 left-2 bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase shadow-sm">🍔 Combo</span>}
                 
                 {prod.imageUrl ? <img src={prod.imageUrl} alt={prod.name} className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-2xl mb-4 shadow-sm" /> : <div className="w-32 h-32 md:w-40 md:h-40 bg-slate-100 rounded-2xl mb-4 flex items-center justify-center text-4xl">🍽️</div>}
                 
