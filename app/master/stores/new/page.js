@@ -1,21 +1,49 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function MasterNewStorePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [isSuperMaster, setIsSuperMaster] = useState(false);
+  const [adminUsers, setAdminUsers] = useState([]);
+  
   const [form, setForm] = useState({
     slug: '', razaoSocial: '', cnpj: '', inscricaoEstadual: '', municipalRegistration: '',
     emailEmpresa: '', telefoneEmpresa: '', regimeTributario: 'Simples Nacional',
     nomeResponsavel: '', cpfResponsavel: '', emailResponsavel: '', senhaResponsavel: '',
     cep: '', street: '', number: '', complement: '', neighborhood: '', city: '', state: '',
-    plan: 'STANDARD', monthlyFee: '' // 🎯 NOVOS CAMPOS DE PLANO E VALOR
+    plan: 'STANDARD', monthlyFee: '', 
+    adminUserId: '' // Para vincular a um franqueado
   });
 
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
+
+  useEffect(() => {
+    checkSuperMasterAccess();
+  }, []);
+
+  const checkSuperMasterAccess = async () => {
+    try {
+      const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
+      
+      //Hack para testes locais
+      if (localStorage.getItem('zenix_super_token')) {
+        setIsSuperMaster(true);
+      }
+
+      const res = await fetch(`${API_URL}/api/super/users`, { headers: { 'Authorization': `Bearer ${token}` } });
+      
+      if (res.ok) {
+        setIsSuperMaster(true);
+        setAdminUsers(await res.json()); 
+      }
+    } catch (error) {
+      console.log("Usuário logado é um Franqueado (não Super Master). O vínculo será automático.");
+    }
+  };
 
   // --- MÁSCARAS DE VALIDAÇÃO ---
   const handleRazaoSocialChange = (e) => {
@@ -79,18 +107,21 @@ export default function MasterNewStorePage() {
     try {
       const fullAddress = `${form.street}, ${form.number} ${form.complement ? `- ${form.complement}` : ''} - ${form.neighborhood}, ${form.city}/${form.state} (CEP: ${form.cep})`;
       
+      const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
+
       const payload = {
         slug: form.slug, razaoSocial: form.razaoSocial, cnpj: form.cnpj, inscricaoEstadual: form.inscricaoEstadual,
         inscricaoMunicipal: form.municipalRegistration, endereco: fullAddress, emailEmpresa: form.emailEmpresa,
         telefoneEmpresa: form.telefoneEmpresa, regimeTributario: form.regimeTributario,
         nomeResponsavel: form.nomeResponsavel, cpfResponsavel: form.cpfResponsavel, emailResponsavel: form.emailResponsavel,
         senhaResponsavel: form.senhaResponsavel, 
-        plan: form.plan, monthlyFee: Number(form.monthlyFee || 0), // 🎯 ENVIANDO O PLANO
-        modulosAtivos: JSON.stringify(["PDV", "KDS", "SALAO", "ESTOQUE", "FINANCEIRO", "FISCAL"])
+        plan: form.plan, monthlyFee: Number(form.monthlyFee || 0), 
+        modulosAtivos: JSON.stringify(["PDV", "KDS", "SALAO", "ESTOQUE", "FINANCEIRO", "FISCAL"]),
+        adminUserId: form.adminUserId === '' ? null : form.adminUserId // Envia o vínculo com o franqueado
       };
 
       const res = await fetch(`${API_URL}/api/master/lojas`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer zenix_master` },
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -154,7 +185,7 @@ export default function MasterNewStorePage() {
             </div>
           </div>
 
-          {/* SEÇÃO 3: PLANO E ASSINATURA (NOVO) */}
+          {/* SEÇÃO 3: PLANO E ASSINATURA */}
           <div className="bg-purple-50 p-6 rounded-3xl border border-purple-200 space-y-4">
             <h2 className="text-xs font-black text-purple-600 uppercase tracking-widest flex items-center gap-2"><span>💎</span> Plano de Assinatura e Pagamento</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -172,6 +203,26 @@ export default function MasterNewStorePage() {
               </div>
             </div>
           </div>
+
+          {/*SEÇÃO EXTRA EXCLUSIVA PARA SUPER MASTER: DIRECIONAR FRANQUEADO */}
+          {isSuperMaster && (
+             <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 space-y-4">
+               <h2 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><span>👥</span> Vínculo de Gestão (Franqueado/Revenda)</h2>
+               <p className="text-[10px] text-emerald-600 font-medium">Selecione qual usuário Master terá acesso a esta loja no painel. Deixe em branco se a loja pertencer à Matriz.</p>
+               <div>
+                  <select 
+                     value={form.adminUserId || ''} 
+                     onChange={e => setForm({...form, adminUserId: e.target.value})} 
+                     className="w-full bg-white border border-emerald-300 rounded-xl p-3.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 shadow-sm font-bold cursor-pointer"
+                  >
+                     <option value="">-- Sem Vínculo (Pertence à Matriz) --</option>
+                     {adminUsers.map(user => (
+                        <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
+                     ))}
+                  </select>
+               </div>
+             </div>
+          )}
 
           {/* SEÇÃO 4: ENDEREÇO DA EMPRESA */}
           <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4">
