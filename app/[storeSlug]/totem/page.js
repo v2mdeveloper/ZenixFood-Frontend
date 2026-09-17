@@ -9,11 +9,12 @@ const getCategoryIcon = (category) => {
   if (/pizza/i.test(textToSearch)) return '🍕';
   if (/bebida|drink|suco|refri|água|agua|chopp|cerveja/i.test(textToSearch)) return '🥤';
   if (/lanche|hamburguer|burger|sanduiche|sanduíche|combo/i.test(textToSearch)) return '🍔';
-  if (/sobremesa|doce|sorvete|açai|açaí|acai|bolo/i.test(textToSearch)) return '🍦';
-  if (/prato|refeicao|refeição|marmita|almoço|almoco|janta|restaurante/i.test(textToSearch)) return '🍽️';
+  if (/sobremesa|doce|sorvete|açai|açaí|acai|bolo/i.test(textToSearch)) return '🍨';
+  if (/prato|pratos|principal|entradas|entrada|prato|refeicao|refeição|marmita|almoço|almoco|janta|restaurante/i.test(textToSearch)) return '🍽️';
   if (/porçao|porção|porcao|petisco|fritas/i.test(textToSearch)) return '🍟';
   if (/salgado|pastel|coxinha/i.test(textToSearch)) return '🥟';
   if (/cafe|café|cappuccino/i.test(textToSearch)) return '☕';
+  if (/churasco|espetinho|/i.test(textToSearch)) return '🥩';
 
   return '🍽️'; // Ícone Padrão caso não ache nenhuma palavra-chave
 };
