@@ -68,8 +68,45 @@ export default function MasterUsersTab({ API_URL }) {
     setIsModalOpen(true);
   };
 
+  // 🎯 MÁSCARAS E BUSCA DE CEP
+  const handleCpfChange = (e) => {
+    let val = e.target.value.replace(/\D/g, '');
+    if (val.length > 11) val = val.slice(0, 11);
+    val = val.replace(/(\d{3})(\d)/, '$1.$2');
+    val = val.replace(/(\d{3})(\d)/, '$1.$2');
+    val = val.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    setFormData(prev => ({ ...prev, cpf: val }));
+  };
+
+  const handleCepSearch = async (e) => {
+    let cepVal = e.target.value.replace(/\D/g, '');
+    if (cepVal.length > 8) cepVal = cepVal.slice(0, 8);
+    const maskedCep = cepVal.replace(/^(\d{5})(\d)/, '$1-$2');
+    setFormData(prev => ({ ...prev, cep: maskedCep }));
+    
+    if (cepVal.length === 8) {
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${cepVal}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          setFormData(prev => ({
+            ...prev, 
+            address: data.logradouro || prev.address, 
+            neighborhood: data.bairro || prev.neighborhood,
+            city: data.localidade || prev.city, 
+            uf: data.uf || prev.uf
+          }));
+        }
+      } catch (err) {}
+    }
+  };
+
   const handleSaveUser = async (e) => {
     e.preventDefault();
+    if (formData.cpf && formData.cpf.length > 0 && formData.cpf.length < 14) {
+      return alert('Por favor, preencha o CPF completo.');
+    }
+
     const url = editingUser ? `${API_URL}/api/super/users/${editingUser.id}` : `${API_URL}/api/super/users`;
     const method = editingUser ? 'PUT' : 'POST';
 
@@ -194,7 +231,7 @@ export default function MasterUsersTab({ API_URL }) {
                   placeholder="Buscar por nome, CPF, e-mail ou loja..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 font-medium"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 font-medium"
                 />
               </div>
 
@@ -204,7 +241,7 @@ export default function MasterUsersTab({ API_URL }) {
                   type="date" 
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 font-medium text-slate-600"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500 font-medium"
                 />
               </div>
 
@@ -213,7 +250,7 @@ export default function MasterUsersTab({ API_URL }) {
                 <select 
                   value={filterRole}
                   onChange={(e) => setFilterRole(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 font-bold text-slate-700 appearance-none cursor-pointer"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500 font-bold appearance-none cursor-pointer"
                 >
                   <option value="ALL">Todos os Níveis</option>
                   <option value="MASTER">Franqueados (Master)</option>
@@ -315,10 +352,9 @@ export default function MasterUsersTab({ API_URL }) {
         </div>
       </div>
 
-      {/* 🔥 MODAL DE CADASTRO/EDIÇÃO REMOVIDO DO CONTAINER ANIMADO */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-fade-in-up">
-          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl flex flex-col max-h-full overflow-hidden">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl flex flex-col max-h-full overflow-hidden border border-slate-200">
             
             <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center bg-white z-10 shrink-0">
               <h3 className="text-2xl font-black text-slate-800 flex items-center gap-3">
@@ -333,13 +369,25 @@ export default function MasterUsersTab({ API_URL }) {
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                 <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><span>👤</span> Dados Pessoais e Acesso</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Nome Completo</label><input type="text" required value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 font-bold" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CPF</label><input type="text" value={formData.cpf} onChange={e=>setFormData({...formData, cpf: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 font-mono" placeholder="Apenas números" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">E-mail (Usado para Login)</label><input type="email" required value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 font-bold" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">{editingUser ? 'Nova Senha (opcional)' : 'Senha Inicial de Acesso'}</label><input type="password" required={!editingUser} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500" placeholder={editingUser ? 'Deixe em branco para não alterar' : '••••••••'} /></div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Nome Completo</label>
+                    <input type="text" required value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 font-bold" placeholder="Nome completo" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CPF</label>
+                    <input type="text" value={formData.cpf} onChange={handleCpfChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 font-mono" placeholder="Apenas números" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">E-mail (Usado para Login)</label>
+                    <input type="email" required value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 font-bold" placeholder="email@exemplo.com" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">{editingUser ? 'Nova Senha (opcional)' : 'Senha Inicial de Acesso'}</label>
+                    <input type="password" required={!editingUser} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500" placeholder={editingUser ? 'Deixe em branco para não alterar' : '••••••••'} />
+                  </div>
                   <div className="md:col-span-2">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Nível de Permissão na Plataforma</label>
-                    <select value={formData.role} onChange={e=>setFormData({...formData, role: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm focus:outline-none focus:border-blue-500 font-black text-slate-700 cursor-pointer">
+                    <select value={formData.role} onChange={e=>setFormData({...formData, role: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500 font-black cursor-pointer">
                       <option value="MASTER">💼 Franqueado / Revendedor (Gerencia apenas suas lojas)</option>
                       <option value="SUPER_MASTER">👑 Super Master (Dono - Acesso irrestrito a todo o sistema)</option>
                     </select>
@@ -350,11 +398,26 @@ export default function MasterUsersTab({ API_URL }) {
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                 <h4 className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-4 flex items-center gap-2"><span>📍</span> Endereço</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CEP</label><input type="text" value={formData.cep} onChange={e=>setFormData({...formData, cep: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500 font-mono" /></div>
-                  <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Rua / Logradouro</label><input type="text" value={formData.address} onChange={e=>setFormData({...formData, address: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Bairro</label><input type="text" value={formData.neighborhood} onChange={e=>setFormData({...formData, neighborhood: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Cidade</label><input type="text" value={formData.city} onChange={e=>setFormData({...formData, city: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">UF</label><input type="text" maxLength="2" value={formData.uf} onChange={e=>setFormData({...formData, uf: e.target.value.toUpperCase()})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500 uppercase font-mono text-center" /></div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CEP</label>
+                    <input type="text" value={formData.cep} onChange={handleCepSearch} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 font-mono" placeholder="00000-000" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Rua / Logradouro</label>
+                    <input type="text" value={formData.address} onChange={e=>setFormData({...formData, address: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500" placeholder="Nome da rua" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Bairro</label>
+                    <input type="text" value={formData.neighborhood} onChange={e=>setFormData({...formData, neighborhood: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500" placeholder="Bairro" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Cidade</label>
+                    <input type="text" value={formData.city} onChange={e=>setFormData({...formData, city: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500" placeholder="Cidade" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">UF</label>
+                    <input type="text" maxLength="2" value={formData.uf} onChange={e=>setFormData({...formData, uf: e.target.value.toUpperCase()})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 uppercase font-mono text-center" placeholder="SP" />
+                  </div>
                 </div>
               </div>
 
