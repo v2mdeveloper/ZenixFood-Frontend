@@ -1,12 +1,17 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Shield, ShieldAlert, Store } from 'lucide-react';
+import { Plus, Edit2, Shield, ShieldAlert, Store, Search, Download, Filter, Calendar } from 'lucide-react';
 
 export default function MasterUsersTab({ API_URL }) {
   const [users, setUsers] = useState([]);
   const [stores, setStores] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
   
+  // Estados de Filtro
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterDate, setFilterDate] = useState('');
+  const [filterRole, setFilterRole] = useState('ALL');
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   
@@ -113,129 +118,259 @@ export default function MasterUsersTab({ API_URL }) {
     });
   };
 
+  // 🎯 LÓGICA DE FILTRAGEM
+  const filteredUsers = users.filter(u => {
+    // Filtro de Texto (Nome, CPF, Email ou Nome da Loja vinculada)
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = 
+      (u.name && u.name.toLowerCase().includes(searchLower)) ||
+      (u.cpf && u.cpf.toLowerCase().includes(searchLower)) ||
+      (u.email && u.email.toLowerCase().includes(searchLower)) ||
+      (u.managedStores && u.managedStores.some(s => (s.razaoSocial || s.name || '').toLowerCase().includes(searchLower)));
+
+    // Filtro de Nível
+    const matchesRole = filterRole === 'ALL' || u.role === filterRole;
+
+    // Filtro de Data
+    let matchesDate = true;
+    if (filterDate && u.createdAt) {
+      const userDate = new Date(u.createdAt).toISOString().split('T')[0];
+      matchesDate = userDate === filterDate;
+    }
+
+    return matchesSearch && matchesRole && matchesDate;
+  });
+
+  // 📊 EXPORTAR PARA EXCEL (CSV)
+  const handleExportCSV = () => {
+    const headers = ['Nome Completo', 'CPF', 'E-mail', 'Nível de Acesso', 'Status', 'Data de Cadastro', 'Lojas Vinculadas'];
+    const csvRows = [headers.join(',')];
+
+    filteredUsers.forEach(u => {
+      const lojas = u.managedStores ? u.managedStores.map(s => s.razaoSocial || s.name || s.slug).join(' / ') : '';
+      const status = u.isActive ? 'Ativo' : 'Bloqueado';
+      const dataCadastro = u.createdAt ? new Date(u.createdAt).toLocaleDateString('pt-BR') : '-';
+      const role = u.role === 'SUPER_MASTER' ? 'Super Master' : 'Master (Franqueado)';
+      
+      const row = [u.name, u.cpf, u.email, role, status, dataCadastro, lojas];
+      // Escapa aspas e vírgulas para não quebrar o Excel
+      csvRows.push(row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','));
+    });
+
+    const blob = new Blob(["\uFEFF" + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Relatorio_Franqueados_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+    <div className="space-y-6 animate-fade-in-up font-sans text-slate-800">
+      
+      {/* CABEÇALHO */}
+      <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-            <Shield className="w-6 h-6 text-blue-600" /> Gestão de Usuários Master
+            <Shield className="w-6 h-6 text-blue-600" /> Gestão de Franqueados
           </h2>
-          <p className="text-sm text-slate-500 mt-1">Gerencie quem tem acesso aos restaurantes. Desative ou edite contas.</p>
+          <p className="text-sm text-slate-500 mt-1 font-medium">Gerencie o acesso dos seus revendedores e as lojas vinculadas a eles.</p>
         </div>
-        <button onClick={() => openModal()} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-black transition-all shadow-md flex items-center gap-2">
-          <Plus className="w-5 h-5" /> Novo Usuário
+        <button onClick={() => openModal()} className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-black transition-all shadow-md flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+          <Plus className="w-5 h-5" /> Adicionar Franqueado
         </button>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto min-h-[300px] relative">
-          {isLoading && <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-10">Carregando...</div>}
-          
+      {/* BARRA DE FERRAMENTAS E FILTROS */}
+      <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col lg:flex-row gap-4 justify-between">
+        
+        <div className="flex flex-col md:flex-row gap-4 flex-1">
+          {/* Busca por Texto */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Buscar por nome, CPF, e-mail ou loja..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 font-medium"
+            />
+          </div>
+
+          {/* Filtro de Data */}
+          <div className="relative flex-1 max-w-[200px]">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="date" 
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 font-medium text-slate-600"
+            />
+          </div>
+
+          {/* Filtro de Nível */}
+          <div className="relative flex-1 max-w-[200px]">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <select 
+              value={filterRole}
+              onChange={(e) => setFilterRole(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 font-bold text-slate-700 appearance-none cursor-pointer"
+            >
+              <option value="ALL">Todos os Níveis</option>
+              <option value="MASTER">Franqueados (Master)</option>
+              <option value="SUPER_MASTER">Acesso Global (Super)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Botão Exportar */}
+        <button onClick={handleExportCSV} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-5 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer">
+          <Download className="w-4 h-4" /> Exportar Planilha
+        </button>
+      </div>
+
+      {/* TABELA DE USUÁRIOS */}
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden relative min-h-[400px]">
+        {isLoading && (
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
+            <span className="text-4xl animate-spin mb-4">⚙️</span>
+            <p className="text-blue-600 font-bold">Carregando usuários...</p>
+          </div>
+        )}
+        
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 uppercase font-black">
+            <thead className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-500 uppercase font-black tracking-widest">
               <tr>
-                <th className="px-6 py-4">Usuário</th>
-                <th className="px-6 py-4">Contato</th>
-                <th className="px-6 py-4">Nível</th>
-                <th className="px-6 py-4">Lojas Vinculadas</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Ações</th>
+                <th className="px-6 py-5">Usuário & Contato</th>
+                <th className="px-6 py-5">Nível de Acesso</th>
+                <th className="px-6 py-5">Carteira de Clientes (Lojas)</th>
+                <th className="px-6 py-5">Data de Cadastro</th>
+                <th className="px-6 py-5">Status</th>
+                <th className="px-6 py-5 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {users.map(u => (
-                <tr key={u.id} className={`hover:bg-slate-50 transition-colors ${!u.isActive ? 'opacity-60 bg-red-50/30' : ''}`}>
-                  <td className="px-6 py-4">
-                    <p className="font-black text-slate-900">{u.name}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">CPF: {u.cpf || 'Não informado'}</p>
+              {filteredUsers.map(u => (
+                <tr key={u.id} className={`hover:bg-slate-50 transition-colors ${!u.isActive ? 'opacity-70 bg-red-50/20' : ''}`}>
+                  
+                  <td className="px-6 py-5">
+                    <p className="font-black text-slate-900 text-base">{u.name}</p>
+                    <p className="text-xs font-bold text-slate-500 mt-1">{u.email}</p>
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">CPF: {u.cpf || 'Não informado'}</p>
                   </td>
-                  <td className="px-6 py-4 font-medium">{u.email}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black tracking-widest ${u.role === 'SUPER_MASTER' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                      {u.role === 'SUPER_MASTER' ? 'SUPER MASTER' : 'MASTER (REVENDEDOR)'}
+                  
+                  <td className="px-6 py-5">
+                    <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase border ${u.role === 'SUPER_MASTER' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                      {u.role === 'SUPER_MASTER' ? '👑 SUPER MASTER' : '💼 FRANQUEADO'}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  
+                  <td className="px-6 py-5">
                     {u.role === 'SUPER_MASTER' ? (
-                      <span className="text-xs font-bold text-slate-400">Acesso Global</span>
+                      <span className="text-xs font-bold text-slate-400 italic">Acesso total a todas as lojas</span>
                     ) : (
-                      <div className="flex items-center gap-1.5 font-bold text-slate-700">
-                        <Store className="w-4 h-4 text-amber-500" /> 
-                        {u.managedStores?.length || 0} Restaurante(s)
+                      <div className="flex flex-col gap-1">
+                        <span className="flex items-center gap-1.5 font-bold text-slate-700 text-sm">
+                          <Store className="w-4 h-4 text-amber-500" /> 
+                          {u.managedStores?.length || 0} Restaurante(s)
+                        </span>
+                        {/* Mostra um resumo das lojas vinculadas */}
+                        {u.managedStores && u.managedStores.length > 0 && (
+                          <span className="text-[10px] text-slate-400 font-medium truncate max-w-[200px] inline-block" title={u.managedStores.map(s => s.razaoSocial).join(', ')}>
+                            {u.managedStores.map(s => s.razaoSocial || s.name).join(', ')}
+                          </span>
+                        )}
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-4">
-                    <button onClick={() => toggleUserStatus(u)} className={`text-[10px] font-black px-3 py-1.5 rounded transition-colors ${u.isActive ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
-                      {u.isActive ? '🟢 ATIVO' : '🔴 BLOQUEADO'}
+
+                  <td className="px-6 py-5 text-xs font-bold text-slate-600">
+                    {u.createdAt ? new Date(u.createdAt).toLocaleDateString('pt-BR') : '-'}
+                  </td>
+
+                  <td className="px-6 py-5">
+                    <button onClick={() => toggleUserStatus(u)} className={`text-[10px] font-black px-3 py-1.5 rounded-lg border uppercase tracking-widest transition-colors cursor-pointer ${u.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200' : 'bg-red-50 text-red-600 border-red-200 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200'}`}>
+                      {u.isActive ? 'Permitido' : 'Bloqueado'}
                     </button>
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <button onClick={() => openModal(u)} className="bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-700 p-2 rounded-lg transition-colors inline-flex items-center gap-2 text-xs font-bold">
+
+                  <td className="px-6 py-5 text-right">
+                    <button onClick={() => openModal(u)} className="bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-700 border border-slate-200 hover:border-amber-300 px-4 py-2 rounded-xl transition-all inline-flex items-center gap-2 text-xs font-bold cursor-pointer">
                       <Edit2 className="w-4 h-4" /> Editar
                     </button>
                   </td>
                 </tr>
               ))}
-              {users.length === 0 && !isLoading && (
-                <tr><td colSpan={6} className="text-center p-8 text-slate-500">Nenhum usuário cadastrado.</td></tr>
+              
+              {filteredUsers.length === 0 && !isLoading && (
+                <tr>
+                  <td colSpan={6} className="text-center py-16">
+                    <span className="text-5xl block mb-4">🕵️‍♂️</span>
+                    <p className="text-slate-500 font-bold text-lg">Nenhum usuário encontrado.</p>
+                    <p className="text-slate-400 text-sm mt-1">Tente limpar os filtros ou adicionar um novo franqueado.</p>
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* 🚀 MODAL DE CADASTRO/EDIÇÃO */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-center items-start p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl my-8 relative flex flex-col">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                {editingUser ? <Edit2 className="w-5 h-5 text-amber-500" /> : <Plus className="w-5 h-5 text-blue-500" />}
-                {editingUser ? 'Editar Usuário Master' : 'Cadastrar Novo Usuário Master'}
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-center items-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl my-8 relative flex flex-col max-h-[90vh] animate-fade-in-up border border-slate-200">
+            <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center shrink-0">
+              <h3 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+                {editingUser ? <span className="text-amber-500">✏️</span> : <span className="text-blue-500">✨</span>}
+                {editingUser ? 'Editar Franqueado' : 'Cadastrar Novo Franqueado'}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors font-bold">✕</button>
+              <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors font-black text-lg cursor-pointer">✕</button>
             </div>
 
-            <form onSubmit={handleSaveUser} className="flex-1 overflow-y-auto p-6 space-y-8">
+            <form onSubmit={handleSaveUser} className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 hide-scrollbar">
               
-              <div>
-                <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Dados de Acesso e Contato</h4>
+              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200">
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><span>👤</span> Dados Pessoais e Acesso</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Nome Completo</label><input type="text" required value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 font-bold" /></div>
-                  <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">CPF</label><input type="text" value={formData.cpf} onChange={e=>setFormData({...formData, cpf: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500" placeholder="Apenas números" /></div>
-                  <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">E-mail (Login)</label><input type="email" required value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500" /></div>
-                  <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">{editingUser ? 'Nova Senha (deixe em branco para manter)' : 'Senha de Acesso'}</label><input type="password" required={!editingUser} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Nome Completo</label><input type="text" required value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 font-bold shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CPF</label><input type="text" value={formData.cpf} onChange={e=>setFormData({...formData, cpf: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 font-mono shadow-sm" placeholder="Apenas números" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">E-mail (Usado para Login)</label><input type="email" required value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 shadow-sm font-bold" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">{editingUser ? 'Nova Senha (opcional)' : 'Senha Inicial de Acesso'}</label><input type="password" required={!editingUser} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 shadow-sm" placeholder={editingUser ? 'Deixe em branco para não alterar' : '••••••••'} /></div>
                   <div className="md:col-span-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Nível de Permissão</label>
-                    <select value={formData.role} onChange={e=>setFormData({...formData, role: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 font-bold text-slate-700">
-                      <option value="MASTER">Master (Apenas gerencia lojas vinculadas a ele)</option>
-                      <option value="SUPER_MASTER">Super Master (Acesso total a TUDO no sistema)</option>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Nível de Permissão na Plataforma</label>
+                    <select value={formData.role} onChange={e=>setFormData({...formData, role: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm focus:outline-none focus:border-blue-500 font-black text-slate-700 shadow-sm cursor-pointer">
+                      <option value="MASTER">💼 Franqueado / Revendedor (Gerencia apenas suas lojas)</option>
+                      <option value="SUPER_MASTER">👑 Super Master (Dono - Acesso irrestrito a todo o sistema)</option>
                     </select>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Endereço</h4>
+              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200">
+                <h4 className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-4 flex items-center gap-2"><span>📍</span> Endereço</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">CEP</label><input type="text" value={formData.cep} onChange={e=>setFormData({...formData, cep: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500" /></div>
-                  <div className="md:col-span-2"><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Rua / Endereço</label><input type="text" value={formData.address} onChange={e=>setFormData({...formData, address: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500" /></div>
-                  <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Bairro</label><input type="text" value={formData.neighborhood} onChange={e=>setFormData({...formData, neighborhood: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500" /></div>
-                  <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Cidade</label><input type="text" value={formData.city} onChange={e=>setFormData({...formData, city: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500" /></div>
-                  <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">UF</label><input type="text" maxLength="2" value={formData.uf} onChange={e=>setFormData({...formData, uf: e.target.value.toUpperCase()})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 uppercase" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CEP</label><input type="text" value={formData.cep} onChange={e=>setFormData({...formData, cep: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500 shadow-sm font-mono" /></div>
+                  <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Rua / Logradouro</label><input type="text" value={formData.address} onChange={e=>setFormData({...formData, address: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500 shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Bairro</label><input type="text" value={formData.neighborhood} onChange={e=>setFormData({...formData, neighborhood: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500 shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Cidade</label><input type="text" value={formData.city} onChange={e=>setFormData({...formData, city: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500 shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">UF</label><input type="text" maxLength="2" value={formData.uf} onChange={e=>setFormData({...formData, uf: e.target.value.toUpperCase()})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500 uppercase font-mono text-center shadow-sm" /></div>
                 </div>
               </div>
 
               {formData.role === 'MASTER' && (
-                <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100">
+                <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-200">
                   <h4 className="text-sm font-black text-blue-800 flex items-center gap-2 mb-2">
                     <Store className="w-5 h-5" /> Quais restaurantes este usuário irá gerenciar?
                   </h4>
-                  <p className="text-xs text-blue-600 mb-4">Ao logar, ele terá acesso apenas aos painéis das lojas selecionadas abaixo.</p>
+                  <p className="text-xs text-blue-600 mb-4 font-medium">Ao logar, o Franqueado terá acesso administrativo exclusivo apenas às lojas selecionadas abaixo.</p>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2 hide-scrollbar">
                     {stores.map(store => (
-                      <label key={store.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${formData.managedStoreIds.includes(store.id) ? 'bg-white border-blue-500 shadow-sm' : 'bg-slate-50 border-slate-200 hover:border-blue-300'}`}>
+                      <label key={store.id} className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${formData.managedStoreIds.includes(store.id) ? 'bg-white border-blue-500 shadow-md' : 'bg-slate-50 border-slate-200 hover:border-blue-300'}`}>
                         <input 
                           type="checkbox" 
                           checked={formData.managedStoreIds.includes(store.id)} 
@@ -243,8 +378,8 @@ export default function MasterUsersTab({ API_URL }) {
                           className="w-5 h-5 accent-blue-600"
                         />
                         <div>
-                          <p className="font-bold text-slate-800 text-sm">{store.razaoSocial || store.name || 'Loja Sem Nome'}</p>
-                          <p className="text-[10px] text-slate-500">{store.slug}</p>
+                          <p className="font-bold text-slate-800 text-sm leading-tight">{store.razaoSocial || store.name || 'Loja Sem Nome'}</p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">/{store.slug}</p>
                         </div>
                       </label>
                     ))}
@@ -252,16 +387,22 @@ export default function MasterUsersTab({ API_URL }) {
                   </div>
                 </div>
               )}
+              
               {formData.role === 'SUPER_MASTER' && (
-                <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 flex items-start gap-3">
-                  <ShieldAlert className="w-6 h-6 text-purple-600 shrink-0 mt-0.5" />
-                  <p className="text-sm text-purple-800 font-bold">Usuários com nível Super Master têm acesso irrestrito a todos os restaurantes e configurações globais da plataforma. Não é necessário vincular lojas específicas.</p>
+                <div className="bg-purple-50 p-5 rounded-2xl border border-purple-200 flex items-start gap-4">
+                  <span className="text-3xl drop-shadow-sm">👑</span>
+                  <div>
+                    <h4 className="font-black text-purple-800 mb-1">Acesso Global Liberado</h4>
+                    <p className="text-xs text-purple-700 font-medium">Usuários com nível Super Master têm acesso irrestrito a todos os restaurantes e configurações globais da plataforma. Não é necessário vincular lojas específicas.</p>
+                  </div>
                 </div>
               )}
 
-              <div className="pt-4 border-t border-slate-100 flex gap-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-xl font-bold transition-all hover:bg-slate-200">Cancelar</button>
-                <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black transition-all shadow-md">Salvar Usuário</button>
+              <div className="pt-6 border-t border-slate-100 flex gap-4 shrink-0">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-100 border border-slate-300 text-slate-700 py-4 rounded-2xl font-bold transition-all hover:bg-slate-200 cursor-pointer">Cancelar</button>
+                <button type="submit" className="flex-2 bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-black transition-all shadow-xl active:scale-95 cursor-pointer">
+                  {editingUser ? 'Salvar Alterações' : 'Cadastrar Franqueado'}
+                </button>
               </div>
             </form>
           </div>
