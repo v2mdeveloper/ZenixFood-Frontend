@@ -4,13 +4,12 @@ import { useRouter } from 'next/navigation';
 import { Plus, Edit2, Shield, ShieldAlert, Store, Search, Download, Filter, Calendar, ArrowLeft } from 'lucide-react';
 
 export default function MasterUsersTab({ API_URL }) {
-  const router = useRouter(); // 🚀 Roteador para o botão voltar
+  const router = useRouter();
   
   const [users, setUsers] = useState([]);
   const [stores, setStores] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
   
-  // Estados de Filtro
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [filterRole, setFilterRole] = useState('ALL');
@@ -58,7 +57,7 @@ export default function MasterUsersTab({ API_URL }) {
         name: user.name || '', cpf: user.cpf || '', email: user.email || '', password: '', 
         cep: user.cep || '', address: user.address || '', neighborhood: user.neighborhood || '', 
         city: user.city || '', uf: user.uf || '', role: user.role || 'MASTER',
-        managedStoreIds: user.managedStores ? user.managedStores.map(s => s.id) : []
+        managedStoreIds: user.managedStores ? user.managedStores.map(st => st.id) : []
       });
     } else {
       setEditingUser(null);
@@ -121,14 +120,13 @@ export default function MasterUsersTab({ API_URL }) {
     });
   };
 
-  // 🎯 LÓGICA DE FILTRAGEM
   const filteredUsers = users.filter(u => {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
       (u.name && u.name.toLowerCase().includes(searchLower)) ||
       (u.cpf && u.cpf.toLowerCase().includes(searchLower)) ||
       (u.email && u.email.toLowerCase().includes(searchLower)) ||
-      (u.managedStores && u.managedStores.some(s => (s.razaoSocial || s.name || '').toLowerCase().includes(searchLower)));
+      (u.managedStores && u.managedStores.some(st => (st.razaoSocial || st.name || '').toLowerCase().includes(searchLower)));
 
     const matchesRole = filterRole === 'ALL' || u.role === filterRole;
 
@@ -141,13 +139,12 @@ export default function MasterUsersTab({ API_URL }) {
     return matchesSearch && matchesRole && matchesDate;
   });
 
-  // 📊 EXPORTAR PARA EXCEL (CSV)
   const handleExportCSV = () => {
     const headers = ['Nome Completo', 'CPF', 'E-mail', 'Nível de Acesso', 'Status', 'Data de Cadastro', 'Lojas Vinculadas'];
     const csvRows = [headers.join(',')];
 
     filteredUsers.forEach(u => {
-      const lojas = u.managedStores ? u.managedStores.map(s => s.razaoSocial || s.name || s.slug).join(' / ') : '';
+      const lojas = u.managedStores ? u.managedStores.map(st => st.razaoSocial || st.name || st.slug).join(' / ') : '';
       const status = u.isActive ? 'Ativo' : 'Bloqueado';
       const dataCadastro = u.createdAt ? new Date(u.createdAt).toLocaleDateString('pt-BR') : '-';
       const role = u.role === 'SUPER_MASTER' ? 'Super Master' : 'Master (Franqueado)';
@@ -167,14 +164,11 @@ export default function MasterUsersTab({ API_URL }) {
   };
 
   return (
-    // 🔥 Envelopamento claro forçado (bg-slate-50 min-h-screen)
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
       <div className="max-w-7xl mx-auto space-y-6 animate-fade-in-up">
         
-        {/* CABEÇALHO */}
         <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
-            {/* BOTÃO DE VOLTAR */}
             <button onClick={() => router.push('/master')} className="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 p-3 rounded-xl transition-all shadow-sm cursor-pointer" title="Voltar ao Dashboard">
               <ArrowLeft className="w-6 h-6" />
             </button>
@@ -190,11 +184,8 @@ export default function MasterUsersTab({ API_URL }) {
           </button>
         </div>
 
-        {/* BARRA DE FERRAMENTAS E FILTROS */}
         <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col lg:flex-row gap-4 justify-between">
-          
           <div className="flex flex-col md:flex-row gap-4 flex-1">
-            {/* Busca por Texto */}
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
@@ -206,7 +197,6 @@ export default function MasterUsersTab({ API_URL }) {
               />
             </div>
 
-            {/* Filtro de Data */}
             <div className="relative flex-1 max-w-[200px]">
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
@@ -217,7 +207,6 @@ export default function MasterUsersTab({ API_URL }) {
               />
             </div>
 
-            {/* Filtro de Nível */}
             <div className="relative flex-1 max-w-[200px]">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <select 
@@ -232,13 +221,11 @@ export default function MasterUsersTab({ API_URL }) {
             </div>
           </div>
 
-          {/* Botão Exportar */}
           <button onClick={handleExportCSV} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-5 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer">
             <Download className="w-4 h-4" /> Exportar Planilha
           </button>
         </div>
 
-        {/* TABELA DE USUÁRIOS */}
         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden relative min-h-[400px]">
           {isLoading && (
             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
@@ -285,8 +272,8 @@ export default function MasterUsersTab({ API_URL }) {
                             {u.managedStores?.length || 0} Restaurante(s)
                           </span>
                           {u.managedStores && u.managedStores.length > 0 && (
-                            <span className="text-[10px] text-slate-400 font-medium truncate max-w-[200px] inline-block" title={u.managedStores.map(s => s.razaoSocial).join(', ')}>
-                              {u.managedStores.map(s => s.razaoSocial || s.name).join(', ')}
+                            <span className="text-[10px] text-slate-400 font-medium truncate max-w-[200px] inline-block" title={u.managedStores.map(st => st.razaoSocial).join(', ')}>
+                              {u.managedStores.map(st => st.razaoSocial || st.name).join(', ')}
                             </span>
                           )}
                         </div>
@@ -325,7 +312,6 @@ export default function MasterUsersTab({ API_URL }) {
           </div>
         </div>
 
-        {/* 🚀 MODAL DE CADASTRO/EDIÇÃO */}
         {isModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-center items-center p-4 overflow-y-auto">
             <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl my-8 relative flex flex-col max-h-[90vh] animate-fade-in-up border border-slate-200">
@@ -417,4 +403,4 @@ export default function MasterUsersTab({ API_URL }) {
       </div>
     </div>
   );
-}s
+}
