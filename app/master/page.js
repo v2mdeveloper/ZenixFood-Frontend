@@ -5,17 +5,25 @@ import { useRouter } from 'next/navigation';
 export default function MasterDashboard() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [masterPassword, setMasterPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
   
+  // 🔐 ESTADOS DE LOGIN
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoginLoading, setIsLoginLoading] = useState(false);
+  
+  // 🔑 ESTADOS DE RECUPERAÇÃO DE SENHA
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotStatus, setForgotStatus] = useState('idle'); // idle, loading, success, error
+  const [forgotError, setForgotError] = useState('');
+  
+  // 🏬 ESTADOS DO PAINEL
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
-  
   const [editingStore, setEditingStore] = useState(null);
   const [viewingInvoicesStore, setViewingInvoicesStore] = useState(null);
-  
   const [invoices, setInvoices] = useState([]);
-  const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [isGeneratingBoleto, setIsGeneratingBoleto] = useState(false);
   const [newInvoiceForm, setNewInvoiceForm] = useState({ reference: '', amount: '', dueDate: '', notes: '' });
 
@@ -28,7 +36,7 @@ export default function MasterDashboard() {
     : 'https://zenixfood-backend.onrender.com';
 
   useEffect(() => {
-    if (localStorage.getItem('zenix_master_token') === 'authenticated' || localStorage.getItem('zenix_super_token')) {
+    if (localStorage.getItem('zenix_master_token') || localStorage.getItem('zenix_super_token')) {
       setIsAuthenticated(true);
     } else {
       setLoading(false);
@@ -42,16 +50,70 @@ export default function MasterDashboard() {
     }
   }, [isAuthenticated]);
 
-  const handleMasterLogin = (e) => {
+  // ==========================================
+  // 🔐 LÓGICA DE AUTENTICAÇÃO REAL
+  // ==========================================
+  const handleMasterLogin = async (e) => {
     e.preventDefault();
-    if (masterPassword === 'zenixadmin123') {
-      localStorage.setItem('zenix_master_token', 'authenticated');
-      // Hack de teste local (idealmente, isso viria da rota de login do backend)
+    setLoginError('');
+    setIsLoginLoading(true);
+
+    // 🛟 MODO DESENVOLVEDOR (Porta dos fundos enquanto a rota de login do backend não fica pronta)
+    if (email === 'admin@zenix' && password === 'zenixadmin123') {
+      localStorage.setItem('zenix_master_token', 'token_simulado');
       localStorage.setItem('zenix_super_token', 'token_simulado'); 
       setIsAuthenticated(true); 
-      setLoginError('');
-    } else { 
-      setLoginError('Senha incorreta! Acesso negado.'); 
+      setIsLoginLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/master/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      
+      if (res.ok && data.token) {
+        localStorage.setItem('zenix_master_token', data.token);
+        // Se o banco informar que ele é Super Master, salva o token de acesso total
+        if (data.user?.role === 'SUPER_MASTER') {
+          localStorage.setItem('zenix_super_token', data.token);
+        }
+        setIsAuthenticated(true);
+      } else {
+        setLoginError(data.error || 'E-mail ou senha incorretos.');
+      }
+    } catch (err) {
+      setLoginError('Erro de conexão ao servidor. O Backend está rodando?');
+    } finally {
+      setIsLoginLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setForgotStatus('loading');
+    setForgotError('');
+    
+    try {
+      const res = await fetch(`${API_URL}/api/master/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail })
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        setForgotStatus('success');
+      } else {
+        setForgotStatus('error');
+        setForgotError(data.error || 'E-mail não encontrado no sistema.');
+      }
+    } catch (err) {
+      setForgotStatus('error');
+      setForgotError('Erro de comunicação com o servidor.');
     }
   };
 
@@ -59,31 +121,30 @@ export default function MasterDashboard() {
     localStorage.removeItem('zenix_master_token');
     localStorage.removeItem('zenix_super_token');
     setIsAuthenticated(false); 
-    setMasterPassword('');
+    setEmail('');
+    setPassword('');
   };
 
-  // 👑 Verifica se o usuário atual é o DONO DO SISTEMA (Super Master) para liberar recursos globais
   const checkSuperMasterAccess = async () => {
+    // 🛟 Se usou o login de dev, força o super master
+    if (email === 'admin@zenix') setIsSuperMaster(true); 
+
     try {
       const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
       const res = await fetch(`${API_URL}/api/super/users`, { headers: { 'Authorization': `Bearer ${token}` } });
       
       if (res.ok) {
         setIsSuperMaster(true);
-        setAdminUsers(await res.json()); // Puxa os usuários para o select de vínculo
-      } else {
-        setIsSuperMaster(false); // É apenas um franqueado
+        setAdminUsers(await res.json()); 
       }
     } catch (error) {
-      setIsSuperMaster(false);
+      console.log("Aviso: Rota de usuários ainda não responde no backend, mas o layout foi liberado.");
     }
   };
 
   const fetchStores = async () => {
     try {
       const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
-      // O Backend já deve estar programado para retornar TODAS as lojas se for SuperMaster, 
-      // ou apenas as lojas vinculadas (where: { adminUserId: req.user.id }) se for Franqueado
       const res = await fetch(`${API_URL}/api/master/lojas`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) setStores(await res.json());
     } catch (error) {} finally { setLoading(false); }
@@ -98,7 +159,7 @@ export default function MasterDashboard() {
       nomeResponsavel: store.nomeResponsavel || '', cpfResponsavel: store.cpfResponsavel || '',
       emailResponsavel: store.emailResponsavel || '', endereco: store.endereco || '', logoUrl: store.logoUrl || '',
       plan: store.plan || 'STANDARD', monthlyFee: store.monthlyFee || '',
-      adminUserId: store.adminUserId || '' // Traz o ID do franqueado para edição
+      adminUserId: store.adminUserId || ''
     });
   };
 
@@ -139,7 +200,7 @@ export default function MasterDashboard() {
       const payload = { 
         ...editingStore, 
         monthlyFee: Number(editingStore.monthlyFee || 0),
-        adminUserId: editingStore.adminUserId === '' ? null : editingStore.adminUserId // Trata a desvinculação
+        adminUserId: editingStore.adminUserId === '' ? null : editingStore.adminUserId 
       };
 
       const res = await fetch(`${API_URL}/api/master/lojas/${editingStore.id}`, {
@@ -152,9 +213,7 @@ export default function MasterDashboard() {
         alert('Loja atualizada com sucesso!'); 
         setEditingStore(null); 
         fetchStores(); 
-      } else {
-        alert(data.error);
-      }
+      } else { alert(data.error); }
     } catch (error) { alert('Erro de conexão.'); }
   };
 
@@ -173,37 +232,103 @@ export default function MasterDashboard() {
   const handleGenerateBoletoCora = async (e) => {
     e.preventDefault();
     setIsGeneratingBoleto(true);
-    
     try {
       setTimeout(() => {
         alert(`Integração Cora: Boleto de R$ ${newInvoiceForm.amount} gerado e enviado para ${viewingInvoicesStore.emailEmpresa}!`);
         setIsGeneratingBoleto(false);
         setViewingInvoicesStore(null);
       }, 1500);
-    } catch (error) {
-      alert("Erro ao comunicar com a API de Boletos.");
-      setIsGeneratingBoleto(false);
-    }
+    } catch (error) { alert("Erro ao comunicar com a API de Boletos."); setIsGeneratingBoleto(false); }
   };
 
   const lojasAtivas = stores.filter(s => s.status === 'ACTIVE' || s.isActive).length;
 
+  // ==========================================
+  // 🔐 TELA DE LOGIN (ATUALIZADA)
+  // ==========================================
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white border border-slate-200 p-8 rounded-3xl w-full max-w-sm shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
-          <div className="text-center mb-8"><span className="text-4xl mb-3 inline-block animate-pulse">👑</span><h1 className="text-2xl font-black text-slate-800">Zenix Master</h1><p className="text-slate-500 text-xs mt-1">Gestão Administrativa SaaS</p></div>
-          <form onSubmit={handleMasterLogin} className="space-y-4">
-            <input type="password" required value={masterPassword} onChange={(e) => setMasterPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-center text-slate-900 focus:outline-none focus:border-amber-500 tracking-widest placeholder:tracking-normal" placeholder="Senha Master" />
-            {loginError && <p className="text-red-500 text-xs text-center font-bold">{loginError}</p>}
-            <button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 text-white font-black py-4 rounded-xl transition-all shadow-md mt-2 cursor-pointer active:scale-95">Acessar Backoffice</button>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans relative overflow-hidden">
+        {/* Elementos visuais de fundo */}
+        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-amber-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse delay-1000"></div>
+
+        <div className="bg-white border border-slate-200 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative z-10 animate-fade-in-up">
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+          
+          <div className="text-center mb-8">
+            <span className="text-5xl mb-4 inline-block drop-shadow-sm">👑</span>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight">Zenix Master</h1>
+            <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest font-bold">Gestão SaaS</p>
+          </div>
+          
+          <form onSubmit={handleMasterLogin} className="space-y-5">
+            <div>
+               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">E-mail de Acesso</label>
+               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors shadow-inner" placeholder="seu@email.com" />
+            </div>
+            
+            <div>
+               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex justify-between items-end mb-1">
+                 <span>Senha</span>
+                 <button type="button" onClick={() => { setIsForgotModalOpen(true); setForgotStatus('idle'); setForgotEmail(email); }} className="text-amber-600 hover:text-amber-500 normal-case tracking-normal">Esqueceu a senha?</button>
+               </label>
+               <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors shadow-inner tracking-widest placeholder:tracking-normal" placeholder="••••••••" />
+            </div>
+
+            {loginError && (
+               <div className="bg-red-50 text-red-600 p-3 rounded-xl border border-red-100 text-xs font-bold text-center animate-fade-in-up">
+                 ⚠️ {loginError}
+               </div>
+            )}
+            
+            <button type="submit" disabled={isLoginLoading} className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 text-white font-black py-4 rounded-xl transition-all shadow-lg mt-2 cursor-pointer active:scale-95 flex items-center justify-center gap-2">
+              {isLoginLoading ? <span className="animate-spin text-xl">⏳</span> : 'Acessar Painel'}
+            </button>
           </form>
         </div>
+
+        {/* 🔑 MODAL "ESQUECI MINHA SENHA" */}
+        {isForgotModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in-up">
+             <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm relative">
+                <button onClick={() => setIsForgotModalOpen(false)} className="absolute top-4 right-4 w-8 h-8 bg-slate-100 text-slate-500 rounded-full font-black hover:bg-slate-200">✕</button>
+                
+                <h3 className="text-xl font-black text-slate-800 mb-2">Recuperar Senha</h3>
+                
+                {forgotStatus === 'success' ? (
+                   <div className="text-center py-6">
+                      <span className="text-5xl block mb-4">📩</span>
+                      <h4 className="font-black text-emerald-600 text-lg mb-2">E-mail Enviado!</h4>
+                      <p className="text-sm text-slate-500 font-medium">Enviamos as instruções de recuperação para <strong>{forgotEmail}</strong>. Verifique sua caixa de entrada e spam.</p>
+                      <button onClick={() => setIsForgotModalOpen(false)} className="mt-6 w-full bg-slate-100 text-slate-700 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors">Voltar ao Login</button>
+                   </div>
+                ) : (
+                   <form onSubmit={handleForgotPassword}>
+                      <p className="text-sm text-slate-500 font-medium mb-6">Digite o e-mail associado à sua conta Master para receber um link de redefinição de senha.</p>
+                      
+                      <div className="mb-4">
+                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Seu E-mail</label>
+                         <input type="email" required value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-900 focus:outline-none focus:border-amber-500" placeholder="seu@email.com" />
+                      </div>
+
+                      {forgotError && <p className="text-red-500 text-xs font-bold mb-4">⚠️ {forgotError}</p>}
+
+                      <button type="submit" disabled={forgotStatus === 'loading'} className="w-full bg-amber-500 disabled:bg-amber-300 text-slate-900 font-black py-4 rounded-xl transition-all shadow-md mt-2 cursor-pointer active:scale-95">
+                         {forgotStatus === 'loading' ? 'Enviando...' : 'Enviar Link de Recuperação'}
+                      </button>
+                   </form>
+                )}
+             </div>
+          </div>
+        )}
       </div>
     );
   }
 
+  // ==========================================
+  // 🏢 TELA PRINCIPAL (LOGADO)
+  // ==========================================
   if (loading) return <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-amber-500 font-bold"><span className="text-4xl animate-spin mb-4">⚙️</span> Carregando Master...</div>;
 
   return (
@@ -219,7 +344,6 @@ export default function MasterDashboard() {
         <div className="flex flex-wrap gap-3">
           <button onClick={handleLogout} className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl font-bold transition-colors cursor-pointer text-sm shadow-sm">Sair</button>
           
-          {/* BOTÃO DE GESTÃO DE USUÁRIOS: Só aparece se for Super Master */}
           {isSuperMaster && (
             <button onClick={() => router.push('/master/user')} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-5 py-2.5 rounded-xl font-black transition-colors shadow-sm cursor-pointer flex items-center gap-2">
               <span>👥</span> Gestão de Franquias
@@ -267,7 +391,6 @@ export default function MasterDashboard() {
                      <p className="font-black text-slate-600">{store.nomeResponsavel}</p>
                      <p className="text-slate-500 text-xs font-bold mb-1.5">{store.telefoneEmpresa}</p>
                      
-                     {/* 🚀 INDICAÇÃO DO DONO DA LOJA */}
                      {store.adminUser ? (
                        <span className="bg-blue-50 border border-blue-100 text-blue-700 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center w-fit gap-1 mt-1">
                          👥 Franqueado: {store.adminUser.name}
@@ -348,7 +471,6 @@ export default function MasterDashboard() {
                 </div>
               </div>
               
-              {/* 🚀 DIRECIONADOR DE FRANQUEADOS (Exclusivo para Super Master) */}
               {isSuperMaster && (
                 <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-200">
                   <h3 className="text-xs font-black text-emerald-700 uppercase tracking-widest mb-2 flex items-center gap-2"><span>👥</span> Vínculo de Gestão (Franqueado/Revenda)</h3>
