@@ -1,24 +1,24 @@
+'use client';
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Shield, ShieldAlert, Store } from 'lucide-react';
 
 export default function MasterUsersTab({ API_URL }) {
   const [users, setUsers] = useState([]);
-  const [stores, setStores] = useState([]); // Lista de todos os restaurantes para vincular
+  const [stores, setStores] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   
-  // Estado do Formulário
   const [formData, setFormData] = useState({
     name: '', cpf: '', email: '', password: '',
     cep: '', address: '', neighborhood: '', city: '', uf: '',
     role: 'MASTER',
-    managedStoreIds: [] // Array com os IDs das lojas que ele gerencia
+    managedStoreIds: [] 
   });
 
   const fetchWithToken = async (url, options = {}) => {
-    const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_token');
+    const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
     const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
     return fetch(url, { ...options, headers });
   };
@@ -30,11 +30,9 @@ export default function MasterUsersTab({ API_URL }) {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // Busca todos os usuários do painel master
       const resUsers = await fetchWithToken(`${API_URL}/api/super/users`);
       if (resUsers.ok) setUsers(await resUsers.json());
 
-      // Busca todos os restaurantes/lojas cadastradas para popular o checkbox de vínculo
       const resStores = await fetchWithToken(`${API_URL}/api/super/stores`);
       if (resStores.ok) setStores(await resStores.json());
       
@@ -49,7 +47,7 @@ export default function MasterUsersTab({ API_URL }) {
     if (user) {
       setEditingUser(user);
       setFormData({
-        name: user.name || '', cpf: user.cpf || '', email: user.email || '', password: '', // Senha vazia na edição significa não alterar
+        name: user.name || '', cpf: user.cpf || '', email: user.email || '', password: '', 
         cep: user.cep || '', address: user.address || '', neighborhood: user.neighborhood || '', 
         city: user.city || '', uf: user.uf || '', role: user.role || 'MASTER',
         managedStoreIds: user.managedStores ? user.managedStores.map(s => s.id) : []
@@ -187,7 +185,6 @@ export default function MasterUsersTab({ API_URL }) {
         </div>
       </div>
 
-      {/* 🚀 MODAL DE CADASTRO/EDIÇÃO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-center items-start p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl my-8 relative flex flex-col">
@@ -201,7 +198,6 @@ export default function MasterUsersTab({ API_URL }) {
 
             <form onSubmit={handleSaveUser} className="flex-1 overflow-y-auto p-6 space-y-8">
               
-              {/* DADOS PESSOAIS */}
               <div>
                 <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Dados de Acesso e Contato</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -219,7 +215,6 @@ export default function MasterUsersTab({ API_URL }) {
                 </div>
               </div>
 
-              {/* ENDEREÇO */}
               <div>
                 <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Endereço</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -231,7 +226,6 @@ export default function MasterUsersTab({ API_URL }) {
                 </div>
               </div>
 
-              {/* VÍNCULO DE RESTAURANTES (CLIENTES) */}
               {formData.role === 'MASTER' && (
                 <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100">
                   <h4 className="text-sm font-black text-blue-800 flex items-center gap-2 mb-2">
