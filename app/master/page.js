@@ -200,21 +200,28 @@ export default function MasterDashboard() {
       const payload = { 
         ...editingStore, 
         monthlyFee: Number(editingStore.monthlyFee || 0),
-        adminUserId: editingStore.adminUserId === '' ? null : editingStore.adminUserId 
+        adminUserId: editingStore.adminUserId === '' || editingStore.adminUserId === 'null' ? null : editingStore.adminUserId 
       };
 
       const res = await fetch(`${API_URL}/api/master/lojas/${editingStore.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(payload)
       });
       
       const data = await res.json();
-      if (data.success) { 
+      
+      if (res.ok && data.success) { 
         alert('Loja atualizada com sucesso!'); 
         setEditingStore(null); 
         fetchStores(); 
-      } else { alert(data.error); }
-    } catch (error) { alert('Erro de conexão.'); }
+      } else { 
+        // 🎯 ISSO VAI MOSTRAR O ERRO TÉCNICO EXATO NO ALERTA
+        alert(`Erro ao editar: ${data.error || 'Erro desconhecido'} (Código: ${data.prismaCode || 'N/A'})`); 
+      }
+    } catch (error) { 
+      alert('Erro de conexão com o servidor.'); 
+    }
   };
 
   const toggleStoreStatus = async (store) => {
