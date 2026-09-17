@@ -134,6 +134,20 @@ export default function MasterDashboard() {
   };
 
   const handleEditClick = (store) => {
+    // Tenta "desmembrar" o endereço antigo se ele estiver salvo em formato de texto único
+    let rua = store.street || '';
+    let num = store.number || '';
+    let comp = store.complement || '';
+    let bair = store.neighborhood || '';
+    let cid = store.city || '';
+    let est = store.state || '';
+    let cepCode = store.cep || '';
+
+    if (store.endereco && !store.street) {
+      // Se houver um endereço em string, joga o texto completo no logradouro para não perder nada
+      rua = store.endereco;
+    }
+
     setEditingStore({
       ...store,
       slug: store.slug || '', 
@@ -147,13 +161,13 @@ export default function MasterDashboard() {
       cpfResponsavel: store.cpfResponsavel || '',
       emailResponsavel: store.emailResponsavel || '', 
       senhaResponsavel: '', 
-      cep: store.cep || '', 
-      street: store.street || '', 
-      number: store.number || '', 
-      complement: store.complement || '', 
-      neighborhood: store.neighborhood || '', 
-      city: store.city || '', 
-      state: store.state || '',
+      cep: cepCode, 
+      street: rua, 
+      number: num, 
+      complement: comp, 
+      neighborhood: bair, 
+      city: cid, 
+      state: est,
       plan: store.plan || 'STANDARD', 
       monthlyFee: store.monthlyFee || '',
       adminUserId: store.adminUserId || ''
