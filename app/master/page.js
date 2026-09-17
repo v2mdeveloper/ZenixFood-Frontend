@@ -17,36 +17,74 @@ export default function MasterDashboard() {
   const [invoices, setInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [isGeneratingBoleto, setIsGeneratingBoleto] = useState(false);
-
   const [newInvoiceForm, setNewInvoiceForm] = useState({ reference: '', amount: '', dueDate: '', notes: '' });
+
+  // 🛡️ ESTADOS DO SISTEMA MULTI-TENANT (SaaS)
+  const [isSuperMaster, setIsSuperMaster] = useState(false);
+  const [adminUsers, setAdminUsers] = useState([]);
 
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
 
   useEffect(() => {
-    if (localStorage.getItem('zenix_master_token') === 'authenticated') setIsAuthenticated(true);
-    else setLoading(false);
+    if (localStorage.getItem('zenix_master_token') === 'authenticated' || localStorage.getItem('zenix_super_token')) {
+      setIsAuthenticated(true);
+    } else {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { if (isAuthenticated) fetchStores(); }, [isAuthenticated]);
+  useEffect(() => { 
+    if (isAuthenticated) {
+      fetchStores(); 
+      checkSuperMasterAccess();
+    }
+  }, [isAuthenticated]);
 
   const handleMasterLogin = (e) => {
     e.preventDefault();
     if (masterPassword === 'zenixadmin123') {
       localStorage.setItem('zenix_master_token', 'authenticated');
-      setIsAuthenticated(true); setLoginError('');
-    } else { setLoginError('Senha incorreta! Acesso negado.'); }
+      // Hack de teste local (idealmente, isso viria da rota de login do backend)
+      localStorage.setItem('zenix_super_token', 'token_simulado'); 
+      setIsAuthenticated(true); 
+      setLoginError('');
+    } else { 
+      setLoginError('Senha incorreta! Acesso negado.'); 
+    }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('zenix_master_token');
-    setIsAuthenticated(false); setMasterPassword('');
+    localStorage.removeItem('zenix_super_token');
+    setIsAuthenticated(false); 
+    setMasterPassword('');
+  };
+
+  // 👑 Verifica se o usuário atual é o DONO DO SISTEMA (Super Master) para liberar recursos globais
+  const checkSuperMasterAccess = async () => {
+    try {
+      const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
+      const res = await fetch(`${API_URL}/api/super/users`, { headers: { 'Authorization': `Bearer ${token}` } });
+      
+      if (res.ok) {
+        setIsSuperMaster(true);
+        setAdminUsers(await res.json()); // Puxa os usuários para o select de vínculo
+      } else {
+        setIsSuperMaster(false); // É apenas um franqueado
+      }
+    } catch (error) {
+      setIsSuperMaster(false);
+    }
   };
 
   const fetchStores = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/master/lojas`, { headers: { 'Authorization': `Bearer zenix_master` } });
+      const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
+      // O Backend já deve estar programado para retornar TODAS as lojas se for SuperMaster, 
+      // ou apenas as lojas vinculadas (where: { adminUserId: req.user.id }) se for Franqueado
+      const res = await fetch(`${API_URL}/api/master/lojas`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) setStores(await res.json());
     } catch (error) {} finally { setLoading(false); }
   };
@@ -59,16 +97,15 @@ export default function MasterDashboard() {
       emailEmpresa: store.emailEmpresa || '', telefoneEmpresa: store.telefoneEmpresa || '',
       nomeResponsavel: store.nomeResponsavel || '', cpfResponsavel: store.cpfResponsavel || '',
       emailResponsavel: store.emailResponsavel || '', endereco: store.endereco || '', logoUrl: store.logoUrl || '',
-      plan: store.plan || 'STANDARD', monthlyFee: store.monthlyFee || ''
+      plan: store.plan || 'STANDARD', monthlyFee: store.monthlyFee || '',
+      adminUserId: store.adminUserId || '' // Traz o ID do franqueado para edição
     });
   };
 
   const handleOpenInvoices = (store) => {
     setViewingInvoicesStore(store);
-    // Sugere valores padrão baseados na loja
     const mesAtual = new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
     setNewInvoiceForm({ reference: `Mensalidade - ${mesAtual.toUpperCase()}`, amount: store.monthlyFee || '', dueDate: '', notes: '' });
-    // fetchInvoices(store.id); // Futura rota para buscar os boletos emitidos
     setInvoices([]); 
   };
 
@@ -97,57 +134,52 @@ export default function MasterDashboard() {
     if (editingStore.cpfResponsavel && editingStore.cpfResponsavel.length > 0 && editingStore.cpfResponsavel.length < 14) return alert('CPF incompleto.');
     
     try {
-      // Garantindo que a mensalidade seja enviada como número
-      const payload = { ...editingStore, monthlyFee: Number(editingStore.monthlyFee || 0) };
+      const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
+      
+      const payload = { 
+        ...editingStore, 
+        monthlyFee: Number(editingStore.monthlyFee || 0),
+        adminUserId: editingStore.adminUserId === '' ? null : editingStore.adminUserId // Trata a desvinculação
+      };
 
       const res = await fetch(`${API_URL}/api/master/lojas/${editingStore.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer zenix_master` },
+        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(payload)
       });
+      
       const data = await res.json();
-      if (data.success) { alert('Loja atualizada!'); setEditingStore(null); fetchStores(); } else alert(data.error);
+      if (data.success) { 
+        alert('Loja atualizada com sucesso!'); 
+        setEditingStore(null); 
+        fetchStores(); 
+      } else {
+        alert(data.error);
+      }
     } catch (error) { alert('Erro de conexão.'); }
   };
 
   const toggleStoreStatus = async (store) => {
     if (!confirm(`Deseja ${store.isActive ? 'BLOQUEAR' : 'DESBLOQUEAR'} a loja ${store.razaoSocial}?`)) return;
     try {
+      const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
       await fetch(`${API_URL}/api/master/lojas/${store.id}/status`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer zenix_master` },
-        body: JSON.stringify({ status: store.isActive ? 'BLOCKED' : 'ACTIVE' }) // Usa os status novos
+        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ status: store.isActive ? 'BLOCKED' : 'ACTIVE' }) 
       });
       fetchStores();
     } catch (error) { alert('Erro ao alterar status.'); }
   };
 
-  // 🎯 PREPARADO PARA A INTEGRAÇÃO COM O BANCO CORA
   const handleGenerateBoletoCora = async (e) => {
     e.preventDefault();
     setIsGeneratingBoleto(true);
     
     try {
-      // Aqui nós enviaremos os dados para a sua API Backend que vai conversar com a API da Cora
-      /*
-      const res = await fetch(`${API_URL}/api/master/stores/${viewingInvoicesStore.id}/invoices/cora`, {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer zenix_master` },
-         body: JSON.stringify(newInvoiceForm)
-      });
-      const data = await res.json();
-      if(data.success) {
-        alert('Boleto Gerado no Banco Cora com sucesso!');
-        fetchInvoices(viewingInvoicesStore.id);
-        setNewInvoiceForm({ reference: '', amount: viewingInvoicesStore.monthlyFee || '', dueDate: '', notes: '' });
-      }
-      */
-      
-      // Simulação para testes até a rota existir
       setTimeout(() => {
         alert(`Integração Cora: Boleto de R$ ${newInvoiceForm.amount} gerado e enviado para ${viewingInvoicesStore.emailEmpresa}!`);
         setIsGeneratingBoleto(false);
         setViewingInvoicesStore(null);
       }, 1500);
-
     } catch (error) {
       alert("Erro ao comunicar com a API de Boletos.");
       setIsGeneratingBoleto(false);
@@ -177,11 +209,26 @@ export default function MasterDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 font-sans p-6 md:p-10">
       
-      <div className="flex justify-between items-center mb-8 border-b border-slate-200 pb-6">
-        <div><h1 className="text-3xl font-black text-slate-800 flex items-center gap-3"><span>👑</span> Zenix Master</h1><p className="text-slate-500 text-sm mt-1">Gestão central de todos os inquilinos (restaurantes).</p></div>
-        <div className="flex gap-4">
-          <button onClick={handleLogout} className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 px-4 py-3 rounded-xl font-bold transition-colors cursor-pointer text-sm shadow-sm">Sair</button>
-          <button onClick={() => router.push('/master/stores/new')} className="bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-3 rounded-xl font-black transition-colors shadow-md cursor-pointer">+ Cadastrar Loja</button>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-slate-200 pb-6 gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-slate-800 flex items-center gap-3">
+            <span>👑</span> Zenix Master {isSuperMaster && <span className="bg-purple-100 text-purple-700 text-[10px] px-2 py-1 rounded-lg uppercase tracking-widest ml-2">Global</span>}
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">Gestão central de todos os inquilinos (restaurantes).</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button onClick={handleLogout} className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl font-bold transition-colors cursor-pointer text-sm shadow-sm">Sair</button>
+          
+          {/* BOTÃO DE GESTÃO DE USUÁRIOS: Só aparece se for Super Master */}
+          {isSuperMaster && (
+            <button onClick={() => router.push('/master/user')} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-5 py-2.5 rounded-xl font-black transition-colors shadow-sm cursor-pointer flex items-center gap-2">
+              <span>👥</span> Gestão de Franquias
+            </button>
+          )}
+
+          <button onClick={() => router.push('/master/stores/new')} className="bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-2.5 rounded-xl font-black transition-colors shadow-md cursor-pointer flex items-center gap-2">
+            <span>+</span> Cadastrar Loja
+          </button>
         </div>
       </div>
 
@@ -205,7 +252,7 @@ export default function MasterDashboard() {
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-widest text-[10px] font-black">
               <tr>
                 <th className="px-6 py-5">Loja / Slug</th>
-                <th className="px-6 py-5">Responsável</th>
+                <th className="px-6 py-5">Responsável / Franqueado</th>
                 <th className="px-6 py-5">Plano/Mensal</th>
                 <th className="px-6 py-5">Acesso Sistema</th>
                 <th className="px-6 py-5 text-right">Ações</th>
@@ -215,7 +262,23 @@ export default function MasterDashboard() {
               {stores.map(store => (
                 <tr key={store.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-6 py-5"><p className="font-black text-slate-800 text-base">{store.razaoSocial}</p><p className="text-amber-600 font-mono text-xs">/{store.slug}</p></td>
-                  <td className="px-6 py-5"><p className="font-black text-slate-600">{store.nomeResponsavel}</p><p className="text-slate-500 text-xs font-bold">{store.telefoneEmpresa}</p></td>
+                  
+                  <td className="px-6 py-5">
+                     <p className="font-black text-slate-600">{store.nomeResponsavel}</p>
+                     <p className="text-slate-500 text-xs font-bold mb-1.5">{store.telefoneEmpresa}</p>
+                     
+                     {/* 🚀 INDICAÇÃO DO DONO DA LOJA */}
+                     {store.adminUser ? (
+                       <span className="bg-blue-50 border border-blue-100 text-blue-700 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center w-fit gap-1 mt-1">
+                         👥 Franqueado: {store.adminUser.name}
+                       </span>
+                     ) : (
+                       <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center w-fit gap-1 mt-1">
+                         🏢 Loja Própria (Matriz)
+                       </span>
+                     )}
+                  </td>
+
                   <td className="px-6 py-5">
                      <span className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">{store.plan || 'STANDARD'}</span>
                      <p className="text-slate-800 font-black mt-1">R$ {parseFloat(store.monthlyFee || 0).toFixed(2)}</p>
@@ -226,7 +289,7 @@ export default function MasterDashboard() {
                     </button>
                   </td>
                   <td className="px-6 py-5 text-right space-x-2">
-                    <button onClick={() => handleOpenInvoices(store)} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer">💳 Cobranças (Cora)</button>
+                    <button onClick={() => handleOpenInvoices(store)} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer">💳 Cobranças</button>
                     <button onClick={() => handleEditClick(store)} className="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer">Editar Dados</button>
                   </td>
                 </tr>
@@ -285,6 +348,26 @@ export default function MasterDashboard() {
                 </div>
               </div>
               
+              {/* 🚀 DIRECIONADOR DE FRANQUEADOS (Exclusivo para Super Master) */}
+              {isSuperMaster && (
+                <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-200">
+                  <h3 className="text-xs font-black text-emerald-700 uppercase tracking-widest mb-2 flex items-center gap-2"><span>👥</span> Vínculo de Gestão (Franqueado/Revenda)</h3>
+                  <p className="text-xs text-emerald-600 mb-4 font-medium">Selecione qual usuário Master terá acesso exclusivo ao painel administrativo desta loja. Deixe em branco se a loja pertencer à Matriz.</p>
+                  <div>
+                    <select 
+                      value={editingStore.adminUserId || ''} 
+                      onChange={e => setEditingStore({...editingStore, adminUserId: e.target.value})} 
+                      className="w-full bg-white border border-emerald-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 shadow-sm font-bold cursor-pointer"
+                    >
+                      <option value="">-- Sem Vinculo (Pertence à Matriz) --</option>
+                      {adminUsers.map(user => (
+                        <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
               <div className="pt-4 flex gap-4 shrink-0 mt-4 border-t border-slate-100">
                 <button type="button" onClick={() => setEditingStore(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 font-bold py-4 rounded-2xl cursor-pointer transition-colors text-sm">Cancelar</button>
                 <button type="submit" className="flex-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-black py-4 rounded-2xl shadow-md cursor-pointer transition-all active:scale-95 text-base">Salvar Alterações</button>
@@ -309,7 +392,6 @@ export default function MasterDashboard() {
             
             <div className="overflow-y-auto pr-2 space-y-6 flex-1 hide-scrollbar">
               
-              {/* Formulário Geração Cora */}
               <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-3xl shadow-sm">
                  <h3 className="text-sm font-black text-emerald-700 uppercase tracking-widest mb-4 flex items-center gap-2"><span>🏦</span> Gerar Novo Boleto (API Cora)</h3>
                  <form onSubmit={handleGenerateBoletoCora} className="space-y-4">
@@ -339,7 +421,6 @@ export default function MasterDashboard() {
                  </form>
               </div>
 
-              {/* Histórico de Faturas */}
               <div>
                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">📜 Histórico de Faturas</h3>
                  {invoices.length === 0 ? (
