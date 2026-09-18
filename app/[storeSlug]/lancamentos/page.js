@@ -1051,17 +1051,29 @@ export default function LancamentosPage() {
                         </div>
                      ) : (
                         visibleProducts.map(prod => (
-                           <button key={prod.id} onClick={() => handleProductInteraction(prod)} className={`border p-4 rounded-2xl flex flex-col justify-between text-left cursor-pointer transition-all hover:border-amber-500 hover:shadow-md active:scale-95 group relative overflow-hidden ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'}`}>
-                              <div className="absolute top-0 left-0 w-full flex gap-1 p-2">
-                                  {prod.isPizza && <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest border border-amber-200/50">🍕 Pizza</span>}
-                                  {prod.isCombo && <span className="bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest border border-blue-200/50">🍔 Combo</span>}
+                           <button key={prod.id} onClick={() => handleProductInteraction(prod)} className={`border rounded-2xl flex flex-col justify-between text-left cursor-pointer transition-all hover:border-amber-500 hover:shadow-md active:scale-95 group relative overflow-hidden ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'}`}>
+                              
+                              <div className={`w-full h-28 sm:h-32 relative overflow-hidden shrink-0 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-100'}`}>
+                                 {prod.imageUrl ? (
+                                    <img src={prod.imageUrl} alt={prod.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                 ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-4xl opacity-20 transition-transform duration-500 group-hover:scale-110">🍽️</div>
+                                 )}
+                                 
+                                 <div className="absolute top-2 left-2 flex flex-col gap-1">
+                                    {prod.isPizza && <span className="bg-amber-100/90 backdrop-blur-sm text-amber-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest border border-amber-200/50 shadow-sm">🍕 Pizza</span>}
+                                    {prod.isCombo && <span className="bg-blue-100/90 backdrop-blur-sm text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest border border-blue-200/50 shadow-sm">🍔 Combo</span>}
+                                 </div>
                               </div>
-                              <div className="absolute -top-6 -right-6 w-16 h-16 bg-amber-500/10 rounded-full group-hover:scale-150 transition-transform"></div>
-                              <p className={`font-black text-xs mb-2 leading-tight relative z-10 line-clamp-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} ${prod.isPizza || prod.isCombo ? 'mt-4' : ''}`}>{prod.name}</p>
-                              <div className={`flex items-center justify-between w-full mt-auto relative z-10 pt-2 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                                 <span className={`font-black text-sm ${isDarkMode ? 'text-amber-500' : 'text-amber-600'}`}>R$ {Number(prod.price).toFixed(2)}</span>
-                                 <span className="w-6 h-6 rounded-md bg-amber-500 text-slate-950 flex items-center justify-center font-black text-sm shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">+</span>
+                              
+                              <div className="p-3 flex flex-col justify-between flex-1 w-full">
+                                 <p className={`font-black text-xs mb-2 leading-tight line-clamp-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{prod.name}</p>
+                                 <div className={`flex items-center justify-between w-full mt-auto pt-2 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                                    <span className={`font-black text-sm ${isDarkMode ? 'text-amber-500' : 'text-amber-600'}`}>R$ {Number(prod.price).toFixed(2)}</span>
+                                    <span className="w-6 h-6 rounded-md bg-amber-500 text-slate-950 flex items-center justify-center font-black text-sm shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">+</span>
+                                 </div>
                               </div>
+                              
                            </button>
                         ))
                      )}
