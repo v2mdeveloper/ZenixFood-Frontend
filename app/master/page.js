@@ -517,7 +517,7 @@ export default function MasterDashboard() {
                       onChange={e => setEditingStore({...editingStore, temSuporte: e.target.checked})} 
                       className="w-5 h-5 accent-purple-600"
                     />
-                    <span className="text-sm font-bold text-slate-800">Adicionar Suporte Técnico Extra</span>
+                    <span className="text-sm font-bold text-slate-800">⌨️ Adicionar Suporte Técnico Extra e outros serviços</span>
                   </label>
                   {editingStore.temSuporte && (
                     <div className="animate-fade-in-up mt-2">

@@ -445,14 +445,14 @@ export default function LancamentosPage() {
     } catch (e) { alert('Erro na transferência.'); }
   };
 
-  // 🍕 LÓGICA DO CONSTRUTOR DE PIZZAS (GARÇOM) E INTERCEPTAÇÃO DE CLIQUES
+  // 🍕 LÓGICA DO CONSTRUTOR DE PIZZAS E INTERCEPTAÇÃO DE CLIQUES
   const handleProductInteraction = (product) => {
     if (product.isPizza && product.maxFlavors > 1) {
       setPizzaBase(product);
       setPizzaFlavorCount(1);
       setPizzaSelectedFlavors([product]);
       setPizzaBuilderOpen(true);
-      return; // Interrompe para abrir o modal da pizza
+      return;
     }
 
     if (clickTimeout.current) {
@@ -504,7 +504,6 @@ export default function LancamentosPage() {
 
     setPizzaBuilderOpen(false);
     
-    // 🎯 Em vez de jogar direto no carrinho, abre a tela de posição da mesa pro garçom!
     setSelectedProduct(virtualProduct);
     setItemQuantity(1);
     setItemObservation('');
@@ -531,7 +530,7 @@ export default function LancamentosPage() {
         seatLabel: finalSeatLabel, 
         targetTabId: targetTabId, 
         originalSeatName: seatPosition,
-        flavors: selectedProduct.flavors // Garante que as metades desçam para a cozinha
+        flavors: selectedProduct.flavors
     };
     processCartAddition(newItem); setSelectedProduct(null);
   };
@@ -555,7 +554,6 @@ export default function LancamentosPage() {
 
   const removeCartItem = (index) => { setCart(prev => (prev || []).filter((_, i) => i !== index)); };
 
-  // 🎯 DISPARO PARA A COZINHA E MOTOR DE ESTOQUE
   const handleSendToKitchen = async (overrideAuth = null) => {
     if ((cart || []).length === 0 || !selectedTab) return;
     setLoadingData(true);
@@ -566,8 +564,6 @@ export default function LancamentosPage() {
       }, {});
       
       for (const [tId, itemsOfTab] of Object.entries(grouped)) {
-         
-         // 🎯 Garante que a coluna de flavors seja enviada tratada pro backend
          const payloadItems = itemsOfTab.map(i => ({
              ...i,
              flavors: i.flavors ? JSON.stringify(i.flavors) : undefined
@@ -653,7 +649,6 @@ export default function LancamentosPage() {
   const comandas = (tabs || []).filter(t => t.type === 'TAB');
   const visibleProducts = getVisibleProducts();
 
-  // Constroi a lista de pizzas disponíveis para a montagem de sabores (busca todos os produtos que são isPizza)
   const allPizzaFlavors = [];
   menu.forEach(cat => cat.products.forEach(p => {
       if (p.isPizza && !allPizzaFlavors.find(x => x.id === p.id)) allPizzaFlavors.push(p);
@@ -958,7 +953,7 @@ export default function LancamentosPage() {
                               <div key={item.id} className={`p-3 rounded-xl border flex flex-col gap-2 relative overflow-hidden ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                                  <div className="flex justify-between items-start">
                                     <div className="flex-1">
-                                       <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">
+                                       <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                                           <span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}
                                        </p>
                                        {/* 🍕 Mostra Sabores Fracionados caso existam */}
@@ -968,7 +963,7 @@ export default function LancamentosPage() {
                                        {item.observation && <p className="text-[9px] text-red-500 font-bold mt-1 bg-red-500/10 px-1.5 py-0.5 inline-block rounded">Obs: {item.observation}</p>}
                                     </div>
                                     <div className="text-right ml-2 flex flex-col items-end gap-1.5">
-                                       <span className="font-black text-xs text-slate-800 dark:text-slate-300 mb-1">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                                       <span className={`font-black text-xs mb-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>R$ {(item.price * item.quantity).toFixed(2)}</span>
                                        {canUndo && (
                                           <button onClick={() => handleUndoItem(item.id)} className="text-[9px] bg-red-500 text-white font-black px-2 py-0.5 rounded animate-pulse cursor-pointer shadow-sm">
                                               Desfazer ({Math.max(0, 30 - Math.floor(ageSeconds))}s)
@@ -1004,7 +999,7 @@ export default function LancamentosPage() {
                         {cart.map((item, idx) => (
                            <div key={idx} className={`${bgCard} border p-2.5 rounded-xl flex justify-between items-center shadow-sm`}>
                               <div className="flex-1 pr-2">
-                                 <p className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate"><span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}</p>
+                                 <p className={`text-[11px] font-bold truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}><span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}</p>
                                  {/* 🍕 Mostra Sabores Fracionados caso existam */}
                                  {item.flavors && <p className="text-[8px] text-amber-600 font-bold mt-0.5 truncate">{item.flavors.map(f => f.name).join(' + ')}</p>}
                                  
@@ -1034,16 +1029,16 @@ export default function LancamentosPage() {
                   </div>
                   
                   <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
-                     <button onClick={() => setActiveCategory(null)} className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shrink-0 transition-colors cursor-pointer ${!activeCategory && !searchTerm && !activeDietFilter ? 'bg-amber-500 text-slate-950 shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>Tudo</button>
+                     <button onClick={() => setActiveCategory(null)} className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shrink-0 transition-colors cursor-pointer ${!activeCategory && !searchTerm && !activeDietFilter ? 'bg-amber-500 text-slate-950 shadow-md' : (isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')}`}>Tudo</button>
                      {menu.map(cat => (
-                        <button key={cat.id} onClick={() => { setActiveCategory(cat.id); setSearchTerm(''); setActiveDietFilter(null); }} className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shrink-0 transition-colors cursor-pointer ${activeCategory === cat.id ? 'bg-amber-500 text-slate-950 shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>{cat.name}</button>
+                        <button key={cat.id} onClick={() => { setActiveCategory(cat.id); setSearchTerm(''); setActiveDietFilter(null); }} className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shrink-0 transition-colors cursor-pointer ${activeCategory === cat.id ? 'bg-amber-500 text-slate-950 shadow-md' : (isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')}`}>{cat.name}</button>
                      ))}
                   </div>
 
                   <div className="flex gap-2 overflow-x-auto pt-2 hide-scrollbar">
-                     <button onClick={() => { setActiveDietFilter(activeDietFilter === 'VEGAN' ? null : 'VEGAN'); setActiveCategory(null); }} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase shrink-0 transition-colors border cursor-pointer ${activeDietFilter === 'VEGAN' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-emerald-50 border-emerald-200 text-emerald-600 dark:bg-emerald-500/10 dark:border-emerald-500/30'}`}>🌱 Vegano</button>
-                     <button onClick={() => { setActiveDietFilter(activeDietFilter === 'NOGLUTEN' ? null : 'NOGLUTEN'); setActiveCategory(null); }} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase shrink-0 transition-colors border cursor-pointer ${activeDietFilter === 'NOGLUTEN' ? 'bg-amber-500 text-white border-amber-500' : 'bg-amber-50 border-amber-200 text-amber-600 dark:bg-amber-500/10 dark:border-amber-500/30'}`}>🌾 Sem Glúten</button>
-                     <button onClick={() => { setActiveDietFilter(activeDietFilter === 'NOLACTOSE' ? null : 'NOLACTOSE'); setActiveCategory(null); }} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase shrink-0 transition-colors border cursor-pointer ${activeDietFilter === 'NOLACTOSE' ? 'bg-blue-500 text-white border-blue-500' : 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-500/10 dark:border-blue-500/30'}`}>🥛 Zero Lactose</button>
+                     <button onClick={() => { setActiveDietFilter(activeDietFilter === 'VEGAN' ? null : 'VEGAN'); setActiveCategory(null); }} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase shrink-0 transition-colors border cursor-pointer ${activeDietFilter === 'VEGAN' ? 'bg-emerald-500 text-white border-emerald-500' : (isDarkMode ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-emerald-50 border-emerald-200 text-emerald-600')}`}>🌱 Vegano</button>
+                     <button onClick={() => { setActiveDietFilter(activeDietFilter === 'NOGLUTEN' ? null : 'NOGLUTEN'); setActiveCategory(null); }} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase shrink-0 transition-colors border cursor-pointer ${activeDietFilter === 'NOGLUTEN' ? 'bg-amber-500 text-white border-amber-500' : (isDarkMode ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-amber-50 border-amber-200 text-amber-600')}`}>🌾 Sem Glúten</button>
+                     <button onClick={() => { setActiveDietFilter(activeDietFilter === 'NOLACTOSE' ? null : 'NOLACTOSE'); setActiveCategory(null); }} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase shrink-0 transition-colors border cursor-pointer ${activeDietFilter === 'NOLACTOSE' ? 'bg-blue-500 text-white border-blue-500' : (isDarkMode ? 'bg-blue-500/10 border-blue-500/30 text-blue-500' : 'bg-blue-50 border-blue-200 text-blue-600')}`}>🥛 Zero Lactose</button>
                   </div>
                </div>
 
@@ -1062,9 +1057,9 @@ export default function LancamentosPage() {
                                   {prod.isCombo && <span className="bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest border border-blue-200/50">🍔 Combo</span>}
                               </div>
                               <div className="absolute -top-6 -right-6 w-16 h-16 bg-amber-500/10 rounded-full group-hover:scale-150 transition-transform"></div>
-                              <p className={`font-black text-xs text-slate-800 dark:text-slate-200 mb-2 leading-tight relative z-10 line-clamp-3 ${prod.isPizza || prod.isCombo ? 'mt-4' : ''}`}>{prod.name}</p>
-                              <div className="flex items-center justify-between w-full mt-auto relative z-10 pt-2 border-t border-slate-100 dark:border-slate-800">
-                                 <span className="text-amber-600 dark:text-amber-500 font-black text-sm">R$ {Number(prod.price).toFixed(2)}</span>
+                              <p className={`font-black text-xs mb-2 leading-tight relative z-10 line-clamp-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} ${prod.isPizza || prod.isCombo ? 'mt-4' : ''}`}>{prod.name}</p>
+                              <div className={`flex items-center justify-between w-full mt-auto relative z-10 pt-2 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                                 <span className={`font-black text-sm ${isDarkMode ? 'text-amber-500' : 'text-amber-600'}`}>R$ {Number(prod.price).toFixed(2)}</span>
                                  <span className="w-6 h-6 rounded-md bg-amber-500 text-slate-950 flex items-center justify-center font-black text-sm shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">+</span>
                               </div>
                            </button>
@@ -1099,7 +1094,7 @@ export default function LancamentosPage() {
                             <button 
                                 key={num} 
                                 onClick={() => { setPizzaFlavorCount(num); setPizzaSelectedFlavors([pizzaBase]); }}
-                                className={`flex-1 py-3 rounded-2xl font-black text-base border-2 transition-all ${pizzaFlavorCount === num ? 'border-amber-500 bg-amber-500/10 text-amber-500' : `${bgInput} text-slate-500 border-slate-200 dark:border-slate-800 hover:border-amber-500/50`}`}
+                                className={`flex-1 py-3 rounded-2xl font-black text-base border-2 transition-all ${pizzaFlavorCount === num ? 'border-amber-500 bg-amber-500/10 text-amber-500' : `${bgInput} text-slate-500 hover:border-amber-500/50${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}`}
                             >
                                 {num} {num === 1 ? 'Sabor' : 'Sabores'}
                             </button>
@@ -1223,7 +1218,7 @@ export default function LancamentosPage() {
                   ))}
                 </div>
                 {!seatPosition.startsWith('Comanda') && (
-                   <input type="text" value={customSeatName} onChange={e => setCustomSeatName(e.target.value)} placeholder="Nome da Pessoa (Opcional)" className={`w-full rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-blue-500 ${bgInput} border border-slate-300 dark:border-slate-700`} />
+                   <input type="text" value={customSeatName} onChange={e => setCustomSeatName(e.target.value)} placeholder="Nome da Pessoa (Opcional)" className={`w-full rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-blue-500 ${bgInput} border ${isDarkMode ? 'border-slate-700' : 'border-slate-300'}`} />
                 )}
               </div>
             )}
@@ -1239,7 +1234,7 @@ export default function LancamentosPage() {
                </div>
                <div className="flex-1">
                   <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Observações</label>
-                  <input type="text" value={itemObservation} onChange={e => setItemObservation(e.target.value)} placeholder="Ex: Sem cebola, bem passado..." className={`w-full h-14 rounded-2xl p-3 text-sm font-bold focus:outline-none focus:border-amber-500 border border-slate-200 dark:border-slate-800 ${bgInput}`} />
+                  <input type="text" value={itemObservation} onChange={e => setItemObservation(e.target.value)} placeholder="Ex: Sem cebola, bem passado..." className={`w-full h-14 rounded-2xl p-3 text-sm font-bold focus:outline-none focus:border-amber-500 border ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} ${bgInput}`} />
                </div>
             </div>
 
@@ -1255,11 +1250,11 @@ export default function LancamentosPage() {
           <div className={`${bgCard} border border-red-500 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden animate-fade-in-up text-center`}>
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-500 to-red-700"></div>
             <span className="text-5xl mb-4 inline-block">⚠️</span>
-            <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Cliente com Pendências!</h3>
+            <h3 className={`text-xl font-black mb-2 ${textMain}`}>Cliente com Pendências!</h3>
             <p className="text-xs text-red-500 font-bold mb-6">{debtAmountMsg} <br/><br/>Deseja que o gerente autorize e puxe essa dívida para esta nova comanda?</p>
             
             <form onSubmit={handleDebtOverrideSubmit} className="space-y-4 text-left">
-              <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Autenticação do Gerente</p>
                 <input type="text" required value={managerAuthDebt.email} onChange={e => setManagerAuthDebt({...managerAuthDebt, email: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 mb-2 ${bgInput}`} placeholder="E-mail ou CPF do Gerente" />
                 <input type="password" required value={managerAuthDebt.password} onChange={e => setManagerAuthDebt({...managerAuthDebt, password: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 ${bgInput}`} placeholder="Senha" />
