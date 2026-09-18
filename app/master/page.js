@@ -6,19 +6,19 @@ export default function MasterDashboard() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   
-  // 🔐 ESTADOS DE LOGIN
+  //ESTADOS DE LOGIN
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoginLoading, setIsLoginLoading] = useState(false);
   
-  // 🔑 ESTADOS DE RECUPERAÇÃO DE SENHA
+  //ESTADOS DE RECUPERAÇÃO DE SENHA
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotStatus, setForgotStatus] = useState('idle'); 
   const [forgotError, setForgotError] = useState('');
   
-  // 🏬 ESTADOS DO PAINEL
+  //ESTADOS DO PAINEL
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingStore, setEditingStore] = useState(null);
@@ -27,14 +27,16 @@ export default function MasterDashboard() {
   const [isGeneratingBoleto, setIsGeneratingBoleto] = useState(false);
   const [newInvoiceForm, setNewInvoiceForm] = useState({ reference: '', amount: '', dueDate: '', notes: '' });
 
-  // 🛡️ ESTADOS DO SISTEMA MULTI-TENANT (SaaS)
+  //ESTADOS DO SISTEMA MULTI-TENANT (SaaS)
   const [isSuperMaster, setIsSuperMaster] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
-
+  
+  // Determina a URL da API com base no ambiente (desenvolvimento ou produção)
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
 
+    // Verifica se o usuário já está autenticado ao carregar o componente
   useEffect(() => {
     if (localStorage.getItem('zenix_master_token') || localStorage.getItem('zenix_super_token')) {
       setIsAuthenticated(true);
@@ -43,21 +45,26 @@ export default function MasterDashboard() {
     }
   }, []);
 
+  // Se o usuário estiver autenticado, verifica se ele é Super Master e busca as lojas
   useEffect(() => { 
     if (isAuthenticated) {
-      fetchStores(); 
-      checkSuperMasterAccess();
+      checkSuperMasterAccess().then(() => {
+        fetchStores(); 
+      });
     }
   }, [isAuthenticated]);
 
+  // Função para lidar com o login do Master
   const handleMasterLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
     setIsLoginLoading(true);
 
+    //BYPASS DE DESENVOLVIMENTO (Agora salva o role corretamente)
     if (email === 'admin@zenix' && password === 'zenixadmin123') {
       localStorage.setItem('zenix_master_token', 'token_simulado');
       localStorage.setItem('zenix_super_token', 'token_simulado'); 
+      localStorage.setItem('zenix_user', JSON.stringify({ id: 'dev', role: 'SUPER_MASTER', name: 'Admin Zenix' })); 
       setIsAuthenticated(true); 
       setIsLoginLoading(false);
       return;
@@ -73,7 +80,6 @@ export default function MasterDashboard() {
       
       if (res.ok && data.token) {
         localStorage.setItem('zenix_master_token', data.token);
-        // 🔐 SALVA OS DADOS DO USUÁRIO PARA FILTRAGEM
         localStorage.setItem('zenix_user', JSON.stringify(data.user)); 
 
         if (data.user?.role === 'SUPER_MASTER') {
@@ -90,6 +96,7 @@ export default function MasterDashboard() {
     }
   };
 
+  // Função para lidar com a recuperação de senha
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     setForgotStatus('loading');
@@ -116,16 +123,15 @@ export default function MasterDashboard() {
   };
 
   const checkSuperMasterAccess = async () => {
-    if (email === 'admin@zenix') setIsSuperMaster(true); 
-
     try {
-      // 🛡️ LER USUÁRIO LOGADO E BLOQUEAR O MASTER
+      const superToken = localStorage.getItem('zenix_super_token');
       const userStr = localStorage.getItem('zenix_user');
       const user = userStr ? JSON.parse(userStr) : null;
 
-      if (user && user.role === 'SUPER_MASTER') {
+      // 🛡️ É SUPER MASTER se tiver o super token ou se o cargo for SUPER_MASTER
+      if (superToken || (user && user.role === 'SUPER_MASTER')) {
         setIsSuperMaster(true);
-        const token = localStorage.getItem('zenix_super_token');
+        const token = superToken || localStorage.getItem('zenix_master_token');
         const res = await fetch(`${API_URL}/api/super/users`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (res.ok) setAdminUsers(await res.json()); 
       } else {
@@ -137,6 +143,7 @@ export default function MasterDashboard() {
   const fetchStores = async () => {
     try {
       const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
+      const isSuper = localStorage.getItem('zenix_super_token') !== null;
       const userStr = localStorage.getItem('zenix_user');
       const user = userStr ? JSON.parse(userStr) : null;
 
@@ -144,8 +151,8 @@ export default function MasterDashboard() {
       if (res.ok) {
         let fetchedStores = await res.json();
         
-        // 🛡️ FILTRO DE SEGURANÇA: Se for Franqueado, exibe APENAS as lojas dele!
-        if (user && user.role === 'MASTER') {
+        // 🛡️ FILTRO DE SEGURANÇA: Se NÃO for Super Master, exibe APENAS as lojas dele!
+        if (!isSuper && user && user.role === 'MASTER') {
            fetchedStores = fetchedStores.filter(s => s.adminUserId === user.id);
         }
         setStores(fetchedStores);
@@ -153,7 +160,6 @@ export default function MasterDashboard() {
     } catch (error) {} finally { setLoading(false); }
   };
 
-  // 🧩 DESMEMBRADOR DE ENDEREÇO INTELIGENTE
   const handleEditClick = (store) => {
     let parsedStreet = store.street || '';
     let parsedNumber = store.number || '';
@@ -163,26 +169,22 @@ export default function MasterDashboard() {
     let parsedState = store.state || '';
     let parsedCep = store.cep || '';
 
-    // Se a rua estiver vazia mas houver o endereço gigante do BD, nós quebramos ele.
     if (store.endereco && !store.street) {
       try {
         const addr = store.endereco;
-        
         const cepMatch = addr.match(/\(CEP:\s*([\d-]+)\)/i);
         if (cepMatch) parsedCep = cepMatch[1];
-
         const ufMatch = addr.match(/\/([A-Z]{2})\s*\(CEP/i);
         if (ufMatch) parsedState = ufMatch[1];
-
         const cityMatch = addr.match(/,\s*([^,]+)\/[A-Z]{2}\s*\(CEP/i);
         if (cityMatch) parsedCity = cityMatch[1].trim();
 
-        const rest = addr.split(/,\s*[^,]+\/[A-Z]{2}\s*\(CEP/i)[0]; // Remove cidade/estado/cep
-        const cleanedRest = rest.replace(/,\s*,/g, ','); // Limpa vírgulas duplas acidentais
+        const rest = addr.split(/,\s*[^,]+\/[A-Z]{2}\s*\(CEP/i)[0]; 
+        const cleanedRest = rest.replace(/,\s*,/g, ','); 
         const parts = cleanedRest.split(' - ');
         
         if (parts.length >= 2) {
-           parsedNeigh = parts[parts.length - 1].trim(); // Bairro
+           parsedNeigh = parts[parts.length - 1].trim(); 
            const streetNumComp = parts.slice(0, parts.length - 1).join(' - ');
            const streetParts = streetNumComp.split(',');
            
@@ -196,12 +198,12 @@ export default function MasterDashboard() {
            parsedStreet = cleanedRest.trim();
         }
       } catch (e) {
-        parsedStreet = store.endereco; // Fallback se der erro no regex
+        parsedStreet = store.endereco; 
       }
     }
 
     setEditingStore({
-      ...store,
+      id: store.id,
       slug: store.slug || '', razaoSocial: store.razaoSocial || '', cnpj: store.cnpj || '',
       inscricaoEstadual: store.inscricaoEstadual || '', inscricaoMunicipal: store.inscricaoMunicipal || '',
       emailEmpresa: store.emailEmpresa || '', telefoneEmpresa: store.telefoneEmpresa || '',
@@ -269,12 +271,27 @@ export default function MasterDashboard() {
       
       const fullAddress = `${editingStore.street || ''}, ${editingStore.number || ''} ${editingStore.complement ? `- ${editingStore.complement}` : ''} - ${editingStore.neighborhood || ''}, ${editingStore.city || ''}/${editingStore.state || ''} (CEP: ${editingStore.cep || ''})`;
 
+      // 🛡️ PACOTE BLINDADO: Envia EXATAMENTE o que a API espera (Sem lixo de objeto store antigo)
       const payload = { 
-        ...editingStore, 
+        slug: editingStore.slug,
+        razaoSocial: editingStore.razaoSocial,
+        cnpj: editingStore.cnpj,
+        inscricaoEstadual: editingStore.inscricaoEstadual,
+        inscricaoMunicipal: editingStore.inscricaoMunicipal,
+        emailEmpresa: editingStore.emailEmpresa,
+        telefoneEmpresa: editingStore.telefoneEmpresa,
+        nomeResponsavel: editingStore.nomeResponsavel,
+        cpfResponsavel: editingStore.cpfResponsavel,
+        emailResponsavel: editingStore.emailResponsavel,
         endereco: fullAddress,
+        plan: editingStore.plan,
         monthlyFee: Number(editingStore.monthlyFee || 0),
         adminUserId: editingStore.adminUserId === '' || editingStore.adminUserId === 'null' ? null : editingStore.adminUserId 
       };
+
+      if (editingStore.senhaResponsavel && editingStore.senhaResponsavel.trim() !== '') {
+        payload.senhaResponsavel = editingStore.senhaResponsavel;
+      }
 
       const res = await fetch(`${API_URL}/api/master/lojas/${editingStore.id}`, {
         method: 'PUT', 
@@ -369,7 +386,6 @@ export default function MasterDashboard() {
         <div className="flex flex-wrap gap-3">
           <button onClick={handleLogout} className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer">Sair</button>
           
-          {/* BOTÃO APARECE APENAS PARA O SUPER MASTER */}
           {isSuperMaster && (
             <button onClick={() => router.push('/master/franquias')} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-5 py-2.5 rounded-xl font-black shadow-sm cursor-pointer flex items-center gap-2">
               <span>👥</span> Gestão de Franquias
@@ -443,7 +459,6 @@ export default function MasterDashboard() {
         </div>
       </div>
 
-      {/* MODAL EDIÇÃO COMPLETO */}
       {editingStore && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-6 md:p-10 rounded-[2.5rem] w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[92vh] animate-fade-in-up">
@@ -502,7 +517,6 @@ export default function MasterDashboard() {
                 </div>
               </div>
 
-              {/* APARECE APENAS PARA O SUPER MASTER */}
               {isSuperMaster && (
                 <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 space-y-2">
                   <h3 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><span>👥</span> Vínculo de Gestão (Franqueado/Revenda)</h3>
@@ -546,7 +560,6 @@ export default function MasterDashboard() {
         </div>
       )}
 
-      {/* MODAL COBRANÇAS */}
       {viewingInvoicesStore && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-8 rounded-[2rem] w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh] animate-fade-in-up">
