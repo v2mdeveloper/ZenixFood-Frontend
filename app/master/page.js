@@ -6,37 +6,33 @@ export default function MasterDashboard() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   
-  //ESTADOS DE LOGIN
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoginLoading, setIsLoginLoading] = useState(false);
   
-  //ESTADOS DE RECUPERAÇÃO DE SENHA
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotStatus, setForgotStatus] = useState('idle'); 
   const [forgotError, setForgotError] = useState('');
   
-  //ESTADOS DO PAINEL
   const [stores, setStores] = useState([]);
+  const [planos, setPlanos] = useState([]); // 🔥 NOVO: Estado para os Planos Dinâmicos
   const [loading, setLoading] = useState(true);
   const [editingStore, setEditingStore] = useState(null);
+  
   const [viewingInvoicesStore, setViewingInvoicesStore] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [isGeneratingBoleto, setIsGeneratingBoleto] = useState(false);
   const [newInvoiceForm, setNewInvoiceForm] = useState({ reference: '', amount: '', dueDate: '', notes: '' });
 
-  //ESTADOS DO SISTEMA MULTI-TENANT (SaaS)
   const [isSuperMaster, setIsSuperMaster] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
-  
-  // Determina a URL da API com base no ambiente (desenvolvimento ou produção)
+
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
 
-    // Verifica se o usuário já está autenticado ao carregar o componente
   useEffect(() => {
     if (localStorage.getItem('zenix_master_token') || localStorage.getItem('zenix_super_token')) {
       setIsAuthenticated(true);
@@ -45,22 +41,20 @@ export default function MasterDashboard() {
     }
   }, []);
 
-  // Se o usuário estiver autenticado, verifica se ele é Super Master e busca as lojas
   useEffect(() => { 
     if (isAuthenticated) {
       checkSuperMasterAccess().then(() => {
+        fetchPlanos(); // 🔥 Busca os planos assim que logar
         fetchStores(); 
       });
     }
   }, [isAuthenticated]);
 
-  // Função para lidar com o login do Master
   const handleMasterLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
     setIsLoginLoading(true);
 
-    //BYPASS DE DESENVOLVIMENTO (Agora salva o role corretamente)
     if (email === 'admin@zenix' && password === 'zenixadmin123') {
       localStorage.setItem('zenix_master_token', 'token_simulado');
       localStorage.setItem('zenix_super_token', 'token_simulado'); 
@@ -96,17 +90,13 @@ export default function MasterDashboard() {
     }
   };
 
-  // Função para lidar com a recuperação de senha
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     setForgotStatus('loading');
     setForgotError('');
-    
     try {
       const res = await fetch(`${API_URL}/api/master/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: forgotEmail })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: forgotEmail })
       });
       if (res.ok) setForgotStatus('success');
       else { setForgotStatus('error'); setForgotError('E-mail não encontrado.'); }
@@ -128,7 +118,6 @@ export default function MasterDashboard() {
       const userStr = localStorage.getItem('zenix_user');
       const user = userStr ? JSON.parse(userStr) : null;
 
-      // 🛡️ É SUPER MASTER se tiver o super token ou se o cargo for SUPER_MASTER
       if (superToken || (user && user.role === 'SUPER_MASTER')) {
         setIsSuperMaster(true);
         const token = superToken || localStorage.getItem('zenix_master_token');
@@ -137,6 +126,15 @@ export default function MasterDashboard() {
       } else {
         setIsSuperMaster(false);
       }
+    } catch (error) {}
+  };
+
+  // 🔥 NOVO: Busca os Planos Dinâmicos
+  const fetchPlanos = async () => {
+    try {
+      const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
+      const res = await fetch(`${API_URL}/api/super/planos`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) setPlanos(await res.json());
     } catch (error) {}
   };
 
@@ -150,8 +148,6 @@ export default function MasterDashboard() {
       const res = await fetch(`${API_URL}/api/master/lojas`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) {
         let fetchedStores = await res.json();
-        
-        // 🛡️ FILTRO DE SEGURANÇA: Se NÃO for Super Master, exibe APENAS as lojas dele!
         if (!isSuper && user && user.role === 'MASTER') {
            fetchedStores = fetchedStores.filter(s => s.adminUserId === user.id);
         }
@@ -187,19 +183,14 @@ export default function MasterDashboard() {
            parsedNeigh = parts[parts.length - 1].trim(); 
            const streetNumComp = parts.slice(0, parts.length - 1).join(' - ');
            const streetParts = streetNumComp.split(',');
-           
            parsedStreet = streetParts[0]?.trim() || '';
            if (streetParts[1]) {
              const numComp = streetParts[1].split('-');
              parsedNumber = numComp[0]?.trim() || '';
              parsedComp = numComp.slice(1).join('-').trim() || '';
            }
-        } else {
-           parsedStreet = cleanedRest.trim();
-        }
-      } catch (e) {
-        parsedStreet = store.endereco; 
-      }
+        } else { parsedStreet = cleanedRest.trim(); }
+      } catch (e) { parsedStreet = store.endereco; }
     }
 
     setEditingStore({
@@ -211,26 +202,25 @@ export default function MasterDashboard() {
       emailResponsavel: store.emailResponsavel || '', senhaResponsavel: '', 
       cep: parsedCep, street: parsedStreet, number: parsedNumber, complement: parsedComp, 
       neighborhood: parsedNeigh, city: parsedCity, state: parsedState,
-      plan: store.plan || 'STANDARD', monthlyFee: store.monthlyFee || '',
+      
+      // 🔥 DADOS DO NOVO PLANO
+      planoSaaSId: store.planoSaaSId || '',
+      temSuporte: store.temSuporte || false,
+      valorSuporte: store.valorSuporte || '',
       adminUserId: store.adminUserId || ''
     });
   };
 
   const handleEditCepSearch = async (e) => {
-    let cepVal = e.target.value.replace(/\D/g, '');
-    if (cepVal.length > 8) cepVal = cepVal.slice(0, 8);
+    let cepVal = e.target.value.replace(/\D/g, ''); if (cepVal.length > 8) cepVal = cepVal.slice(0, 8);
     const maskedCep = cepVal.replace(/^(\d{5})(\d)/, '$1-$2');
     setEditingStore(prev => ({ ...prev, cep: maskedCep }));
-    
     if (cepVal.length === 8) {
       try {
         const res = await fetch(`https://viacep.com.br/ws/${cepVal}/json/`);
         const data = await res.json();
         if (!data.erro) {
-          setEditingStore(prev => ({
-            ...prev, street: data.logradouro || prev.street, neighborhood: data.bairro || prev.neighborhood,
-            city: data.localidade || prev.city, state: data.uf || prev.state
-          }));
+          setEditingStore(prev => ({ ...prev, street: data.logradouro || prev.street, neighborhood: data.bairro || prev.neighborhood, city: data.localidade || prev.city, state: data.uf || prev.state }));
         }
       } catch (err) {}
     }
@@ -265,13 +255,18 @@ export default function MasterDashboard() {
     e.preventDefault();
     if (editingStore.cnpj && editingStore.cnpj.length < 18) return alert('CNPJ incompleto.');
     if (editingStore.cpfResponsavel && editingStore.cpfResponsavel.length < 14) return alert('CPF incompleto.');
+    if (!editingStore.planoSaaSId) return alert('Por favor, selecione um Plano SaaS para a loja.');
     
     try {
       const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
-      
       const fullAddress = `${editingStore.street || ''}, ${editingStore.number || ''} ${editingStore.complement ? `- ${editingStore.complement}` : ''} - ${editingStore.neighborhood || ''}, ${editingStore.city || ''}/${editingStore.state || ''} (CEP: ${editingStore.cep || ''})`;
 
-      // 🛡️ PACOTE BLINDADO: Envia EXATAMENTE o que a API espera (Sem lixo de objeto store antigo)
+      // 🔥 MATEMÁTICA: Plano Base + Valor de Suporte = Valor Mensal
+      const planoSelecionado = planos.find(p => p.id === editingStore.planoSaaSId);
+      const precoPlano = planoSelecionado ? planoSelecionado.precoBase : 0;
+      const valorSup = editingStore.temSuporte ? Number(editingStore.valorSuporte || 0) : 0;
+      const totalFatura = precoPlano + valorSup;
+
       const payload = { 
         slug: editingStore.slug,
         razaoSocial: editingStore.razaoSocial,
@@ -284,8 +279,12 @@ export default function MasterDashboard() {
         cpfResponsavel: editingStore.cpfResponsavel,
         emailResponsavel: editingStore.emailResponsavel,
         endereco: fullAddress,
-        plan: editingStore.plan,
-        monthlyFee: Number(editingStore.monthlyFee || 0),
+        
+        planoSaaSId: editingStore.planoSaaSId,
+        temSuporte: editingStore.temSuporte,
+        valorSuporte: valorSup,
+        monthlyFee: totalFatura, 
+        
         adminUserId: editingStore.adminUserId === '' || editingStore.adminUserId === 'null' ? null : editingStore.adminUserId 
       };
 
@@ -294,33 +293,21 @@ export default function MasterDashboard() {
       }
 
       const res = await fetch(`${API_URL}/api/master/lojas/${editingStore.id}`, {
-        method: 'PUT', 
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(payload)
+        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload)
       });
-      
       const data = await res.json();
       
       if (res.ok && data.success) { 
-        alert('Loja atualizada com sucesso!'); 
-        setEditingStore(null); 
-        fetchStores(); 
-      } else { 
-        alert(`Erro ao editar: ${data.error || 'Erro desconhecido'}`); 
-      }
-    } catch (error) { 
-      alert('Erro de conexão com o servidor.'); 
-    }
+        alert('Loja atualizada com sucesso!'); setEditingStore(null); fetchStores(); 
+      } else { alert(`Erro ao editar: ${data.error || 'Erro desconhecido'}`); }
+    } catch (error) { alert('Erro de conexão com o servidor.'); }
   };
 
   const toggleStoreStatus = async (store) => {
     if (!confirm(`Deseja ${store.isActive ? 'BLOQUEAR' : 'DESBLOQUEAR'} a loja ${store.razaoSocial}?`)) return;
     try {
       const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
-      await fetch(`${API_URL}/api/master/lojas/${store.id}/status`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ status: store.isActive ? 'BLOCKED' : 'ACTIVE' }) 
-      });
+      await fetch(`${API_URL}/api/master/lojas/${store.id}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ status: store.isActive ? 'BLOCKED' : 'ACTIVE' }) });
       fetchStores();
     } catch (error) { alert('Erro ao alterar status.'); }
   };
@@ -328,13 +315,7 @@ export default function MasterDashboard() {
   const handleGenerateBoletoCora = async (e) => {
     e.preventDefault();
     setIsGeneratingBoleto(true);
-    try {
-      setTimeout(() => {
-        alert(`Boleto de R$ ${newInvoiceForm.amount} gerado e enviado para ${viewingInvoicesStore.emailEmpresa}!`);
-        setIsGeneratingBoleto(false);
-        setViewingInvoicesStore(null);
-      }, 1500);
-    } catch (error) { setIsGeneratingBoleto(false); }
+    try { setTimeout(() => { alert(`Boleto de R$ ${newInvoiceForm.amount} gerado e enviado para ${viewingInvoicesStore.emailEmpresa}!`); setIsGeneratingBoleto(false); setViewingInvoicesStore(null); }, 1500); } catch (error) { setIsGeneratingBoleto(false); }
   };
 
   const lojasAtivas = stores.filter(s => s.status === 'ACTIVE' || s.isActive).length;
@@ -349,7 +330,6 @@ export default function MasterDashboard() {
             <h1 className="text-3xl font-black text-slate-800 tracking-tight">Zenix Master</h1>
             <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest font-bold">Gestão SaaS</p>
           </div>
-          
           <form onSubmit={handleMasterLogin} className="space-y-5">
             <div>
                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">E-mail de Acesso</label>
@@ -387,9 +367,14 @@ export default function MasterDashboard() {
           <button onClick={handleLogout} className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer">Sair</button>
           
           {isSuperMaster && (
-            <button onClick={() => router.push('/master/franquias')} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-5 py-2.5 rounded-xl font-black shadow-sm cursor-pointer flex items-center gap-2">
-              <span>👥</span> Gestão de Franquias
-            </button>
+            <>
+              <button onClick={() => router.push('/master/planos')} className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-5 py-2.5 rounded-xl font-black shadow-sm cursor-pointer flex items-center gap-2">
+                <span>💎</span> Planos SaaS
+              </button>
+              <button onClick={() => router.push('/master/franquias')} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-5 py-2.5 rounded-xl font-black shadow-sm cursor-pointer flex items-center gap-2">
+                <span>👥</span> Gestão de Franquias
+              </button>
+            </>
           )}
 
           <button onClick={() => router.push('/master/stores/new')} className="bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-2.5 rounded-xl font-black shadow-md cursor-pointer flex items-center gap-2">
@@ -422,37 +407,39 @@ export default function MasterDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {stores.map(store => (
-                <tr key={store.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-5"><p className="font-black text-slate-800 text-base">{store.razaoSocial}</p><p className="text-amber-600 font-mono text-xs">/{store.slug}</p></td>
-                  <td className="px-6 py-5">
-                     <p className="font-black text-slate-600">{store.nomeResponsavel}</p>
-                     <p className="text-slate-500 text-xs font-bold mb-1.5">{store.telefoneEmpresa}</p>
-                     {store.adminUser ? (
-                       <span className="bg-blue-50 border border-blue-100 text-blue-700 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center w-fit gap-1 mt-1">
-                         👥 Franqueado: {store.adminUser.name}
+              {stores.map(store => {
+                const planoVinculado = planos.find(p => p.id === store.planoSaaSId);
+                return (
+                  <tr key={store.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-5"><p className="font-black text-slate-800 text-base">{store.razaoSocial}</p><p className="text-amber-600 font-mono text-xs">/{store.slug}</p></td>
+                    <td className="px-6 py-5">
+                       <p className="font-black text-slate-600">{store.nomeResponsavel}</p>
+                       <p className="text-slate-500 text-xs font-bold mb-1.5">{store.telefoneEmpresa}</p>
+                       {store.adminUser ? (
+                         <span className="bg-blue-50 border border-blue-100 text-blue-700 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center w-fit gap-1 mt-1">👥 Franqueado: {store.adminUser.name}</span>
+                       ) : (
+                         <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center w-fit gap-1 mt-1">🏢 Matriz</span>
+                       )}
+                    </td>
+                    <td className="px-6 py-5">
+                       <span className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">
+                          {planoVinculado ? planoVinculado.nome : store.plan || 'SEM PLANO'}
                        </span>
-                     ) : (
-                       <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center w-fit gap-1 mt-1">
-                         🏢 Loja Própria (Matriz)
-                       </span>
-                     )}
-                  </td>
-                  <td className="px-6 py-5">
-                     <span className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">{store.plan || 'STANDARD'}</span>
-                     <p className="text-slate-800 font-black mt-1">R$ {parseFloat(store.monthlyFee || 0).toFixed(2)}</p>
-                  </td>
-                  <td className="px-6 py-5">
-                    <button onClick={() => toggleStoreStatus(store)} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest border cursor-pointer ${store.status === 'ACTIVE' || store.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-red-50 hover:text-red-600' : 'bg-red-50 text-red-600 border-red-200 hover:bg-emerald-50 hover:text-emerald-600'}`}>
-                      {store.status === 'ACTIVE' || store.isActive ? 'SISTEMA LIBERADO' : 'SISTEMA BLOQUEADO'}
-                    </button>
-                  </td>
-                  <td className="px-6 py-5 text-right space-x-2">
-                    <button onClick={() => handleOpenInvoices(store)} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer">💳 Cobranças</button>
-                    <button onClick={() => handleEditClick(store)} className="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer">Editar Dados</button>
-                  </td>
-                </tr>
-              ))}
+                       <p className="text-slate-800 font-black mt-1">R$ {parseFloat(store.monthlyFee || 0).toFixed(2)}</p>
+                       {store.temSuporte && <p className="text-[10px] text-emerald-600 font-bold mt-0.5">+ Suporte Técnico</p>}
+                    </td>
+                    <td className="px-6 py-5">
+                      <button onClick={() => toggleStoreStatus(store)} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest border cursor-pointer ${store.status === 'ACTIVE' || store.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                        {store.status === 'ACTIVE' || store.isActive ? 'SISTEMA LIBERADO' : 'BLOQUEADO'}
+                      </button>
+                    </td>
+                    <td className="px-6 py-5 text-right space-x-2">
+                      <button onClick={() => handleOpenInvoices(store)} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer">💳 Cobranças</button>
+                      <button onClick={() => handleEditClick(store)} className="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer">Editar Dados</button>
+                    </td>
+                  </tr>
+                )
+              })}
               {stores.length === 0 && <tr><td colSpan="5" className="text-center py-12 text-slate-500">Nenhuma loja para exibir.</td></tr>}
             </tbody>
           </table>
@@ -464,9 +451,7 @@ export default function MasterDashboard() {
           <div className="bg-white border border-slate-200 p-6 md:p-10 rounded-[2.5rem] w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[92vh] animate-fade-in-up">
             
             <div className="flex justify-between items-center mb-6 shrink-0 border-b border-slate-100 pb-4">
-              <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-                <span className="text-amber-500">✏️</span> Editar: {editingStore.razaoSocial}
-              </h2>
+              <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3"><span className="text-amber-500">✏️</span> Editar: {editingStore.razaoSocial}</h2>
               <button onClick={() => setEditingStore(null)} className="w-10 h-10 bg-slate-100 hover:bg-red-100 hover:text-red-600 text-slate-500 rounded-full flex items-center justify-center font-black text-lg cursor-pointer">✕</button>
             </div>
 
@@ -499,32 +484,60 @@ export default function MasterDashboard() {
                 </div>
               </div>
 
+              {/* 🔥 NOVO: ÁREA DE PLANOS E SUPORTE DINÂMICOS */}
               <div className="bg-purple-50 p-6 rounded-3xl border border-purple-200 space-y-4">
-                <h3 className="text-xs font-black text-purple-600 uppercase tracking-widest flex items-center gap-2"><span>💎</span> Plano de Assinatura e Pagamento</h3>
+                <h3 className="text-xs font-black text-purple-600 uppercase tracking-widest flex items-center gap-2"><span>💎</span> Plano SaaS e Suporte</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Plano Contratado</label>
-                    <select value={editingStore.plan} onChange={e => setEditingStore({...editingStore, plan: e.target.value})} className="w-full bg-white border border-purple-300 rounded-xl p-3.5 text-sm text-slate-900 font-bold shadow-sm cursor-pointer">
-                       <option value="STARTER">Plano Starter</option>
-                       <option value="STANDARD">Plano Standard</option>
-                       <option value="PREMIUM">Plano Premium</option>
+                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Selecione o Pacote Base</label>
+                    <select 
+                      value={editingStore.planoSaaSId || ''} 
+                      onChange={e => setEditingStore({...editingStore, planoSaaSId: e.target.value})} 
+                      className="w-full bg-white border border-purple-300 rounded-xl p-3.5 text-sm text-slate-900 font-bold shadow-sm cursor-pointer"
+                    >
+                       <option value="">-- Escolha um Plano --</option>
+                       {planos.map(p => (
+                         <option key={p.id} value={p.id}>{p.nome} - R$ {p.precoBase.toFixed(2)}</option>
+                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Valor da Mensalidade (R$)</label>
-                    <input type="number" step="0.01" required value={editingStore.monthlyFee} onChange={e => setEditingStore({...editingStore, monthlyFee: e.target.value})} className="w-full bg-white border border-purple-300 rounded-xl p-3.5 text-sm text-purple-700 font-black shadow-sm" />
+                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Fatura Mensal Final (R$)</label>
+                    <div className="w-full bg-purple-100 border border-purple-300 rounded-xl p-3.5 text-sm text-purple-800 font-black shadow-inner flex items-center">
+                       R$ {((planos.find(p => p.id === editingStore.planoSaaSId)?.precoBase || 0) + (editingStore.temSuporte ? Number(editingStore.valorSuporte || 0) : 0)).toFixed(2)}
+                    </div>
                   </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-purple-100 mt-2 flex flex-col gap-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={editingStore.temSuporte} 
+                      onChange={e => setEditingStore({...editingStore, temSuporte: e.target.checked})} 
+                      className="w-5 h-5 accent-purple-600"
+                    />
+                    <span className="text-sm font-bold text-slate-800">Adicionar Suporte Técnico Extra</span>
+                  </label>
+                  {editingStore.temSuporte && (
+                    <div className="animate-fade-in-up mt-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Valor Cobrado pelo Suporte (R$)</label>
+                      <input 
+                        type="number" step="0.01" 
+                        value={editingStore.valorSuporte} 
+                        onChange={e => setEditingStore({...editingStore, valorSuporte: e.target.value})} 
+                        placeholder="Ex: 50.00" 
+                        className="w-full md:w-1/2 bg-white border border-purple-300 rounded-xl p-3 text-sm text-purple-700 font-black shadow-sm" 
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
               {isSuperMaster && (
                 <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 space-y-2">
                   <h3 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><span>👥</span> Vínculo de Gestão (Franqueado/Revenda)</h3>
-                  <select 
-                    value={editingStore.adminUserId || ''} 
-                    onChange={e => setEditingStore({...editingStore, adminUserId: e.target.value})} 
-                    className="w-full bg-white border border-emerald-300 rounded-xl p-3.5 text-sm text-slate-900 font-bold shadow-sm cursor-pointer mt-2"
-                  >
+                  <select value={editingStore.adminUserId || ''} onChange={e => setEditingStore({...editingStore, adminUserId: e.target.value})} className="w-full bg-white border border-emerald-300 rounded-xl p-3.5 text-sm text-slate-900 font-bold shadow-sm cursor-pointer mt-2">
                     <option value="">-- Sem Vínculo (Pertence à Matriz) --</option>
                     {adminUsers.map(user => (
                       <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
@@ -566,14 +579,13 @@ export default function MasterDashboard() {
             <div className="flex justify-between items-center mb-6 shrink-0 border-b border-slate-100 pb-4">
               <div>
                 <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3"><span className="text-emerald-500">💳</span> Central de Cobranças</h2>
-                <p className="text-slate-500 text-sm font-medium mt-1">Gerar faturas e boletos para <strong className="text-slate-800">{viewingInvoicesStore.razaoSocial}</strong></p>
+                <p className="text-slate-500 text-sm font-medium mt-1">Gerar faturas para <strong className="text-slate-800">{viewingInvoicesStore.razaoSocial}</strong></p>
               </div>
               <button onClick={() => setViewingInvoicesStore(null)} className="w-10 h-10 bg-slate-100 hover:bg-red-100 text-slate-500 rounded-full flex items-center justify-center font-black text-lg cursor-pointer">✕</button>
             </div>
-            
             <div className="overflow-y-auto pr-2 space-y-6 flex-1 hide-scrollbar">
               <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-3xl shadow-sm">
-                 <h3 className="text-sm font-black text-emerald-700 uppercase tracking-widest mb-4 flex items-center gap-2"><span>🏦</span> Gerar Novo Boleto (API Cora)</h3>
+                 <h3 className="text-sm font-black text-emerald-700 uppercase tracking-widest mb-4 flex items-center gap-2"><span>🏦</span> Gerar Novo Boleto</h3>
                  <form onSubmit={handleGenerateBoletoCora} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Referência</label><input type="text" required value={newInvoiceForm.reference} onChange={e => setNewInvoiceForm({...newInvoiceForm, reference: e.target.value})} className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm font-bold" /></div>
@@ -582,9 +594,7 @@ export default function MasterDashboard() {
                       <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Observações</label><input type="text" value={newInvoiceForm.notes} onChange={e => setNewInvoiceForm({...newInvoiceForm, notes: e.target.value})} className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm" /></div>
                     </div>
                     <div className="flex justify-end pt-2">
-                       <button type="submit" disabled={isGeneratingBoleto} className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-8 py-3 rounded-xl shadow-md cursor-pointer">
-                          {isGeneratingBoleto ? 'Comunicando...' : 'Emitir e Enviar Boleto Cora'}
-                       </button>
+                       <button type="submit" disabled={isGeneratingBoleto} className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-8 py-3 rounded-xl shadow-md cursor-pointer">Emitir e Enviar Boleto Cora</button>
                     </div>
                  </form>
               </div>
