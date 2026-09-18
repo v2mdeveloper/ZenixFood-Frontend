@@ -50,8 +50,8 @@ export default function DeliveryApp() {
   }, [storeSlug]);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('@Canone:deliveryToken');
-    const savedEmployee = localStorage.getItem('@Canone:deliveryUser');
+    const savedToken = localStorage.getItem('@ZenixFood:deliveryToken');
+    const savedEmployee = localStorage.getItem('@ZenixFood:deliveryUser');
     if (savedToken && savedEmployee) {
       setLoggedEmployee(JSON.parse(savedEmployee));
     }
@@ -196,14 +196,14 @@ export default function DeliveryApp() {
       alert('❌ Acesso negado. Área exclusiva para Entregadores.');
       return;
     }
-    localStorage.setItem('@Canone:deliveryToken', token);
-    localStorage.setItem('@Canone:deliveryUser', JSON.stringify(employee));
+    localStorage.setItem('@ZenixFood:deliveryToken', token);
+    localStorage.setItem('@ZenixFood:deliveryUser', JSON.stringify(employee));
     setLoggedEmployee(employee);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('@Canone:deliveryToken');
-    localStorage.removeItem('@Canone:deliveryUser');
+    localStorage.removeItem('@ZenixFood:deliveryToken');
+    localStorage.removeItem('@ZenixFood:deliveryUser');
     setLoggedEmployee(null);
     setMyOrders([]);
     setLoginForm({ email: '', password: '' });
@@ -211,7 +211,7 @@ export default function DeliveryApp() {
 
   const fetchMyOrders = async () => {
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
-    const token = localStorage.getItem('@Canone:deliveryToken');
+    const token = localStorage.getItem('@ZenixFood:deliveryToken');
     try {
       const res = await fetch(`${API_URL}/api/delivery/my-orders/${loggedEmployee.id}`, {
         headers: {
@@ -228,7 +228,7 @@ export default function DeliveryApp() {
     if (!code || code.length < 4) return alert('⚠️ Digite a senha de 4 dígitos!');
     
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
-    const token = localStorage.getItem('@Canone:deliveryToken');
+    const token = localStorage.getItem('@ZenixFood:deliveryToken');
     try {
       const res = await fetch(`${API_URL}/api/delivery/confirm`, {
         method: 'POST', 

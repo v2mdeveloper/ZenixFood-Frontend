@@ -228,7 +228,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
 
   const handleCreateCustomer = async (e) => {
     e.preventDefault();
-    const randomPassword = 'Canone' + Math.floor(Math.random() * 1000000) + '!';
+    const randomPassword = 'ZenixFood' + Math.floor(Math.random() * 1000000) + '!';
     try {
       const res = await fetchWithStore(`${API_URL}/api/auth/register`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

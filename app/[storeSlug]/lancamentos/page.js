@@ -96,7 +96,7 @@ export default function LancamentosPage() {
 
   // Helper local com interceptador de Inadimplência
   const fetchWithStore = async (url, options = {}) => {
-    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token') || localStorage.getItem('@Canone:employeeToken');
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token') || localStorage.getItem('@ZenixFood:employeeToken');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
 
     const headers = {
@@ -136,9 +136,9 @@ export default function LancamentosPage() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('@Canone:employeeToken') || localStorage.getItem('zenix_employeeToken');
-    const savedUser = localStorage.getItem('@Canone:employeeUser') || localStorage.getItem('zenix_employeeUser');
-    const savedTheme = localStorage.getItem('@Canone:theme') || localStorage.getItem('zenix_theme');
+    const token = localStorage.getItem('@ZenixFood:employeeToken') || localStorage.getItem('zenix_employeeToken');
+    const savedUser = localStorage.getItem('@ZenixFood:employeeUser') || localStorage.getItem('zenix_employeeUser');
+    const savedTheme = localStorage.getItem('@ZenixFood:theme') || localStorage.getItem('zenix_theme');
     if (savedTheme === 'light') setIsDarkMode(false);
     if (token && savedUser) {
       setIsAuthenticated(true);
@@ -184,7 +184,7 @@ export default function LancamentosPage() {
   const toggleTheme = () => {
     const newTheme = !isDarkMode;
     setIsDarkMode(newTheme);
-    localStorage.setItem('@Canone:theme', newTheme ? 'dark' : 'light');
+    localStorage.setItem('@ZenixFood:theme', newTheme ? 'dark' : 'light');
   };
 
   const handleLogin = async (e) => {
@@ -201,7 +201,7 @@ export default function LancamentosPage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        localStorage.setItem('@Canone:employeeToken', data.token); localStorage.setItem('@Canone:employeeUser', JSON.stringify(data.employee));
+        localStorage.setItem('@ZenixFood:employeeToken', data.token); localStorage.setItem('@ZenixFood:employeeUser', JSON.stringify(data.employee));
         setIsAuthenticated(true); setEmployeeUser(data.employee);
         handleFullscreen(); 
       } else { alert(data.error || 'Credenciais inválidas.'); }
@@ -221,8 +221,8 @@ export default function LancamentosPage() {
 
   const handleLogout = () => { 
     logEmployeeAction('Realizou Logout');
-    localStorage.removeItem('@Canone:employeeToken'); 
-    localStorage.removeItem('@Canone:employeeUser'); 
+    localStorage.removeItem('@ZenixFood:employeeToken'); 
+    localStorage.removeItem('@ZenixFood:employeeUser'); 
     setIsAuthenticated(false); 
     setEmployeeUser(null); 
   };

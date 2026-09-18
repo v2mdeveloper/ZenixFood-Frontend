@@ -92,7 +92,7 @@ export default function ZenixLandingPage() {
                 type="text" 
                 value={storeSlug}
                 onChange={(e) => setStoreSlug(e.target.value)}
-                placeholder="Ex: canone-burger" 
+                placeholder="Ex: ZenixFood-burger" 
                 className="flex-1 bg-black/50 border border-white/10 rounded-2xl p-4 text-white focus:outline-none focus:border-purple-500 font-bold"
               />
               <button type="submit" className="bg-white text-black px-8 py-4 rounded-2xl font-black hover:bg-zinc-200 transition-colors">

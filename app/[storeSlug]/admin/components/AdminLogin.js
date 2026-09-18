@@ -14,7 +14,7 @@ export default function AdminLogin({ adminLoginForm, setAdminLoginForm, handleAd
               required 
               value={adminLoginForm.storeId || ""} 
               onChange={e => setAdminLoginForm({...adminLoginForm, storeId: e.target.value})} 
-              placeholder="ex: canone-burger" 
+              placeholder="ex: ZenixFood-burger" 
               className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 focus:outline-none focus:border-amber-500" 
             />
           </div>
