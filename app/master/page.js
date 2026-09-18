@@ -73,6 +73,9 @@ export default function MasterDashboard() {
       
       if (res.ok && data.token) {
         localStorage.setItem('zenix_master_token', data.token);
+        // 🔐 SALVA OS DADOS DO USUÁRIO PARA FILTRAGEM
+        localStorage.setItem('zenix_user', JSON.stringify(data.user)); 
+
         if (data.user?.role === 'SUPER_MASTER') {
           localStorage.setItem('zenix_super_token', data.token);
         }
@@ -106,6 +109,7 @@ export default function MasterDashboard() {
   const handleLogout = () => {
     localStorage.removeItem('zenix_master_token');
     localStorage.removeItem('zenix_super_token');
+    localStorage.removeItem('zenix_user');
     setIsAuthenticated(false); 
     setEmail('');
     setPassword('');
@@ -115,12 +119,17 @@ export default function MasterDashboard() {
     if (email === 'admin@zenix') setIsSuperMaster(true); 
 
     try {
-      const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
-      const res = await fetch(`${API_URL}/api/super/users`, { headers: { 'Authorization': `Bearer ${token}` } });
-      
-      if (res.ok) {
+      // 🛡️ LER USUÁRIO LOGADO E BLOQUEAR O MASTER
+      const userStr = localStorage.getItem('zenix_user');
+      const user = userStr ? JSON.parse(userStr) : null;
+
+      if (user && user.role === 'SUPER_MASTER') {
         setIsSuperMaster(true);
-        setAdminUsers(await res.json()); 
+        const token = localStorage.getItem('zenix_super_token');
+        const res = await fetch(`${API_URL}/api/super/users`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.ok) setAdminUsers(await res.json()); 
+      } else {
+        setIsSuperMaster(false);
       }
     } catch (error) {}
   };
@@ -128,48 +137,79 @@ export default function MasterDashboard() {
   const fetchStores = async () => {
     try {
       const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
+      const userStr = localStorage.getItem('zenix_user');
+      const user = userStr ? JSON.parse(userStr) : null;
+
       const res = await fetch(`${API_URL}/api/master/lojas`, { headers: { 'Authorization': `Bearer ${token}` } });
-      if (res.ok) setStores(await res.json());
+      if (res.ok) {
+        let fetchedStores = await res.json();
+        
+        // 🛡️ FILTRO DE SEGURANÇA: Se for Franqueado, exibe APENAS as lojas dele!
+        if (user && user.role === 'MASTER') {
+           fetchedStores = fetchedStores.filter(s => s.adminUserId === user.id);
+        }
+        setStores(fetchedStores);
+      }
     } catch (error) {} finally { setLoading(false); }
   };
 
+  // 🧩 DESMEMBRADOR DE ENDEREÇO INTELIGENTE
   const handleEditClick = (store) => {
-    // Tenta "desmembrar" o endereço antigo se ele estiver salvo em formato de texto único
-    let rua = store.street || '';
-    let num = store.number || '';
-    let comp = store.complement || '';
-    let bair = store.neighborhood || '';
-    let cid = store.city || '';
-    let est = store.state || '';
-    let cepCode = store.cep || '';
+    let parsedStreet = store.street || '';
+    let parsedNumber = store.number || '';
+    let parsedComp = store.complement || '';
+    let parsedNeigh = store.neighborhood || '';
+    let parsedCity = store.city || '';
+    let parsedState = store.state || '';
+    let parsedCep = store.cep || '';
 
+    // Se a rua estiver vazia mas houver o endereço gigante do BD, nós quebramos ele.
     if (store.endereco && !store.street) {
-      // Se houver um endereço em string, joga o texto completo no logradouro para não perder nada
-      rua = store.endereco;
+      try {
+        const addr = store.endereco;
+        
+        const cepMatch = addr.match(/\(CEP:\s*([\d-]+)\)/i);
+        if (cepMatch) parsedCep = cepMatch[1];
+
+        const ufMatch = addr.match(/\/([A-Z]{2})\s*\(CEP/i);
+        if (ufMatch) parsedState = ufMatch[1];
+
+        const cityMatch = addr.match(/,\s*([^,]+)\/[A-Z]{2}\s*\(CEP/i);
+        if (cityMatch) parsedCity = cityMatch[1].trim();
+
+        const rest = addr.split(/,\s*[^,]+\/[A-Z]{2}\s*\(CEP/i)[0]; // Remove cidade/estado/cep
+        const cleanedRest = rest.replace(/,\s*,/g, ','); // Limpa vírgulas duplas acidentais
+        const parts = cleanedRest.split(' - ');
+        
+        if (parts.length >= 2) {
+           parsedNeigh = parts[parts.length - 1].trim(); // Bairro
+           const streetNumComp = parts.slice(0, parts.length - 1).join(' - ');
+           const streetParts = streetNumComp.split(',');
+           
+           parsedStreet = streetParts[0]?.trim() || '';
+           if (streetParts[1]) {
+             const numComp = streetParts[1].split('-');
+             parsedNumber = numComp[0]?.trim() || '';
+             parsedComp = numComp.slice(1).join('-').trim() || '';
+           }
+        } else {
+           parsedStreet = cleanedRest.trim();
+        }
+      } catch (e) {
+        parsedStreet = store.endereco; // Fallback se der erro no regex
+      }
     }
 
     setEditingStore({
       ...store,
-      slug: store.slug || '', 
-      razaoSocial: store.razaoSocial || '', 
-      cnpj: store.cnpj || '',
-      inscricaoEstadual: store.inscricaoEstadual || '', 
-      inscricaoMunicipal: store.inscricaoMunicipal || '',
-      emailEmpresa: store.emailEmpresa || '', 
-      telefoneEmpresa: store.telefoneEmpresa || '',
-      nomeResponsavel: store.nomeResponsavel || '', 
-      cpfResponsavel: store.cpfResponsavel || '',
-      emailResponsavel: store.emailResponsavel || '', 
-      senhaResponsavel: '', 
-      cep: cepCode, 
-      street: rua, 
-      number: num, 
-      complement: comp, 
-      neighborhood: bair, 
-      city: cid, 
-      state: est,
-      plan: store.plan || 'STANDARD', 
-      monthlyFee: store.monthlyFee || '',
+      slug: store.slug || '', razaoSocial: store.razaoSocial || '', cnpj: store.cnpj || '',
+      inscricaoEstadual: store.inscricaoEstadual || '', inscricaoMunicipal: store.inscricaoMunicipal || '',
+      emailEmpresa: store.emailEmpresa || '', telefoneEmpresa: store.telefoneEmpresa || '',
+      nomeResponsavel: store.nomeResponsavel || '', cpfResponsavel: store.cpfResponsavel || '',
+      emailResponsavel: store.emailResponsavel || '', senhaResponsavel: '', 
+      cep: parsedCep, street: parsedStreet, number: parsedNumber, complement: parsedComp, 
+      neighborhood: parsedNeigh, city: parsedCity, state: parsedState,
+      plan: store.plan || 'STANDARD', monthlyFee: store.monthlyFee || '',
       adminUserId: store.adminUserId || ''
     });
   };
@@ -186,11 +226,8 @@ export default function MasterDashboard() {
         const data = await res.json();
         if (!data.erro) {
           setEditingStore(prev => ({
-            ...prev, 
-            street: data.logradouro || prev.street, 
-            neighborhood: data.bairro || prev.neighborhood,
-            city: data.localidade || prev.city, 
-            state: data.uf || prev.state
+            ...prev, street: data.logradouro || prev.street, neighborhood: data.bairro || prev.neighborhood,
+            city: data.localidade || prev.city, state: data.uf || prev.state
           }));
         }
       } catch (err) {}
@@ -331,11 +368,14 @@ export default function MasterDashboard() {
         </div>
         <div className="flex flex-wrap gap-3">
           <button onClick={handleLogout} className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer">Sair</button>
+          
+          {/* BOTÃO APARECE APENAS PARA O SUPER MASTER */}
           {isSuperMaster && (
             <button onClick={() => router.push('/master/franquias')} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-5 py-2.5 rounded-xl font-black shadow-sm cursor-pointer flex items-center gap-2">
               <span>👥</span> Gestão de Franquias
             </button>
           )}
+
           <button onClick={() => router.push('/master/stores/new')} className="bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-2.5 rounded-xl font-black shadow-md cursor-pointer flex items-center gap-2">
             <span>+</span> Cadastrar Loja
           </button>
@@ -397,7 +437,7 @@ export default function MasterDashboard() {
                   </td>
                 </tr>
               ))}
-              {stores.length === 0 && <tr><td colSpan="5" className="text-center py-12 text-slate-500">Nenhuma loja cadastrada ainda.</td></tr>}
+              {stores.length === 0 && <tr><td colSpan="5" className="text-center py-12 text-slate-500">Nenhuma loja para exibir.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -462,6 +502,7 @@ export default function MasterDashboard() {
                 </div>
               </div>
 
+              {/* APARECE APENAS PARA O SUPER MASTER */}
               {isSuperMaster && (
                 <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 space-y-2">
                   <h3 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><span>👥</span> Vínculo de Gestão (Franqueado/Revenda)</h3>
