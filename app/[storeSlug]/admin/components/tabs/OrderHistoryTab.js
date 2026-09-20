@@ -19,7 +19,6 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
 
   const toggleOrigin = (origin) => setActiveOrigins(prev => ({ ...prev, [origin]: !prev[origin] }));
 
-  // Helper local para garantir o envio do x-store-id e Token JWT
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
@@ -31,41 +30,50 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
     };
 
     const response = await fetch(url, { ...options, headers });
-
-    // SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
-    if (response.status === 402) {
-      if (typeof window !== 'undefined') {
-        window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
-      }
-    }
-
+    if (response.status === 402 && typeof window !== 'undefined') window.location.href = '/bloqueado';
     return response;
   };
 
-  // Busca dados de RH para cruzamento de comissões com suporte multi-tenant
   useEffect(() => {
     fetchWithStore(`${API_URL}/api/rh/employees`).then(r => r.ok ? r.json() : []).then(setEmployees).catch(() => {});
     fetchWithStore(`${API_URL}/api/settings`).then(r => r.ok ? r.json() : {}).then(data => setTipPercentage(Number(data.tipPercentage) || 10)).catch(() => {});
   }, []);
 
-  // Fallback seguro caso a função de tamanho não seja passada
   const sizeLabelFn = getProductSizeLabel || ((item) => {
     if (!item.product) return "";
     if (item.product.price1kg && Number(item.price) === Number(item.product.price1kg)) return " (1kg)";
     if (item.product.price700g && Number(item.price) === Number(item.product.price700g)) return " (700g)";
-    if (item.product.name.toLowerCase().includes('costela') && item.product.price700g) return " (500g)";
+    if (item.product.name?.toLowerCase().includes('costela') && item.product.price700g) return " (500g)";
     return "";
   });
+
+  // 🔥 LÓGICA INTELIGENTE DE NOMES E MESAS/COMANDAS
+  const getOrderTotal = (o) => Number(o.total || (o.items?.reduce((acc, curr) => acc + (Number(curr.price) * curr.quantity), 0) || 0));
+
+  const getDisplayName = (o) => {
+     if (o.customerName) return o.customerName; // Prioriza o nome da Recepção/Garçom!
+     if (o.client?.name) return o.client.name;
+     const ref = o.tableNumber || o.shortId || o.number;
+     if (ref) return Number(ref) >= 1000 ? `Comanda #${ref}` : `Mesa ${ref}`;
+     return 'Cliente Avulso';
+  };
+
+  const getSecondaryLabel = (o) => {
+     const ref = o.tableNumber || o.shortId || o.number;
+     if (o.origin === 'SALAO' || o.origin === 'PDV' || !o.origin) {
+        if (ref) return Number(ref) >= 1000 ? `💳 Comanda #${ref}` : `🪑 Mesa ${ref}`;
+        return o.waiter || o.openedBy ? `Atendido por: ${o.waiter || o.openedBy}` : 'Consumo Local';
+     }
+     return o.address || (o.client?.cpf ? `CPF: ${o.client.cpf}` : 'Sem detalhes');
+  };
 
   // =========================================================
   // LÓGICA DE FILTRAGEM GLOBAL
   // =========================================================
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
-      // 1. Filtro de Origem
       if (!activeOrigins[o.origin || 'APP']) return false;
 
-      // 2. Filtro de Data
       if (startDate || endDate) {
         const orderDate = new Date(o.createdAt);
         orderDate.setHours(0, 0, 0, 0);
@@ -83,27 +91,19 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
         }
       }
 
-      // 3. Filtro de Busca Geral (Nome, CPF, Pedido, Endereço)
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
-        
-        // Verifica se é uma comanda ou mesa (Para aparecer os convidados dos Eventos)
-        const isTableOrTab = o.origin === 'SALAO';
-        const clientNameMatch = o.client?.name?.toLowerCase().includes(term);
-        // Nas comandas/mesas, o nome do cliente pode vir guardado no customerName
-        const customerNameMatch = isTableOrTab && o.customerName?.toLowerCase().includes(term); 
-        
+        const mainNameMatch = getDisplayName(o).toLowerCase().includes(term);
         const termNumbers = term.replace(/\D/g, '');
         const cpfMatch = termNumbers && o.client?.cpf ? o.client.cpf.replace(/\D/g, '').includes(termNumbers) : false;
-        const idMatch = o.shortId?.toString().includes(term);
+        const idMatch = (o.shortId || o.number)?.toString().includes(term);
         const addressMatch = o.address?.toLowerCase().includes(term); 
         
-        if (!clientNameMatch && !customerNameMatch && !cpfMatch && !idMatch && !addressMatch) return false;
+        if (!mainNameMatch && !cpfMatch && !idMatch && !addressMatch) return false;
       }
 
-      // 4. Filtro por Produto Específico
       if (productSearch) {
-        const hasProduct = o.items?.some(i => i.product?.name?.toLowerCase().includes(productSearch.toLowerCase()));
+        const hasProduct = o.items?.some(i => (i.product?.name || i.name)?.toLowerCase().includes(productSearch.toLowerCase()));
         if (!hasProduct) return false;
       }
 
@@ -129,7 +129,7 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
     let totalCommissionsToPay = 0;
 
     filteredOrders.forEach(o => {
-      const val = Number(o.total) || 0;
+      const val = getOrderTotal(o);
       const origin = o.origin || 'APP';
       
       const isValidSale = o.status !== 'CANCELED' && o.status !== 'PENDING';
@@ -144,7 +144,7 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
         }
 
         if (origin === 'SALAO' || origin === 'PDV') {
-           const empName = o.waiter || (origin === 'SALAO' ? 'Garçom (Não Registrado)' : 'Caixa PDV (Não Registrado)');
+           const empName = o.waiter || o.openedBy || (origin === 'SALAO' ? 'Garçom (Não Registrado)' : 'Caixa PDV');
            if (!empMap[empName]) {
               const empObj = employees.find(e => e.name === empName);
               empMap[empName] = { name: empName, count: 0, revenue: 0, origin: origin, receivesTips: empObj ? empObj.receivesTips : false };
@@ -158,13 +158,11 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
         }
       }
 
-      // Considera PAID ou DELIVERED como vendas concluídas para relatórios
-      if (o.status === 'DELIVERED' || o.status === 'PAID') {
+      if (o.status === 'DELIVERED' || o.status === 'PAID' || o.status === 'CLOSED') {
          deliveredRevenue += val;
          deliveredOrdersCount++;
 
-         // Prioriza o customerName nas comandas (SALAO) para cruzar eventos perfeitamente
-         const cName = o.customerName || o.client?.name || (o.origin === 'SALAO' ? `Mesa/Comanda ${o.tableNumber || o.shortId}` : 'Cliente Avulso');
+         const cName = getDisplayName(o);
          custMap[cName] = (custMap[cName] || 0) + val;
 
          o.items?.forEach(i => {
@@ -218,18 +216,21 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
     } else {
       if (filteredOrders.length === 0) return alert("Não há dados para exportar.");
-      const header = ["Nº Pedido", "Data/Hora", "Vendedor", "Cliente", "CPF", "Canal", "Pagamento", "Status", "Itens", "Total (R$)"];
+      const header = ["Nº Pedido", "Data/Hora", "Vendedor", "Cliente", "Detalhe / Mesa", "Canal", "Pagamento", "Status", "Itens", "Total (R$)"];
       const escapeCSV = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
 
       const rows = filteredOrders.map(o => {
-        // Garantindo que clientes de mesa apareçam (CustomerName vs Client.name)
-        const clienteNomeFinal = o.customerName || o.client?.name || (o.origin === 'SALAO' ? `Mesa/Comanda ${o.tableNumber || o.shortId}` : 'Avulso');
-
         return [
-          o.shortId, new Date(o.createdAt).toLocaleString('pt-BR'), o.waiter || '-', clienteNomeFinal, o.client?.cpf || o.customerCpf || '-',
-          o.origin || 'APP', getMetodoPagamentoLabel(o.paymentMethod), translateStatus(o.status).label, 
+          o.shortId || o.number || '-', 
+          new Date(o.createdAt).toLocaleString('pt-BR'), 
+          o.waiter || o.openedBy || '-', 
+          getDisplayName(o), 
+          getSecondaryLabel(o),
+          o.origin || 'APP', 
+          getMetodoPagamentoLabel(o.paymentMethod), 
+          translateStatus(o.status).label, 
           o.items?.map(i => `${i.quantity}x ${i.product?.name || i.name}${sizeLabelFn(i)}`).join(' | '),
-          Number(o.total).toFixed(2).replace('.', ',')
+          getOrderTotal(o).toFixed(2).replace('.', ',')
         ];
       });
 
@@ -241,7 +242,7 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
   };
 
   const translateStatus = (status) => {
-    const map = { 'PENDING': { label: 'Pendente', color: 'bg-slate-100 text-slate-600' }, 'PREPARING': { label: 'Na Chapa', color: 'bg-amber-100 text-amber-700' }, 'READY': { label: 'Em Rota/Pronto', color: 'bg-blue-100 text-blue-700' }, 'DELIVERED': { label: 'Concluído', color: 'bg-emerald-100 text-emerald-700' }, 'PAID': { label: 'Pago/Concluído', color: 'bg-emerald-100 text-emerald-700' }, 'CANCELED': { label: 'Cancelado', color: 'bg-red-100 text-red-700' }};
+    const map = { 'PENDING': { label: 'Pendente', color: 'bg-slate-100 text-slate-600' }, 'PREPARING': { label: 'Na Chapa', color: 'bg-amber-100 text-amber-700' }, 'READY': { label: 'Em Rota/Pronto', color: 'bg-blue-100 text-blue-700' }, 'DELIVERED': { label: 'Concluído', color: 'bg-emerald-100 text-emerald-700' }, 'PAID': { label: 'Pago/Fechado', color: 'bg-emerald-100 text-emerald-700' }, 'CLOSED': { label: 'Fechado', color: 'bg-emerald-100 text-emerald-700' }, 'CANCELED': { label: 'Cancelado', color: 'bg-red-100 text-red-700' }};
     return map[status] || { label: status, color: 'bg-slate-100 text-slate-700' };
   };
 
@@ -393,31 +394,31 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
               <div className="overflow-x-auto bg-white rounded-3xl border border-slate-200 shadow-sm mt-6">
                 <table className="w-full text-left text-sm text-slate-700">
                   <thead className="text-xs text-slate-400 uppercase tracking-wider bg-slate-50/50 border-b border-slate-100">
-                    <tr><th className="px-6 py-5 font-black">Nº Pedido</th><th className="px-6 py-5 font-black">Data/Hora</th><th className="px-6 py-5 font-black">Vendedor</th><th className="px-6 py-5 font-black">Cliente / Mesa</th><th className="px-6 py-5 font-black">Canal</th><th className="px-6 py-5 font-black">Pagamento</th><th className="px-6 py-5 font-black">Total</th><th className="px-6 py-5 font-black text-right">Ação</th></tr>
+                    <tr><th className="px-6 py-5 font-black">Nº Pedido</th><th className="px-6 py-5 font-black">Data/Hora</th><th className="px-6 py-5 font-black">Vendedor/Garçom</th><th className="px-6 py-5 font-black">Cliente / Mesa</th><th className="px-6 py-5 font-black">Canal</th><th className="px-6 py-5 font-black">Pagamento</th><th className="px-6 py-5 font-black">Total</th><th className="px-6 py-5 font-black text-right">Ação</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredOrders.map(order => {
                       const origInfo = getOrigemInfo(order.origin);
                       const isCanceledOrPending = order.status === 'CANCELED' || order.status === 'PENDING';
-                      const isSalao = order.origin === 'SALAO';
-                      const displayName = order.customerName || order.client?.name || (isSalao ? `Mesa ${order.tableNumber || order.shortId}` : 'Avulso');
 
                       return (
                         <tr key={order.id} className={`hover:bg-slate-50 transition-colors group ${isCanceledOrPending ? 'opacity-50 grayscale' : ''}`}>
-                          <td className="px-6 py-4 font-black text-slate-900">#{order.shortId}</td>
+                          <td className="px-6 py-4 font-black text-slate-900">#{order.shortId || order.number || '-'}</td>
                           <td className="px-6 py-4 text-slate-500 font-medium">{new Date(order.createdAt).toLocaleString('pt-BR')}</td>
-                          <td className="px-6 py-4 font-black text-amber-600 uppercase text-[10px] tracking-wider">{order.waiter || '-'}</td>
+                          <td className="px-6 py-4 font-black text-amber-600 uppercase text-[10px] tracking-wider">{order.waiter || order.openedBy || '-'}</td>
+                          
                           <td className="px-6 py-4">
-                             <p className="font-black text-slate-800 leading-tight mb-0.5">{displayName}</p>
-                             {order.address && <p className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.5 rounded inline-block truncate max-w-[150px]">{order.address}</p>}
+                             <p className="font-black text-slate-800 leading-tight mb-0.5">{getDisplayName(order)}</p>
+                             <p className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.5 rounded inline-block truncate max-w-[150px]">{getSecondaryLabel(order)}</p>
                           </td>
+                          
                           <td className="px-6 py-4"><span className={`${origInfo.color} px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-max shadow-sm border border-black/5`}><span>{origInfo.icon}</span> {origInfo.label}</span></td>
                           <td className="px-6 py-4 text-[11px] font-bold text-slate-500">
                              {getMetodoPagamentoLabel(order.paymentMethod)}
                              <br/>
                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase mt-1 inline-block ${translateStatus(order.status).color}`}>{translateStatus(order.status).label}</span>
                           </td>
-                          <td className={`px-6 py-4 font-black text-base ${isCanceledOrPending ? 'text-slate-400 line-through' : 'text-emerald-600'}`}>R$ {Number(order.total).toFixed(2)}</td>
+                          <td className={`px-6 py-4 font-black text-base ${isCanceledOrPending ? 'text-slate-400 line-through' : 'text-emerald-600'}`}>R$ {getOrderTotal(order).toFixed(2)}</td>
                           <td className="px-6 py-4 text-right"><button onClick={() => setSelectedOrderDetails(order)} className="text-amber-600 hover:text-white font-black bg-amber-100 hover:bg-amber-500 px-4 py-2 rounded-xl transition-all text-xs cursor-pointer shadow-sm">Detalhes</button></td>
                         </tr>
                       )
