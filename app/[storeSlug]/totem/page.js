@@ -214,7 +214,7 @@ export default function TotemModerno() {
         clientId: "TOTEM_MODE", 
         origin: "TOTEM",
         customerName: customerName,
-        address: `Cliente: ${customerName}`, // 🔥 AQUI ESTÁ A CORREÇÃO! (O Prisma exige esse campo preenchido)
+        address: `Cliente: ${customerName}`, 
         paymentMethod: paymentMethod, 
         total: totalCart,
         items: cart.map(item => ({ 
@@ -290,7 +290,8 @@ export default function TotemModerno() {
           <div className="bg-slate-100 p-8 rounded-3xl border-2 border-slate-200 mb-8 inline-block w-full">
             <p className="text-lg text-slate-500 font-bold uppercase tracking-widest">{t.passwordIs}</p>
             <p className="text-[6rem] font-black text-emerald-600 leading-none">{orderSuccessData.shortId}</p>
-            <p className="text-2xl text-slate-800 font-black mt-4">{orderSuccessData.customerName || extractFirstName(orderSuccessData)}</p>
+            {/* 🔥 CORREÇÃO AQUI: Usa a variável do estado direto para evitar o erro */}
+            <p className="text-2xl text-slate-800 font-black mt-4">{orderSuccessData.customerName || customerName}</p>
           </div>
 
           <button onClick={() => { setOrderSuccessData(null); setIsIdle(true); }} className="w-full bg-emerald-500 text-white py-6 rounded-2xl font-black text-2xl shadow-xl active:scale-95 transition-all">
