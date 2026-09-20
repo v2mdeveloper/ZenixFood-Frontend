@@ -18,7 +18,7 @@ export default function LancamentosPage() {
   const [loadingLogin, setLoadingLogin] = useState(false);
 
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const [activeMenu, setActiveMenu] = useState('mesas'); // mesas, aberturas, transferencias, caixa
+  const [activeMenu, setActiveMenu] = useState('mesas');
 
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
@@ -66,13 +66,13 @@ export default function LancamentosPage() {
   const [readyAlerts, setReadyAlerts] = useState([]);
   const [alertedItemsSet, setAlertedItemsSet] = useState(new Set());
 
-  // 🍕 ESTADOS DO CONSTRUTOR DE PIZZAS
+  // ESTADOS DO CONSTRUTOR DE PIZZAS
   const [pizzaBuilderOpen, setPizzaBuilderOpen] = useState(false);
   const [pizzaBase, setPizzaBase] = useState(null);
   const [pizzaFlavorCount, setPizzaFlavorCount] = useState(1);
   const [pizzaSelectedFlavors, setPizzaSelectedFlavors] = useState([]);
 
-  // 💰 ESTADOS DO CAIXA AMBULANTE E PAGAMENTOS
+  // ESTADOS DO CAIXA AMBULANTE E PAGAMENTOS
   const [meuCaixa, setMeuCaixa] = useState(null);
   const [caixaLoading, setCaixaLoading] = useState(false);
   const [openingBalance, setOpeningBalance] = useState('');
@@ -82,6 +82,10 @@ export default function LancamentosPage() {
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [pagamentos, setPagamentos] = useState([]);
   const [pagamentoAtual, setPagamentoAtual] = useState({ metodo: 'PIX', valor: '' });
+
+  // ESTADOS PARA SANGRIA E SUPRIMENTO
+  const [showMovementModal, setShowMovementModal] = useState(false);
+  const [movementForm, setMovementForm] = useState({ type: 'OUT', amount: '', reason: '' });
 
   // Identifica e valida a loja pelo slug da URL
   useEffect(() => {
@@ -239,7 +243,7 @@ export default function LancamentosPage() {
 
   const fetchUpsells = async () => { try { const res = await fetchWithStore(`${API_URL}/api/upsells`); if (res.ok) setUpsells(await res.json()); } catch (e) {} };
 
-  // 💰 LÓGICA DO CAIXA AMBULANTE (SMART POS)
+  // 💰 LÓGICA DO CAIXA AMBULANTE E MOVIMENTOS (SANGRIA/SUPRIMENTO)
   const fetchMeuCaixa = async () => {
     try {
       const res = await fetchWithStore(`${API_URL}/api/mobile-pos/meu-caixa`, { headers: { 'x-employee-name': employeeUser.name } });
@@ -271,10 +275,26 @@ export default function LancamentosPage() {
       if (res.ok && data.success) { 
         setMeuCaixa(null); setShowCloseCaixaModal(false); 
         alert("Caixa encerrado com sucesso! Entregue o dinheiro físico ao gerente."); 
-        setActiveMenu('mesas'); 
-        setClosingForm({ balance: '', details: '' });
+        setActiveMenu('mesas'); setClosingForm({ balance: '', details: '' });
       } else alert(data.error);
     } catch (e) { alert("Erro de comunicação ao fechar caixa."); } finally { setCaixaLoading(false); }
+  };
+
+  const handleCashMovement = async (e) => {
+    e.preventDefault();
+    if (Number(movementForm.amount) <= 0) return alert('Digite um valor válido.');
+    setCaixaLoading(true);
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/mobile-pos/movimento`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-employee-name': employeeUser.name },
+        body: JSON.stringify({ caixaId: meuCaixa.id, type: movementForm.type, amount: movementForm.amount, reason: movementForm.reason })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(movementForm.type === 'IN' ? 'Suprimento registrado com sucesso!' : 'Sangria registrada com sucesso!');
+        setShowMovementModal(false); setMovementForm({ type: 'OUT', amount: '', reason: '' }); fetchMeuCaixa();
+      } else alert(data.error);
+    } catch (e) { alert("Erro de comunicação."); } finally { setCaixaLoading(false); }
   };
 
   const handleAdicionarPagamento = () => {
@@ -302,7 +322,6 @@ export default function LancamentosPage() {
       } else alert(data.error);
     } catch (e) { alert("Erro ao processar pagamento."); } finally { setCaixaLoading(false); }
   };
-
 
   const handleCpfChange = (e) => {
     let val = e.target.value.replace(/\D/g, ''); if (val.length > 11) val = val.slice(0, 11); 
@@ -482,11 +501,15 @@ export default function LancamentosPage() {
     return currentCat ? currentCat.products || [] : [];
   };
 
-  // 🔥 CÁLCULOS DO CHECKOUT
+  // CÁLCULOS DO CAIXA E CHECKOUT
   const totalDevido = selectedTab ? calculateTotal(selectedTab.items) : 0;
-  const totalPago = pagamentos.reduce((acc, p) => acc + p.valor, 0);
-  const valorRestante = Math.max(0, totalDevido - totalPago);
-  const troco = Math.max(0, totalPago - totalDevido);
+  const totalPagoCheckout = pagamentos.reduce((acc, p) => acc + p.valor, 0);
+  const valorRestante = Math.max(0, totalDevido - totalPagoCheckout);
+  const troco = Math.max(0, totalPagoCheckout - totalDevido);
+
+  const totalIn = meuCaixa?.movements?.filter(m => m.type === 'IN').reduce((acc, m) => acc + m.amount, 0) || 0;
+  const totalOut = meuCaixa?.movements?.filter(m => m.type === 'OUT').reduce((acc, m) => acc + m.amount, 0) || 0;
+  const saldoAtualCaixa = (Number(meuCaixa?.openingBalance || 0) + totalIn - totalOut).toFixed(2);
 
   if (storeStatus === 'LOADING') return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500 font-black text-xl animate-pulse">Carregando painel de salão...</div>;
   if (storeStatus === 'NOT_FOUND') return <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6"><span className="text-6xl mb-4">🚫</span><h1 className="text-3xl font-black text-white mb-2">Acesso Negado</h1></div>;
@@ -553,12 +576,9 @@ export default function LancamentosPage() {
                <button onClick={() => { setActiveMenu('transferencias'); setSelectedTab(null); }} className={`flex flex-col md:flex-row items-center gap-1 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl font-black text-[10px] md:text-sm transition-all cursor-pointer ${activeMenu === 'transferencias' ? 'bg-amber-500 text-slate-950 shadow-md' : textMenuUnselected}`}>
                   <span className="text-xl md:text-lg">🔄</span> <span className="hidden sm:block md:inline">Transferir</span>
                </button>
-               
-               {/* 💰 NOVO BOTÃO DO CAIXA AMBULANTE */}
-               <button onClick={() => { setActiveMenu('caixa'); setSelectedTab(null); }} className={`flex flex-col md:flex-row items-center gap-1 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl font-black text-[10px] md:text-sm transition-all cursor-pointer ${activeMenu === 'caixa' ? 'bg-emerald-500 text-slate-950 shadow-md' : textMenuUnselected}`}>
+               <button onClick={() => { setActiveMenu('caixa'); setSelectedTab(null); }} className={`flex flex-col md:flex-row items-center gap-1 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl font-black text-[10px] md:text-sm transition-all cursor-pointer ${activeMenu === 'caixa' ? 'bg-emerald-500 text-white shadow-md' : textMenuUnselected}`}>
                   <span className="text-xl md:text-lg">💰</span> <span className="hidden sm:block md:inline">Meu Caixa</span>
                </button>
-
                <button onClick={() => router.push(`/${storeSlug}/recepcao`)} className={`flex flex-col md:flex-row items-center gap-1 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl font-black text-[10px] md:text-sm transition-all cursor-pointer ${textMenuUnselected}`}>
                   <span className="text-xl md:text-lg">🎟️</span> <span className="hidden sm:block md:inline">Porta</span>
                </button>
@@ -574,21 +594,21 @@ export default function LancamentosPage() {
       <main className="flex-1 h-[calc(100vh-80px)] md:h-screen pb-[100px] md:pb-0 overflow-y-auto hide-scrollbar relative">
         
         {/* ========================================================================= */}
-        {/* 💰 ABA: MEU CAIXA (SMART POS) */}
+        {/* ABA: MEU CAIXA (SMART POS COM SANGRIA E SUPRIMENTO) */}
         {/* ========================================================================= */}
         {activeMenu === 'caixa' && (
-           <div className="p-4 md:p-10 max-w-2xl mx-auto animate-fade-in-up md:mt-6">
+           <div className="p-4 md:p-10 max-w-3xl mx-auto animate-fade-in-up md:mt-6">
               <div className={`${bgCard} border p-6 md:p-8 rounded-[2.5rem] shadow-xl relative overflow-hidden`}>
                  <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-emerald-600"></div>
                  
                  <div className="text-center mb-8">
                     <span className="text-5xl mb-4 inline-block">💰</span>
                     <h2 className="text-2xl font-black">Meu Caixa (Smart POS)</h2>
-                    <p className={`text-xs ${textMuted} mt-2 font-medium`}>Gerencie seus recebimentos diretamente na mesa.</p>
+                    <p className={`text-xs ${textMuted} mt-2 font-medium`}>Gerencie recebimentos, sangrias e suprimentos.</p>
                  </div>
 
                  {!meuCaixa ? (
-                    <form onSubmit={handleAbrirCaixa} className="space-y-6">
+                    <form onSubmit={handleAbrirCaixa} className="space-y-6 max-w-sm mx-auto">
                        <div className={`p-6 border rounded-2xl ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                           <h3 className="text-sm font-black uppercase tracking-widest mb-4 flex items-center justify-center gap-2"><span>🔓</span> Abrir Novo Caixa</h3>
                           <label className={`text-xs font-bold ${textMuted} uppercase block mb-2`}>Fundo de Troco (R$)</label>
@@ -600,31 +620,53 @@ export default function LancamentosPage() {
                     </form>
                  ) : (
                     <div className="space-y-6">
-                       <div className="grid grid-cols-2 gap-4">
-                          <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'}`}>
-                             <p className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-emerald-500' : 'text-emerald-700'}`}>Fundo de Troco</p>
-                             <p className="text-2xl font-black text-emerald-600 mt-1">R$ {Number(meuCaixa.openingBalance).toFixed(2)}</p>
+                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className={`p-4 rounded-2xl border flex flex-col justify-center items-center text-center ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                             <p className={`text-[9px] font-black uppercase tracking-widest ${textMuted}`}>Fundo (Abertura)</p>
+                             <p className={`text-lg font-black mt-1 ${textMain}`}>R$ {Number(meuCaixa.openingBalance).toFixed(2)}</p>
                           </div>
-                          <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'}`}>
-                             <p className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-blue-500' : 'text-blue-700'}`}>Total Recebido</p>
-                             <p className="text-2xl font-black text-blue-600 mt-1">R$ {meuCaixa.movements?.filter(m => m.type === 'IN').reduce((acc, m) => acc + m.amount, 0).toFixed(2)}</p>
+                          <div className={`p-4 rounded-2xl border flex flex-col justify-center items-center text-center ${isDarkMode ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'}`}>
+                             <p className={`text-[9px] font-black uppercase tracking-widest ${isDarkMode ? 'text-blue-500' : 'text-blue-700'}`}>Entradas / Vendas</p>
+                             <p className="text-lg font-black text-blue-600 mt-1">R$ {totalIn.toFixed(2)}</p>
+                          </div>
+                          <div className={`p-4 rounded-2xl border flex flex-col justify-center items-center text-center ${isDarkMode ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'}`}>
+                             <p className={`text-[9px] font-black uppercase tracking-widest ${isDarkMode ? 'text-red-500' : 'text-red-700'}`}>Saídas / Sangrias</p>
+                             <p className="text-lg font-black text-red-600 mt-1">R$ {totalOut.toFixed(2)}</p>
+                          </div>
+                          <div className={`p-4 rounded-2xl border flex flex-col justify-center items-center text-center ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'}`}>
+                             <p className={`text-[9px] font-black uppercase tracking-widest ${isDarkMode ? 'text-emerald-500' : 'text-emerald-700'}`}>Saldo Atual Caixa</p>
+                             <p className="text-xl font-black text-emerald-600 mt-1">R$ {saldoAtualCaixa}</p>
                           </div>
                        </div>
 
+                       <div className="flex gap-4">
+                          <button onClick={() => { setMovementForm({type:'IN', amount:'', reason:''}); setShowMovementModal(true); }} className="flex-1 bg-blue-500/10 text-blue-500 border border-blue-500/30 hover:bg-blue-500 hover:text-white font-black py-3 rounded-xl transition-all cursor-pointer">
+                             + Suprimento (Entrada)
+                          </button>
+                          <button onClick={() => { setMovementForm({type:'OUT', amount:'', reason:''}); setShowMovementModal(true); }} className="flex-1 bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500 hover:text-white font-black py-3 rounded-xl transition-all cursor-pointer">
+                             - Sangria (Retirada)
+                          </button>
+                       </div>
+
                        <div className={`border p-4 rounded-2xl ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                          <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Histórico de Recebimentos</h4>
-                          <div className="max-h-40 overflow-y-auto space-y-2 hide-scrollbar">
-                             {meuCaixa.movements?.length === 0 ? <p className="text-xs text-slate-500 font-bold text-center py-4">Nenhuma cobrança realizada ainda.</p> : null}
-                             {meuCaixa.movements?.filter(m => m.type === 'IN').map(m => (
+                          <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Histórico de Movimentos (Vendas, Sangrias e Suprimentos)</h4>
+                          <div className="max-h-60 overflow-y-auto space-y-2 hide-scrollbar">
+                             {meuCaixa.movements?.length === 0 ? <p className="text-xs text-slate-500 font-bold text-center py-4">Nenhum movimento registrado.</p> : null}
+                             {meuCaixa.movements?.slice().reverse().map(m => (
                                 <div key={m.id} className="flex justify-between items-center text-xs font-bold border-b border-slate-200/20 pb-2">
-                                   <span className="text-slate-500">{new Date(m.createdAt).toLocaleTimeString([],{hour:'2-digit', minute:'2-digit'})} - {m.reason}</span>
-                                   <span className="text-emerald-500">+ R$ {m.amount.toFixed(2)}</span>
+                                   <div className="flex flex-col">
+                                      <span className={textMain}>{m.reason}</span>
+                                      <span className="text-[9px] text-slate-500">{new Date(m.createdAt).toLocaleTimeString([],{hour:'2-digit', minute:'2-digit'})}</span>
+                                   </div>
+                                   <span className={`text-sm font-black ${m.type === 'IN' ? 'text-emerald-500' : 'text-red-500'}`}>
+                                      {m.type === 'IN' ? '+' : '-'} R$ {m.amount.toFixed(2)}
+                                   </span>
                                 </div>
                              ))}
                           </div>
                        </div>
 
-                       <button onClick={() => setShowCloseCaixaModal(true)} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-4 rounded-2xl shadow-lg cursor-pointer transition-colors flex items-center justify-center gap-2">
+                       <button onClick={() => setShowCloseCaixaModal(true)} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-4 rounded-2xl shadow-lg cursor-pointer transition-colors flex items-center justify-center gap-2 mt-4">
                           🔒 Encerrar Turno (Fechar Caixa)
                        </button>
                     </div>
@@ -771,7 +813,7 @@ export default function LancamentosPage() {
                      </div>
                   )}
                   
-                  {/* 🔥 ÁREA DE TOTAL E BOTÃO DE COBRANÇA */}
+                  {/*ÁREA DE TOTAL E BOTÃO DE COBRANÇA */}
                   <div className="flex justify-between items-end mt-2 pt-3 border-t border-slate-200/20">
                      <div>
                         <span className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-1`}>Total Acumulado</span>
@@ -872,10 +914,39 @@ export default function LancamentosPage() {
       </main>
 
       {/* ========================================================================= */}
-      {/* 🔥 MODAIS RESTAURADOS (PRODUTO, PIZZA, CAIXA, CHECKOUT E TRANSFERÊNCIAS) */}
+      {/* (MOVIMENTOS, PIZZA, CAIXA, CHECKOUT...) */}
       {/* ========================================================================= */}
 
-      {/* 🍔 MODAL DO PRODUTO SIMPLES */}
+      {/*MODAL DE SANGRIA E SUPRIMENTO */}
+      {showMovementModal && (
+         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+            <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 md:p-8 w-full max-w-sm animate-fade-in-up text-center`}>
+               <h2 className={`text-2xl font-black mb-2 ${movementForm.type === 'IN' ? 'text-blue-500' : 'text-red-500'}`}>
+                  {movementForm.type === 'IN' ? 'Suprimento (Entrada)' : 'Sangria (Saída)'}
+               </h2>
+               <p className={`text-xs ${textMuted} mb-6`}>
+                  {movementForm.type === 'IN' ? 'Adicionar troco extra ao caixa.' : 'Retirar dinheiro em excesso para o cofre.'}
+               </p>
+               
+               <form onSubmit={handleCashMovement} className="space-y-4 text-left">
+                  <div>
+                     <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Valor (R$)</label>
+                     <input type="number" required step="0.01" min="0.01" value={movementForm.amount} onChange={e => setMovementForm({...movementForm, amount: e.target.value})} className={`w-full border rounded-xl p-4 text-2xl font-black text-center focus:outline-none focus:border-${movementForm.type === 'IN' ? 'blue' : 'red'}-500 ${bgInput}`} placeholder="0.00" />
+                  </div>
+                  <div>
+                     <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Motivo / Observação</label>
+                     <input type="text" value={movementForm.reason} onChange={e => setMovementForm({...movementForm, reason: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-${movementForm.type === 'IN' ? 'blue' : 'red'}-500 ${bgInput}`} placeholder="Ex: Moedas para troco..." />
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                     <button type="button" onClick={() => setShowMovementModal(false)} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-bold cursor-pointer transition-colors`}>Cancelar</button>
+                     <button type="submit" disabled={caixaLoading} className={`flex-1 ${movementForm.type === 'IN' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'} text-white font-black py-3 rounded-xl shadow-lg transition-all cursor-pointer`}>Confirmar</button>
+                  </div>
+               </form>
+            </div>
+         </div>
+      )}
+
+      {/*MODAL DO PRODUTO SIMPLES */}
       {selectedProduct && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className={`${bgCard} border p-6 rounded-t-[2rem] sm:rounded-3xl w-full max-w-md shadow-2xl space-y-4 animate-fade-in-up transition-colors`}>
@@ -914,7 +985,7 @@ export default function LancamentosPage() {
         </div>
       )}
 
-      {/* 🍕 MODAL: CONSTRUTOR DE PIZZA */}
+      {/*MODAL: CONSTRUTOR DE PIZZA */}
       {pizzaBuilderOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 w-full max-w-3xl flex flex-col max-h-[90vh] animate-fade-in-up`}>
@@ -965,7 +1036,7 @@ export default function LancamentosPage() {
         </div>
       )}
 
-      {/* 💳 MODAL DE CHECKOUT (SMART POS) */}
+      {/*MODAL DE CHECKOUT (SMART POS) */}
       {showCheckoutModal && (
          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
             <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 md:p-8 w-full max-w-lg animate-fade-in-up`}>
@@ -1022,14 +1093,14 @@ export default function LancamentosPage() {
                   </div>
                )}
 
-               <button onClick={handleConfirmarPagamento} disabled={totalPago < totalDevido || caixaLoading} className="w-full bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-400 hover:bg-emerald-600 text-white font-black text-xl py-4 rounded-2xl shadow-xl transition-all active:scale-95 flex justify-center items-center gap-2">
+               <button onClick={handleConfirmarPagamento} disabled={totalPagoCheckout < totalDevido || caixaLoading} className="w-full bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-400 hover:bg-emerald-600 text-white font-black text-xl py-4 rounded-2xl shadow-xl transition-all active:scale-95 flex justify-center items-center gap-2">
                   {caixaLoading ? 'Processando...' : 'Finalizar Pagamento ✅'}
                </button>
             </div>
          </div>
       )}
 
-      {/* 🔒 MODAL: FECHAR CAIXA */}
+      {/*MODAL: FECHAR CAIXA */}
       {showCloseCaixaModal && meuCaixa && (
          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
             <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 md:p-8 w-full max-w-md animate-fade-in-up text-center`}>
@@ -1055,7 +1126,7 @@ export default function LancamentosPage() {
          </div>
       )}
 
-      {/* 💳 MODAL: DÍVIDA DO CLIENTE (GERENTE) */}
+      {/*MODAL: DÍVIDA DO CLIENTE (GERENTE) */}
       {showManagerDebtModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className={`${bgCard} border border-red-500 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden animate-fade-in-up text-center`}>
@@ -1078,7 +1149,7 @@ export default function LancamentosPage() {
         </div>
       )}
 
-      {/* ⚠️ MODAL: LIMITE DE CRÉDITO (GERENTE) */}
+      {/* MODAL: LIMITE DE CRÉDITO (GERENTE) */}
       {showLimitOverrideModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-red-500 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden animate-fade-in-up text-center">
@@ -1101,7 +1172,7 @@ export default function LancamentosPage() {
         </div>
       )}
 
-      {/* 🔄 MODAL: JUNTAR CONTAS */}
+      {/*MODAL: JUNTAR CONTAS */}
       {showMergeModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
            <div className={`${bgCard} border p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up text-center`}>
@@ -1118,7 +1189,7 @@ export default function LancamentosPage() {
         </div>
       )}
 
-      {/* ✨🎁 MODAL: UPSELL */}
+      {/*MODAL: UPSELL */}
       {showUpsellModal && pendingUpsellItem && activeUpsellRule && (
          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
             <div className={`${bgCard} border p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up text-center`}>
