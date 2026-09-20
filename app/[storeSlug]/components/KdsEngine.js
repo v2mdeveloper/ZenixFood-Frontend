@@ -333,7 +333,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
   const totemCompleted = filteredTotemOrders.filter(o => o.status === 'DELIVERED').reverse();
   
   // 🔥 NOVO: Pedidos do Totem aguardando pagamento
-  const totemAwaitingPayment = filteredTotemOrders.filter(o => o.status === 'AWAITING_PAYMENT');
+  const totemAwaitingPayment = filteredTotemOrders.filter(o => o.status === 'PENDING' && o.paymentMethod === 'PAGAR_NO_CAIXA');
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans p-4 flex flex-col overflow-hidden">
@@ -577,6 +577,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                 </div>
                 <p className="text-xs font-bold text-slate-700 mt-1">Cliente: {extractName(order)}</p>
 
+                {/* ITENS AGUARDANDO ROTA (EXPEDIÇÃO) */}
                 <div className="bg-white/70 p-2.5 rounded-lg border border-emerald-100 space-y-2 mb-2 shadow-inner">
                   {order.items.map(i => (
                     <div key={i.id} className="border-b border-emerald-50 last:border-0 pb-1 last:pb-0">
