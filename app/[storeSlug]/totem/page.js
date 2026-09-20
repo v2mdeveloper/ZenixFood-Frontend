@@ -203,7 +203,7 @@ export default function TotemModerno() {
   };
 
   // ==========================================
-  // FINALIZAÇÃO DE PEDIDO (Agora com as 3 opções de Pagamento)
+  // FINALIZAÇÃO DE PEDIDO
   // ==========================================
   const handleFinalizeOrder = async () => {
     if (!customerName.trim() || !paymentMethod) return alert(t.namePrompt);
@@ -214,7 +214,8 @@ export default function TotemModerno() {
         clientId: "TOTEM_MODE", 
         origin: "TOTEM",
         customerName: customerName,
-        paymentMethod: paymentMethod, // Usa a opção que o cliente clicou (CREDIT_CARD, PIX, PAGAR_NO_CAIXA)
+        address: `Cliente: ${customerName}`, // 🔥 AQUI ESTÁ A CORREÇÃO! (O Prisma exige esse campo preenchido)
+        paymentMethod: paymentMethod, 
         total: totalCart,
         items: cart.map(item => ({ 
           productId: item.productId || item.id, 
@@ -275,7 +276,6 @@ export default function TotemModerno() {
   // TELA DE SUCESSO
   // ==========================================
   if (orderSuccessData) {
-    // Se o cliente escolheu Pagar no Caixa, a mensagem de sucesso orienta ele a ir ao Caixa
     const orientacao = orderSuccessData.paymentMethod === 'PAGAR_NO_CAIXA' 
        ? (lang === 'pt' ? 'Vá até o Caixa para efetuar o pagamento.' : lang === 'en' ? 'Please proceed to the counter to pay.' : 'Vaya a la caja para pagar.')
        : t.orderSuccessSub;
@@ -290,7 +290,7 @@ export default function TotemModerno() {
           <div className="bg-slate-100 p-8 rounded-3xl border-2 border-slate-200 mb-8 inline-block w-full">
             <p className="text-lg text-slate-500 font-bold uppercase tracking-widest">{t.passwordIs}</p>
             <p className="text-[6rem] font-black text-emerald-600 leading-none">{orderSuccessData.shortId}</p>
-            <p className="text-2xl text-slate-800 font-black mt-4">{orderSuccessData.customerName}</p>
+            <p className="text-2xl text-slate-800 font-black mt-4">{orderSuccessData.customerName || extractFirstName(orderSuccessData)}</p>
           </div>
 
           <button onClick={() => { setOrderSuccessData(null); setIsIdle(true); }} className="w-full bg-emerald-500 text-white py-6 rounded-2xl font-black text-2xl shadow-xl active:scale-95 transition-all">
