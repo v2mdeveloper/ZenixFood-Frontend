@@ -19,7 +19,7 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
 
   const toggleOrigin = (origin) => setActiveOrigins(prev => ({ ...prev, [origin]: !prev[origin] }));
 
-  //Helper local para garantir o envio do x-store-id e Token JWT
+  // Helper local para garantir o envio do x-store-id e Token JWT
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
@@ -32,7 +32,7 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
 
     const response = await fetch(url, { ...options, headers });
 
-    //SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
+    // SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
         window.location.href = '/bloqueado'; // Redireciona para a tela de aviso
@@ -86,12 +86,19 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
       // 3. Filtro de Busca Geral (Nome, CPF, Pedido, Endereço)
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
-        const nameMatch = o.client?.name?.toLowerCase().includes(term);
+        
+        // Verifica se é uma comanda ou mesa (Para aparecer os convidados dos Eventos)
+        const isTableOrTab = o.origin === 'SALAO';
+        const clientNameMatch = o.client?.name?.toLowerCase().includes(term);
+        // Nas comandas/mesas, o nome do cliente pode vir guardado no customerName
+        const customerNameMatch = isTableOrTab && o.customerName?.toLowerCase().includes(term); 
+        
         const termNumbers = term.replace(/\D/g, '');
         const cpfMatch = termNumbers && o.client?.cpf ? o.client.cpf.replace(/\D/g, '').includes(termNumbers) : false;
         const idMatch = o.shortId?.toString().includes(term);
         const addressMatch = o.address?.toLowerCase().includes(term); 
-        if (!nameMatch && !cpfMatch && !idMatch && !addressMatch) return false;
+        
+        if (!clientNameMatch && !customerNameMatch && !cpfMatch && !idMatch && !addressMatch) return false;
       }
 
       // 4. Filtro por Produto Específico
@@ -151,15 +158,17 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
         }
       }
 
-      if (o.status === 'DELIVERED') {
+      // Considera PAID ou DELIVERED como vendas concluídas para relatórios
+      if (o.status === 'DELIVERED' || o.status === 'PAID') {
          deliveredRevenue += val;
          deliveredOrdersCount++;
 
-         const cName = o.client?.name || 'Cliente Avulso';
+         // Prioriza o customerName nas comandas (SALAO) para cruzar eventos perfeitamente
+         const cName = o.customerName || o.client?.name || (o.origin === 'SALAO' ? `Mesa/Comanda ${o.tableNumber || o.shortId}` : 'Cliente Avulso');
          custMap[cName] = (custMap[cName] || 0) + val;
 
          o.items?.forEach(i => {
-             const pName = (i.product?.name || 'Desconhecido') + sizeLabelFn(i);
+             const pName = (i.product?.name || i.name || 'Desconhecido') + sizeLabelFn(i);
              prodMap[pName] = (prodMap[pName] || 0) + i.quantity;
          });
       }
@@ -212,12 +221,17 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
       const header = ["Nº Pedido", "Data/Hora", "Vendedor", "Cliente", "CPF", "Canal", "Pagamento", "Status", "Itens", "Total (R$)"];
       const escapeCSV = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
 
-      const rows = filteredOrders.map(o => [
-        o.shortId, new Date(o.createdAt).toLocaleString('pt-BR'), o.waiter || '-', o.client?.name || 'Avulso', o.client?.cpf || '-',
-        o.origin || 'APP', getMetodoPagamentoLabel(o.paymentMethod), translateStatus(o.status).label, 
-        o.items?.map(i => `${i.quantity}x ${i.product?.name}${sizeLabelFn(i)}`).join(' | '),
-        Number(o.total).toFixed(2).replace('.', ',')
-      ]);
+      const rows = filteredOrders.map(o => {
+        // Garantindo que clientes de mesa apareçam (CustomerName vs Client.name)
+        const clienteNomeFinal = o.customerName || o.client?.name || (o.origin === 'SALAO' ? `Mesa/Comanda ${o.tableNumber || o.shortId}` : 'Avulso');
+
+        return [
+          o.shortId, new Date(o.createdAt).toLocaleString('pt-BR'), o.waiter || '-', clienteNomeFinal, o.client?.cpf || o.customerCpf || '-',
+          o.origin || 'APP', getMetodoPagamentoLabel(o.paymentMethod), translateStatus(o.status).label, 
+          o.items?.map(i => `${i.quantity}x ${i.product?.name || i.name}${sizeLabelFn(i)}`).join(' | '),
+          Number(o.total).toFixed(2).replace('.', ',')
+        ];
+      });
 
       const csvContent = "sep=;\n" + [header.map(escapeCSV).join(";"), ...rows.map(r => r.map(escapeCSV).join(";")), Array(10).fill("").join(";"), ["TOTAL FILTRADO VÁLIDO", "", "", "", "", "", "", "", "", stats.totalRevenue.toFixed(2).replace('.', ',')].map(escapeCSV).join(";")].join("\n");
       const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -227,7 +241,7 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
   };
 
   const translateStatus = (status) => {
-    const map = { 'PENDING': { label: 'Pendente', color: 'bg-slate-100 text-slate-600' }, 'PREPARING': { label: 'Na Chapa', color: 'bg-amber-100 text-amber-700' }, 'READY': { label: 'Em Rota/Pronto', color: 'bg-blue-100 text-blue-700' }, 'DELIVERED': { label: 'Concluído', color: 'bg-emerald-100 text-emerald-700' }, 'CANCELED': { label: 'Cancelado', color: 'bg-red-100 text-red-700' }};
+    const map = { 'PENDING': { label: 'Pendente', color: 'bg-slate-100 text-slate-600' }, 'PREPARING': { label: 'Na Chapa', color: 'bg-amber-100 text-amber-700' }, 'READY': { label: 'Em Rota/Pronto', color: 'bg-blue-100 text-blue-700' }, 'DELIVERED': { label: 'Concluído', color: 'bg-emerald-100 text-emerald-700' }, 'PAID': { label: 'Pago/Concluído', color: 'bg-emerald-100 text-emerald-700' }, 'CANCELED': { label: 'Cancelado', color: 'bg-red-100 text-red-700' }};
     return map[status] || { label: status, color: 'bg-slate-100 text-slate-700' };
   };
 
@@ -385,12 +399,18 @@ export default function OrderHistoryTab({ orders = [], setSelectedOrderDetails, 
                     {filteredOrders.map(order => {
                       const origInfo = getOrigemInfo(order.origin);
                       const isCanceledOrPending = order.status === 'CANCELED' || order.status === 'PENDING';
+                      const isSalao = order.origin === 'SALAO';
+                      const displayName = order.customerName || order.client?.name || (isSalao ? `Mesa ${order.tableNumber || order.shortId}` : 'Avulso');
+
                       return (
                         <tr key={order.id} className={`hover:bg-slate-50 transition-colors group ${isCanceledOrPending ? 'opacity-50 grayscale' : ''}`}>
                           <td className="px-6 py-4 font-black text-slate-900">#{order.shortId}</td>
                           <td className="px-6 py-4 text-slate-500 font-medium">{new Date(order.createdAt).toLocaleString('pt-BR')}</td>
                           <td className="px-6 py-4 font-black text-amber-600 uppercase text-[10px] tracking-wider">{order.waiter || '-'}</td>
-                          <td className="px-6 py-4"><p className="font-black text-slate-800 leading-tight mb-0.5">{order.client?.name || 'Cliente Avulso'}</p>{order.address && <p className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.5 rounded inline-block truncate max-w-[150px]">{order.address}</p>}</td>
+                          <td className="px-6 py-4">
+                             <p className="font-black text-slate-800 leading-tight mb-0.5">{displayName}</p>
+                             {order.address && <p className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.5 rounded inline-block truncate max-w-[150px]">{order.address}</p>}
+                          </td>
                           <td className="px-6 py-4"><span className={`${origInfo.color} px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-max shadow-sm border border-black/5`}><span>{origInfo.icon}</span> {origInfo.label}</span></td>
                           <td className="px-6 py-4 text-[11px] font-bold text-slate-500">
                              {getMetodoPagamentoLabel(order.paymentMethod)}
