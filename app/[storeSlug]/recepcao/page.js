@@ -130,13 +130,24 @@ export default function RecepcaoHostessPage() {
   };
 
   const handleFinalizarEvento = async (eventoId) => {
-    if(!confirm("Tem certeza que deseja finalizar este evento?")) return;
+    if(!confirm("Tem certeza que deseja finalizar este evento? O relatório financeiro será gerado.")) return;
     try {
       const res = await fetchWithStore(`${API_URL}/api/eventos/${eventoId}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'FINALIZADO' })
       });
-      if (res.ok) { alert("Evento finalizado com sucesso!"); setSelectedEvento(null); fetchEventos(); }
-    } catch (e) { alert("Erro ao finalizar."); }
+      const data = await res.json();
+      
+      if (res.ok && data.success) { 
+         alert("Evento finalizado com sucesso!"); 
+         setSelectedEvento(null); 
+         fetchEventos(); 
+      } else {
+         //MOSTRA O ERRO EXATO DO BACKEND (Ex: Existem 5 mesas abertas)
+         alert(data.error || "Erro ao tentar finalizar o evento.");
+      }
+    } catch (e) { 
+      alert("Erro de comunicação ao tentar finalizar."); 
+    }
   };
 
   const handleCheckIn = async (convidadoId) => {
