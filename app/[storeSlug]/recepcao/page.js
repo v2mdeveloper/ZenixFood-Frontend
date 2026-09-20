@@ -30,7 +30,9 @@ export default function RecepcaoHostessPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   
-  const [viewingGuest, setViewingGuest] = useState(null); // 🔥 NOVO ESTADO: Ver Conta do Cliente
+  // 🔥 ESTADOS PARA VER E IMPRIMIR AS CONTAS
+  const [viewingGuest, setViewingGuest] = useState(null); 
+  const [viewingTable, setViewingTable] = useState(null);
 
   const [novoEventoForm, setNovoEventoForm] = useState({ id: null, nome: '', tipo: 'MISTO', dataHoraInicio: '', dataHoraFim: '', qtdPessoas: 1, observacoes: '' });
   const [csvPreview, setCsvPreview] = useState([]);
@@ -130,24 +132,15 @@ export default function RecepcaoHostessPage() {
   };
 
   const handleFinalizarEvento = async (eventoId) => {
-    if(!confirm("Tem certeza que deseja finalizar este evento? O relatório financeiro será gerado.")) return;
+    if(!confirm("Tem certeza que deseja finalizar este evento? Ele será movido para o histórico e o relatório estará disponível.")) return;
     try {
       const res = await fetchWithStore(`${API_URL}/api/eventos/${eventoId}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'FINALIZADO' })
       });
       const data = await res.json();
-      
-      if (res.ok && data.success) { 
-         alert("Evento finalizado com sucesso!"); 
-         setSelectedEvento(null); 
-         fetchEventos(); 
-      } else {
-         //MOSTRA O ERRO EXATO DO BACKEND (Ex: Existem 5 mesas abertas)
-         alert(data.error || "Erro ao tentar finalizar o evento.");
-      }
-    } catch (e) { 
-      alert("Erro de comunicação ao tentar finalizar."); 
-    }
+      if (res.ok && data.success) { alert("Evento finalizado com sucesso!"); setSelectedEvento(null); fetchEventos(); }
+      else alert(data.error || "Erro ao tentar finalizar.");
+    } catch (e) { alert("Erro de comunicação ao tentar finalizar."); }
   };
 
   const handleCheckIn = async (convidadoId) => {
@@ -161,25 +154,28 @@ export default function RecepcaoHostessPage() {
     } catch (e) { alert('Erro ao realizar check-in'); }
   };
 
-  // 🔥 GERADOR DE RELATÓRIO ATUALIZADO (Inclui Mesas e Comandas)
+  // 🔥 GERADOR DE RELATÓRIO EXCEL MELHORADO (Usa ; para o Excel Brasileiro ler perfeitamente)
   const handleDownloadRelatorio = async (evento) => {
     try {
       const res = await fetchWithStore(`${API_URL}/api/eventos/${evento.id}/relatorio`);
       const data = await res.json();
       if (data.success) {
-        let csvContent = "NOME,CPF,EMAIL,MESA,COMANDA,CHECK-IN,GASTO INDIVIDUAL (R$)\n";
+        const formatMoney = (val) => String(val).replace('.', ','); // Troca ponto por vírgula para o Excel BR
+
+        let csvContent = "NOME;CPF;EMAIL;MESA;COMANDA;CHECK-IN;GASTO INDIVIDUAL (R$)\n";
         data.convidados.forEach(c => {
-          csvContent += `"${c.nome}","${c.cpf}","${c.email}","${c.mesa}","${c.comanda}","${c.checkIn}","${c.gasto}"\n`;
+          csvContent += `"${c.nome}";"${c.cpf}";"${c.email}";"${c.mesa}";"${c.comanda}";"${c.checkIn}";"R$ ${formatMoney(c.gasto)}"\n`;
         });
 
         if (data.mesasColetivas && data.mesasColetivas.length > 0) {
-           csvContent += `\nCONSUMO COMPARTILHADO (Lancado direto na Mesa)\nMESA,QTD ITENS,GASTO DA MESA (R$)\n`;
+           csvContent += `\nCONSUMO COMPARTILHADO (Lancado direto na Mesa)\n`;
+           csvContent += `MESA;QTD ITENS;GASTO DA MESA (R$)\n`;
            data.mesasColetivas.forEach(m => {
-              csvContent += `"Mesa ${m.mesa}","${m.qtdItens} itens","${m.gasto}"\n`;
+              csvContent += `"Mesa ${m.mesa}";"${m.qtdItens} itens";"R$ ${formatMoney(m.gasto)}"\n`;
            });
         }
 
-        csvContent += `\n,,,,,TOTAL GERAL DO EVENTO,"R$ ${data.totalGasto}"\n`;
+        csvContent += `\n;;;;;TOTAL GERAL DO EVENTO;"R$ ${formatMoney(data.totalGasto)}"\n`;
 
         const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -297,6 +293,12 @@ export default function RecepcaoHostessPage() {
   const eventosSelecionadosCalendario = eventos.filter(e => e.status !== 'FINALIZADO' && isSameDay(new Date(e.dataHoraInicio), selectedDate));
   const eventosHistorico = eventos.filter(e => e.status === 'FINALIZADO').sort((a,b) => new Date(b.dataHoraInicio) - new Date(a.dataHoraInicio));
   const convidadosFiltrados = selectedEvento?.convidados?.filter(c => c.nome.toLowerCase().includes(searchTerm.toLowerCase())) || [];
+
+  // 🔥 CÁLCULOS TOTAIS EM TEMPO REAL
+  const mesasDoEvento = selectedEvento?.tabsAtivas?.filter(t => t.type === 'TABLE') || [];
+  const totalComandas = selectedEvento?.convidados?.reduce((acc, c) => acc + (c.tab?.items?.reduce((a, b) => a + (Number(b.price) * b.quantity), 0) || 0), 0) || 0;
+  const totalMesas = mesasDoEvento.reduce((acc, t) => acc + (t.items?.reduce((a, b) => a + (Number(b.price) * b.quantity), 0) || 0), 0) || 0;
+  const totalEventoGasto = totalComandas + totalMesas;
 
   if (storeStatus === 'LOADING') return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Carregando Recepção...</div>;
   if (!isAuthenticated) return (
@@ -416,16 +418,23 @@ export default function RecepcaoHostessPage() {
            {selectedEvento ? (
              <>
                <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
-                  <div>
+                  <div className="flex flex-col w-full md:w-auto">
                     <div className="flex items-center gap-2 mb-1">
                       <button onClick={() => setSelectedEvento(null)} className="md:hidden bg-slate-200 w-8 h-8 rounded-full font-black text-slate-600">←</button>
                       <h2 className="text-xl md:text-3xl font-black text-slate-800">{selectedEvento.nome}</h2>
                     </div>
-                    <p className="text-xs md:text-sm text-slate-500 font-medium md:pl-0 pl-10">{selectedEvento.observacoes || 'Sem observações especiais.'}</p>
+                    <p className="text-xs md:text-sm text-slate-500 font-medium md:pl-0 pl-10 mb-2">{selectedEvento.observacoes || 'Sem observações especiais.'}</p>
+                    
+                    {/* 🔥 EXIBIÇÃO DO TOTAL GERAL DO EVENTO */}
+                    <div className="md:pl-0 pl-10 flex gap-2">
+                       <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 shadow-sm uppercase tracking-widest">
+                          Total Evento: R$ {totalEventoGasto.toFixed(2)}
+                       </span>
+                    </div>
                   </div>
                   
                   {activeTab !== 'HISTORICO' ? (
-                     <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                     <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto mt-4 md:mt-0">
                         <div className="flex gap-2">
                            <button onClick={() => openEditModal(selectedEvento)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-3 rounded-xl font-black shadow-sm transition-colors text-xs">✏️ Editar</button>
                            <button onClick={() => handleFinalizarEvento(selectedEvento.id)} className="flex-1 bg-red-50 text-red-600 hover:bg-red-100 px-4 py-3 rounded-xl font-black shadow-sm transition-colors text-xs border border-red-200">🚩 Finalizar</button>
@@ -435,41 +444,82 @@ export default function RecepcaoHostessPage() {
                         </button>
                      </div>
                   ) : (
-                     <button onClick={() => handleDownloadRelatorio(selectedEvento)} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-black shadow-md flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-95">
+                     <button onClick={() => handleDownloadRelatorio(selectedEvento)} className="w-full md:w-auto mt-4 md:mt-0 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-black shadow-md flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-95">
                         📊 Baixar Relatório (Excel)
                      </button>
                   )}
                </div>
                
+               {/* 🔥 MESAS COLETIVAS (CONSUMO COMPARTILHADO) */}
+               {mesasDoEvento.length > 0 && (
+                  <div className="p-4 bg-blue-50 border-b border-blue-100 flex flex-wrap gap-2 shrink-0">
+                     <span className="text-[10px] font-black text-blue-600 uppercase w-full mb-1 tracking-widest">Consumo Compartilhado (Mesas Físicas)</span>
+                     {mesasDoEvento.map(m => {
+                        const gastoMesa = m.items?.reduce((a, b) => a + (Number(b.price) * b.quantity), 0) || 0;
+                        return (
+                          <button key={m.id} onClick={() => setViewingTable(m)} className="bg-white border border-blue-200 px-3 py-2 rounded-xl flex gap-3 items-center shadow-sm hover:border-blue-400 cursor-pointer transition-colors active:scale-95">
+                             <span className="font-bold text-xs text-blue-800">Mesa {m.number}</span>
+                             <span className="font-black text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">R$ {gastoMesa.toFixed(2)}</span>
+                             <span className="text-slate-400 text-[10px] ml-1 bg-slate-100 px-2 py-1 rounded">🖨️ Ver Conta</span>
+                          </button>
+                        );
+                     })}
+                  </div>
+               )}
+
                <div className="p-4 bg-slate-100 border-b border-slate-200 shrink-0">
                   <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="🔍 Buscar nome na lista..." className="w-full bg-white border border-slate-300 p-3 md:p-4 rounded-2xl text-base md:text-lg font-bold shadow-sm focus:outline-none focus:border-blue-500" />
                </div>
 
                <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
                   <div className="space-y-3">
-                      {convidadosFiltrados.map(conv => (
-                         <div key={conv.id} onClick={() => setViewingGuest(conv)} className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-blue-300 transition-colors cursor-pointer">
-                            <div className="flex-1">
-                               <p className="font-black text-slate-800 text-base">{conv.nome}</p>
-                               <div className="flex flex-wrap gap-2 mt-2">
-                                  {conv.mesaIndicada && <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest">🪑 Mesa {conv.mesaIndicada} {conv.posicaoMesa && `- ${conv.posicaoMesa}`}</span>}
-                                  {conv.comandaIndicada && <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest">💳 Cmd {conv.comandaIndicada}</span>}
-                               </div>
-                            </div>
-                            <div className="w-full md:w-auto text-right">
-                               {conv.statusCheckIn ? (
-                                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-600 px-4 py-2 rounded-xl text-xs font-black w-full text-center">✅ Check-in às {new Date(conv.horaCheckIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                               ) : (
-                                  activeTab !== 'HISTORICO' ? (
-                                     <button onClick={(e) => { e.stopPropagation(); handleCheckIn(conv.id); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-black shadow-sm transition-colors cursor-pointer active:scale-95 w-full">Dar Check-in</button>
-                                  ) : (
-                                     <span className="text-xs font-bold text-slate-400">Não compareceu</span>
-                                  )
-                               )}
-                            </div>
-                         </div>
-                      ))}
+                      {convidadosFiltrados.map(conv => {
+                         const gastoConvidado = conv.tab?.items?.reduce((a, b) => a + (Number(b.price) * b.quantity), 0) || 0;
+                         return (
+                           <div key={conv.id} onClick={() => setViewingGuest(conv)} className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-blue-300 transition-colors cursor-pointer group">
+                              <div className="flex-1">
+                                 <p className="font-black text-slate-800 text-base flex items-center gap-2">
+                                    {conv.nome}
+                                    {/* 🔥 GASTO INDIVIDUAL DO CLIENTE NA LISTA */}
+                                    <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest shadow-sm">
+                                       💰 R$ {gastoConvidado.toFixed(2)}
+                                    </span>
+                                 </p>
+                                 <div className="flex flex-wrap gap-2 mt-2">
+                                    {conv.mesaIndicada && <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest">🪑 Mesa {conv.mesaIndicada} {conv.posicaoMesa && `- ${conv.posicaoMesa}`}</span>}
+                                    {conv.comandaIndicada && <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest">💳 Cmd {conv.comandaIndicada}</span>}
+                                 </div>
+                              </div>
+                              <div className="w-full md:w-auto text-right flex items-center justify-end gap-3">
+                                 {conv.statusCheckIn ? (
+                                    <div className="flex flex-col items-end">
+                                       <span className="text-xs font-black text-emerald-500 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">✅ Check-in às {new Date(conv.horaCheckIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                       {conv.tab && (
+                                          <span className={`mt-2 text-[9px] font-black px-2 py-1 rounded uppercase tracking-widest shadow-sm ${conv.tab.status === 'OPEN' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                                             {conv.tab.status === 'OPEN' ? '🟢 CONTA ABERTA' : '✅ CONTA PAGA/FECHADA'}
+                                          </span>
+                                       )}
+                                    </div>
+                                 ) : (
+                                    activeTab !== 'HISTORICO' ? (
+                                       <button onClick={(e) => { e.stopPropagation(); handleCheckIn(conv.id); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-black shadow-sm transition-colors cursor-pointer active:scale-95 w-full">Dar Check-in</button>
+                                    ) : (
+                                       <span className="text-xs font-bold text-slate-400">Não compareceu</span>
+                                    )
+                                 )}
+                                 <span className="text-2xl text-slate-300 group-hover:text-blue-500 transition-colors ml-2 hidden md:block">🖨️</span>
+                              </div>
+                           </div>
+                         );
+                      })}
                   </div>
+                  {convidadosFiltrados.length === 0 && (
+                     <div className="flex flex-col items-center justify-center py-20 opacity-50">
+                        <span className="text-5xl mb-4">📋</span>
+                        <p className="text-lg font-black text-slate-800">A lista está vazia.</p>
+                        {activeTab !== 'HISTORICO' && <p className="text-sm text-slate-500">Clique em "Importar Lista" para enviar o arquivo CSV.</p>}
+                     </div>
+                  )}
                </div>
              </>
            ) : (
@@ -480,6 +530,47 @@ export default function RecepcaoHostessPage() {
            )}
         </div>
       </main>
+
+      {/* 🔥 MODAL PARA VISUALIZAR CONTA DA MESA (COLETIVO) E IMPRIMIR */}
+      {viewingTable && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+           <div className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-md shadow-2xl relative animate-fade-in-up print-area">
+              <button onClick={() => setViewingTable(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 font-black hover:text-red-500 transition-colors flex items-center justify-center no-print">✕</button>
+              
+              <h2 className="text-2xl font-black mb-1 text-slate-800">Mesa {viewingTable.number}</h2>
+              <p className="text-sm text-slate-500 mb-4 font-bold">Consumo Compartilhado (Coletivo)</p>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 max-h-60 overflow-y-auto hide-scrollbar">
+                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Extrato da Mesa</h4>
+                 {viewingTable.items?.length > 0 ? (
+                    <div className="space-y-2">
+                       {viewingTable.items.map(item => (
+                          <div key={item.id} className="flex justify-between text-sm border-b border-slate-100 pb-2">
+                             <span className="font-bold text-slate-700">{item.quantity}x {item.name}</span>
+                             <span className="font-black text-slate-900">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                          </div>
+                       ))}
+                    </div>
+                 ) : (
+                    <p className="text-xs text-slate-500 font-bold text-center py-4">Nenhum item lançado direto nesta mesa.</p>
+                 )}
+              </div>
+              
+              <div className="flex justify-between items-center mb-6 bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
+                 <span className="font-black text-emerald-700 uppercase tracking-widest text-xs">Total da Mesa:</span>
+                 <span className="text-2xl font-black text-emerald-600">
+                    R$ {viewingTable.items?.reduce((a, b) => a + (b.price * b.quantity), 0).toFixed(2) || '0.00'}
+                 </span>
+              </div>
+
+              <div className="flex gap-3 no-print">
+                 <button onClick={() => window.print()} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-black transition-colors flex items-center justify-center gap-2">
+                    🖨️ Imprimir Fechamento da Mesa
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* 🔥 MODAL PARA VISUALIZAR CONTA DO CLIENTE E IMPRIMIR */}
       {viewingGuest && (
@@ -495,7 +586,7 @@ export default function RecepcaoHostessPage() {
               </p>
 
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 max-h-60 overflow-y-auto hide-scrollbar">
-                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Extrato de Consumo</h4>
+                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Extrato Individual de Consumo</h4>
                  {viewingGuest.tab?.items?.length > 0 ? (
                     <div className="space-y-2">
                        {viewingGuest.tab.items.map(item => (
@@ -506,12 +597,12 @@ export default function RecepcaoHostessPage() {
                        ))}
                     </div>
                  ) : (
-                    <p className="text-xs text-slate-500 font-bold text-center py-4">Nenhum item lançado na comanda individual.</p>
+                    <p className="text-xs text-slate-500 font-bold text-center py-4">Nenhum item individual lançado.</p>
                  )}
               </div>
               
               <div className="flex justify-between items-center mb-6 bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
-                 <span className="font-black text-emerald-700 uppercase tracking-widest text-xs">Total Gasto:</span>
+                 <span className="font-black text-emerald-700 uppercase tracking-widest text-xs">Gasto do Cliente:</span>
                  <span className="text-2xl font-black text-emerald-600">
                     R$ {viewingGuest.tab?.items?.reduce((a, b) => a + (b.price * b.quantity), 0).toFixed(2) || '0.00'}
                  </span>
@@ -519,7 +610,7 @@ export default function RecepcaoHostessPage() {
 
               <div className="flex gap-3 no-print">
                  <button onClick={() => window.print()} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-black transition-colors flex items-center justify-center gap-2">
-                    🖨️ Imprimir Conta
+                    🖨️ Imprimir Conta do Cliente
                  </button>
               </div>
            </div>
