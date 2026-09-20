@@ -73,7 +73,7 @@ export default function KdsClientePage() {
          return match[1].trim().split(' ')[0];
       }
     }
-    return order.client?.name ? order.client.name.split(' ')[0] : 'Cliente';
+    return order.customerName ? order.customerName.split(' ')[0] : (order.client?.name ? order.client.name.split(' ')[0] : 'Cliente');
   };
 
   useEffect(() => {
@@ -156,6 +156,7 @@ export default function KdsClientePage() {
 
   const TEMPO_LIMPEZA_MS = 60 * 60 * 1000;
 
+  // 🔥 GARANTE QUE SÓ APARECEM PEDIDOS QUE REALMENTE ESTÃO SENDO PREPARADOS (Ignora AWAITING_PAYMENT)
   const preparingOrders = totemOrders.filter(o => o.status === 'PREPARING');
   
   const readyOrders = totemOrders.filter(o => {
@@ -165,7 +166,7 @@ export default function KdsClientePage() {
     return true;
   });
 
-  // 🎯 LÓGICA DE ANÚNCIO ATUALIZADA PARA USAR A VOZ ESCOLHIDA (COM CORREÇÃO DO SHORTID)
+  // 🎯 LÓGICA DE ANÚNCIO ATUALIZADA PARA USAR A VOZ ESCOLHIDA
   useEffect(() => {
     readyOrders.forEach(order => {
       if (!announcedOrders.current.has(order.id)) {
@@ -173,7 +174,6 @@ export default function KdsClientePage() {
         
         if ('speechSynthesis' in window) {
           const nomeCliente = extractFirstName(order);
-          // CORREÇÃO AQUI: Garante que o shortId é convertido para String antes de fazer o split
           const shortIdFalado = String(order.shortId || '').split('').join(' '); 
           const text = `Pedido ${shortIdFalado}, ${nomeCliente}. Pronto para retirada.`;
           

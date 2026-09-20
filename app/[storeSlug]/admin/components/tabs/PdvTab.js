@@ -53,6 +53,13 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   const [pizzaFlavorCount, setPizzaFlavorCount] = useState(1);
   const [pizzaSelectedFlavors, setPizzaSelectedFlavors] = useState([]);
 
+  // 🔥 ESTADOS DO TOTEM (PAGAMENTOS PENDENTES NO CAIXA)
+  const [awaitingTotemOrders, setAwaitingTotemOrders] = useState([]);
+  const [isTotemSidebarOpen, setIsTotemSidebarOpen] = useState(false);
+  const [selectedTotemOrder, setSelectedTotemOrder] = useState(null);
+  const [totemPaymentMethod, setTotemPaymentMethod] = useState('PIX');
+  const [processingTotem, setProcessingTotem] = useState(false);
+
   //Helper para injetar o x-store-id e o Token JWT automaticamente
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
@@ -82,6 +89,23 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
     fetchEmployees();
     fetchSettings();
   }, [employeeUser]);
+
+  // 🔥 BUSCAR PEDIDOS DO TOTEM AGUARDANDO PAGAMENTO A CADA 5 SEGUNDOS
+  useEffect(() => {
+    fetchAwaitingTotemOrders();
+    const interval = setInterval(fetchAwaitingTotemOrders, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchAwaitingTotemOrders = async () => {
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/pdv/awaiting-payment`);
+      if (res.ok) {
+         const data = await res.json();
+         setAwaitingTotemOrders(data || []);
+      }
+    } catch (e) {}
+  };
 
   const fetchSettings = async () => {
     try { const res = await fetchWithStore(`${API_URL}/api/settings`); if (res.ok) { const data = await res.json(); setPrinterName(data.printerName || ''); } } catch(e){}
@@ -258,7 +282,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
 
   const addToCart = (product) => { 
     setCart(prev => {
-        // Verifica duplicidade baseada no ID customizado (usado para pizzas fracionadas)
         const existingIdx = (prev || []).findIndex(item => item.id === (product.id || product.productId));
         if (existingIdx >= 0 && !loadedTab) {
             const newCart = [...prev];
@@ -307,7 +330,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
     const customName = `🍕 ${pizzaFlavorCount} Sabores: ` + pizzaSelectedFlavors.map(f => f.name).join(' / ');
     
     const cartItem = {
-      id: customId,             
+      id: customId,            
       productId: pizzaBase.id,  
       name: customName,
       price: finalPrice,
@@ -373,7 +396,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
           clientId: selectedCustomer?.id || 'TOTEM_MODE', 
           employeeBuyerId: selectedEmployeeBuyer?.id, 
           client: { name: finalClientName },
-          // Envia o carrinho extraindo a coluna "flavors" para baixa de estoque
           items: currentCart.map(item => ({
              productId: item.productId || item.id,
              quantity: item.quantity,
@@ -409,6 +431,53 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       handleCheckoutPDV(managerAuthLimit);
   };
 
+  // 🔥 PROCESSAR PAGAMENTO DO TOTEM
+  const approveTotemOrder = async () => {
+    if (!selectedTotemOrder) return;
+    setProcessingTotem(true);
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/pdv/awaiting-payment/${selectedTotemOrder.id}/approve`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-employee-name': employeeUser.name },
+        body: JSON.stringify({ paymentMethod: totemPaymentMethod })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Recebimento do Totem confirmado e pedido liberado para Cozinha!");
+        setSelectedTotemOrder(null);
+        fetchAwaitingTotemOrders();
+      } else {
+        alert(data.error);
+      }
+    } catch (e) {
+      alert("Erro ao aprovar pedido do totem.");
+    }
+    setProcessingTotem(false);
+  };
+
+  const cancelTotemOrder = async () => {
+    if (!selectedTotemOrder || !confirm("Tem certeza que deseja CANCELAR este pedido do Totem? Ele será removido da cozinha.")) return;
+    setProcessingTotem(true);
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/pdv/awaiting-payment/${selectedTotemOrder.id}/cancel`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Pedido Cancelado.");
+        setSelectedTotemOrder(null);
+        fetchAwaitingTotemOrders();
+      } else {
+        alert(data.error);
+      }
+    } catch (e) {
+      alert("Erro ao cancelar pedido.");
+    }
+    setProcessingTotem(false);
+  };
+
+
   if (loading) return <div className="p-8 text-center text-slate-500 font-bold">Verificando situação do caixa...</div>;
 
   if (!registerInfo) {
@@ -428,13 +497,25 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   }
 
   return (
-    <div className="h-full flex flex-col animate-fade-in-up relative">
-      <div className="bg-slate-900 rounded-3xl p-4 mb-6 flex justify-between items-center shadow-lg border border-slate-800">
+    <div className="h-full flex flex-col animate-fade-in-up relative overflow-hidden">
+      
+      {/* HEADER DO CAIXA E ALERTA DO TOTEM */}
+      <div className="bg-slate-900 rounded-3xl p-4 mb-6 flex justify-between items-center shadow-lg border border-slate-800 shrink-0">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 text-2xl">🔓</div>
           <div><h2 className="text-white font-black text-lg leading-none mb-1">Ponto de Venda (PDV)</h2><p className="text-emerald-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Caixa Aberto</p></div>
         </div>
-        <div className="flex gap-2 relative z-50">
+        
+        <div className="flex gap-2 relative z-50 items-center">
+          
+          {/* 🔥 ALERTA PULSANTE PARA O CAIXA SE TIVER PEDIDOS DO TOTEM */}
+          {awaitingTotemOrders.length > 0 && (
+             <button onClick={() => setIsTotemSidebarOpen(!isTotemSidebarOpen)} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-black cursor-pointer shadow-lg shadow-red-500/50 flex items-center gap-2 mr-4 animate-pulse">
+                <span className="text-base">🚨</span> 
+                {awaitingTotemOrders.length} TOTEM PENDENTE
+             </button>
+          )}
+
           <button type="button" onClick={() => setShowMovementsListModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black cursor-pointer shadow-sm hover:bg-blue-500 transition-colors">📋 Consultar Sangrias</button>
           <button type="button" onClick={() => setShowMovementModal(true)} className="bg-amber-500 text-slate-950 px-4 py-2 rounded-xl text-xs font-black cursor-pointer shadow-sm hover:bg-amber-400 transition-colors">💸 Sangria / Suprimento</button>
           <button type="button" onClick={() => setShowCloseModal(true)} className="bg-red-500 text-white px-4 py-2 rounded-xl text-xs font-black cursor-pointer shadow-sm hover:bg-red-400 transition-colors">🔒 Fechar Caixa</button>
@@ -442,6 +523,8 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       </div>
 
       <div className="flex flex-1 gap-6 overflow-hidden">
+        
+        {/* ÁREA CENTRAL - CATÁLOGO */}
         <div className="flex-1 bg-white border border-slate-200 rounded-3xl p-6 overflow-y-auto hide-scrollbar">
           <h3 className="font-black text-slate-800 mb-6 text-lg">Catálogo Rápido</h3>
           <div className="space-y-8">
@@ -468,148 +551,212 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
           </div>
         </div>
 
-        <div className="w-[390px] bg-white border border-slate-200 rounded-3xl p-6 flex flex-col shadow-sm">
-          
-          <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
-             <h3 className="font-black text-slate-800 text-lg">Venda Balcão / Caixa</h3>
-             <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-200 transition-colors">
-               <input type="checkbox" checked={isEmployeePurchase} onChange={(e) => { setIsEmployeePurchase(e.target.checked); setSelectedEmployeeBuyer(null); setDiscountValue(''); }} className="accent-amber-500" />
-               Venda p/ Equipe
-             </label>
-          </div>
-
-          <form onSubmit={handleSearchTab} className="mb-4 bg-blue-50 border border-blue-200 p-3 rounded-2xl">
-            <input type="number" value={searchTabNumber} onChange={e => setSearchTabNumber(e.target.value)} placeholder="Nº Mesa ou Comanda" className="w-full bg-white border border-blue-200 rounded-xl p-2 text-xs font-black text-slate-800 text-center mb-2 focus:outline-none focus:border-blue-500" />
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-2 rounded-xl text-xs font-black cursor-pointer">Carregar Conta</button>
-          </form>
-
-          {loadedTab && (
-            <div className="mb-4 p-3 bg-blue-100/60 rounded-xl border border-blue-200">
-               <div className="flex justify-between items-center mb-2"><h4 className="font-black text-blue-900 text-sm">{loadedTab.type === 'TABLE' ? `Mesa ${loadedTab.number}` : `Comanda #${loadedTab.number}`}</h4><button onClick={() => setShowMergeModal(true)} className="bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded text-[10px] font-black cursor-pointer transition-colors shadow-sm flex items-center gap-1"><span>🔗</span> Juntar Contas</button></div>
-               <label className="text-[10px] font-black text-blue-700 uppercase mb-1 block mt-2">Filtrar por Posição/Lugar:</label>
-               <select value={selectedSeatFilter} onChange={handleSeatFilterChange} className="w-full p-2 bg-white border border-blue-300 focus:outline-none focus:border-blue-500 rounded-lg text-xs font-bold cursor-pointer"><option value="TODOS">Mesa/Comanda Completa</option>{[...new Set((loadedTab?.items || []).map(i => i.seatLabel).filter(Boolean))].map(seat => (<option key={seat} value={seat}>{seat}</option>))}</select>
-               <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-200/50"><label className="text-[10px] font-black text-blue-700 uppercase">Dividir em partes:</label><select value={splitCount} onChange={(e) => setSplitCount(Number(e.target.value))} className="p-1 bg-white border border-blue-300 rounded text-xs font-bold cursor-pointer"><option value="1">Não dividir (1x)</option><option value="2">2 Pessoas</option><option value="3">3 Pessoas</option><option value="4">4 Pessoas</option></select></div>
-               <button type="button" onClick={() => { setLoadedTab(null); setCart([]); setSearchTabNumber(''); setSelectedSeatFilter('TODOS'); setIsEmployeePurchase(false); setSelectedEmployeeBuyer(null); setSelectedCustomer(null); setSearchCustomerText(''); }} className="text-red-500 text-[10px] font-black hover:underline mt-2 block text-center w-full cursor-pointer">✕ Cancelar e Limpar</button>
-            </div>
-          )}
-
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4 relative">
-            {isEmployeePurchase ? (
-              <>
-                <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest block mb-2">Selecione o Funcionário (Dívida)</label>
-                <select value={selectedEmployeeBuyer?.id || ''} onChange={e => { const emp = employees.find(x => x.id === e.target.value); setSelectedEmployeeBuyer(emp); }} className="w-full bg-white border border-amber-300 rounded-lg p-2 text-xs font-bold focus:outline-none focus:border-amber-500">
-                   <option value="">Escolha...</option>
-                   {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
-                </select>
-                {selectedEmployeeBuyer && (
-                   <div className="mt-2 bg-amber-100 text-amber-800 p-2 rounded-lg text-[10px] font-bold">
-                      Dívida Atual: R$ {selectedEmployeeBuyer.currentDebt?.toFixed(2) || '0.00'} / Limite: R$ {selectedEmployeeBuyer.creditLimit?.toFixed(2) || '0.00'}<br/>
-                      Desconto Automático: {selectedEmployeeBuyer.discountPercent || 0}%
-                   </div>
-                )}
-              </>
-            ) : (
-              <>
-                <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest block mb-2">Cliente / Fiado de Cliente</label>
-                <input 
-                  type="text" 
-                  placeholder="Buscar Cliente por Nome ou CPF..." 
-                  value={searchCustomerText}
-                  onChange={(e) => {
-                    setSearchCustomerText(e.target.value);
-                    if (e.target.value.length >= 2) setShowCustomerDropdown(true);
-                    else setShowCustomerDropdown(false);
-                  }}
-                  className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 mb-3"
-                />
-                {showCustomerDropdown && searchCustomerText.length >= 2 && (
-                  <div className="absolute z-50 w-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
-                    {customers.filter(c => c.name.toLowerCase().includes(searchCustomerText.toLowerCase()) || (c.cpf && c.cpf.includes(searchCustomerText))).map(c => (
-                      <div key={c.id} onClick={() => { setSelectedCustomer(c); setSearchCustomerText(c.name); setShowCustomerDropdown(false); }} className="p-3 border-b border-slate-100 hover:bg-slate-50 cursor-pointer flex justify-between items-center">
-                         <span className="text-xs font-bold text-slate-800">{c.name}</span>
-                         {c.isBlocked && <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded">BLOQUEADO</span>}
-                      </div>
-                    ))}
-                    <div onClick={() => { setShowNewCustomerModal(true); setShowCustomerDropdown(false); }} className="p-3 bg-emerald-50 hover:bg-emerald-100 cursor-pointer text-emerald-700 text-xs font-black text-center">
-                      ➕ Cadastrar Novo Cliente
-                    </div>
+        {/* BARRA LATERAL - CARRINHO DO CAIXA E TOTEM */}
+        <div className="w-[390px] flex flex-col gap-4 overflow-hidden shrink-0">
+            
+            {/* 🔥 PAINEL DOS PEDIDOS DO TOTEM (SÓ APARECE SE ABERTO) */}
+            {isTotemSidebarOpen && (
+               <div className="bg-red-50 border-2 border-red-500 rounded-3xl p-4 flex flex-col shadow-xl animate-fade-in-up shrink-0 max-h-[50%]">
+                  <div className="flex justify-between items-center mb-3 border-b border-red-200 pb-2">
+                     <h3 className="font-black text-red-700 text-sm flex items-center gap-2"><span className="animate-pulse">🚨</span> Pendentes (Totem)</h3>
+                     <button onClick={() => setIsTotemSidebarOpen(false)} className="text-red-500 font-black bg-red-100 w-6 h-6 rounded-full hover:bg-red-200">✕</button>
                   </div>
-                )}
 
-                {!loadedTab && (
+                  <div className="overflow-y-auto hide-scrollbar flex-1 space-y-2">
+                     {awaitingTotemOrders.length === 0 ? <p className="text-[10px] text-red-400 font-bold text-center">Nenhum pedido do Totem na fila.</p> : null}
+                     {awaitingTotemOrders.map(order => (
+                        <button key={order.id} onClick={() => setSelectedTotemOrder(order)} className={`w-full text-left p-3 rounded-xl border-2 transition-all cursor-pointer ${selectedTotemOrder?.id === order.id ? 'bg-red-100 border-red-500' : 'bg-white border-red-200 hover:border-red-400'}`}>
+                           <div className="flex justify-between items-start">
+                              <div>
+                                 <span className="font-black text-slate-800 text-xs">#{order.shortId}</span>
+                                 <p className="text-[10px] font-bold text-slate-500 mt-0.5">{order.customerName}</p>
+                              </div>
+                              <span className="font-black text-red-600 text-sm">R$ {Number(order.total).toFixed(2)}</span>
+                           </div>
+                        </button>
+                     ))}
+                  </div>
+               </div>
+            )}
+
+            {/* CARRINHO NORMAL DO PDV */}
+            <div className={`bg-white border border-slate-200 rounded-3xl p-6 flex flex-col shadow-sm flex-1 ${isTotemSidebarOpen ? 'opacity-50 pointer-events-none' : ''}`}>
+              <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
+                 <h3 className="font-black text-slate-800 text-lg">Venda Balcão / Caixa</h3>
+                 <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-200 transition-colors">
+                   <input type="checkbox" checked={isEmployeePurchase} onChange={(e) => { setIsEmployeePurchase(e.target.checked); setSelectedEmployeeBuyer(null); setDiscountValue(''); }} className="accent-amber-500" />
+                   Venda p/ Equipe
+                 </label>
+              </div>
+
+              <form onSubmit={handleSearchTab} className="mb-4 bg-blue-50 border border-blue-200 p-3 rounded-2xl">
+                <input type="number" value={searchTabNumber} onChange={e => setSearchTabNumber(e.target.value)} placeholder="Nº Mesa ou Comanda" className="w-full bg-white border border-blue-200 rounded-xl p-2 text-xs font-black text-slate-800 text-center mb-2 focus:outline-none focus:border-blue-500" />
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-2 rounded-xl text-xs font-black cursor-pointer">Carregar Conta</button>
+              </form>
+
+              {loadedTab && (
+                <div className="mb-4 p-3 bg-blue-100/60 rounded-xl border border-blue-200">
+                   <div className="flex justify-between items-center mb-2"><h4 className="font-black text-blue-900 text-sm">{loadedTab.type === 'TABLE' ? `Mesa ${loadedTab.number}` : `Comanda #${loadedTab.number}`}</h4><button onClick={() => setShowMergeModal(true)} className="bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded text-[10px] font-black cursor-pointer transition-colors shadow-sm flex items-center gap-1"><span>🔗</span> Juntar Contas</button></div>
+                   <label className="text-[10px] font-black text-blue-700 uppercase mb-1 block mt-2">Filtrar por Posição/Lugar:</label>
+                   <select value={selectedSeatFilter} onChange={handleSeatFilterChange} className="w-full p-2 bg-white border border-blue-300 focus:outline-none focus:border-blue-500 rounded-lg text-xs font-bold cursor-pointer"><option value="TODOS">Mesa/Comanda Completa</option>{[...new Set((loadedTab?.items || []).map(i => i.seatLabel).filter(Boolean))].map(seat => (<option key={seat} value={seat}>{seat}</option>))}</select>
+                   <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-200/50"><label className="text-[10px] font-black text-blue-700 uppercase">Dividir em partes:</label><select value={splitCount} onChange={(e) => setSplitCount(Number(e.target.value))} className="p-1 bg-white border border-blue-300 rounded text-xs font-bold cursor-pointer"><option value="1">Não dividir (1x)</option><option value="2">2 Pessoas</option><option value="3">3 Pessoas</option><option value="4">4 Pessoas</option></select></div>
+                   <button type="button" onClick={() => { setLoadedTab(null); setCart([]); setSearchTabNumber(''); setSelectedSeatFilter('TODOS'); setIsEmployeePurchase(false); setSelectedEmployeeBuyer(null); setSelectedCustomer(null); setSearchCustomerText(''); }} className="text-red-500 text-[10px] font-black hover:underline mt-2 block text-center w-full cursor-pointer">✕ Cancelar e Limpar</button>
+                </div>
+              )}
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4 relative">
+                {isEmployeePurchase ? (
                   <>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Aplicar Desconto Manual</label>
-                    <div className="flex gap-2">
-                      <select value={discountType} onChange={e => setDiscountType(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 text-xs font-bold text-slate-700 cursor-pointer"><option value="R$">R$</option><option value="%">%</option></select>
-                      <input type="number" step="0.01" value={discountValue} onChange={e => setDiscountValue(e.target.value)} placeholder="Valor..." className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500" />
-                    </div>
+                    <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest block mb-2">Selecione o Funcionário (Dívida)</label>
+                    <select value={selectedEmployeeBuyer?.id || ''} onChange={e => { const emp = employees.find(x => x.id === e.target.value); setSelectedEmployeeBuyer(emp); }} className="w-full bg-white border border-amber-300 rounded-lg p-2 text-xs font-bold focus:outline-none focus:border-amber-500">
+                       <option value="">Escolha...</option>
+                       {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                    </select>
+                    {selectedEmployeeBuyer && (
+                       <div className="mt-2 bg-amber-100 text-amber-800 p-2 rounded-lg text-[10px] font-bold">
+                          Dívida Atual: R$ {selectedEmployeeBuyer.currentDebt?.toFixed(2) || '0.00'} / Limite: R$ {selectedEmployeeBuyer.creditLimit?.toFixed(2) || '0.00'}<br/>
+                          Desconto Automático: {selectedEmployeeBuyer.discountPercent || 0}%
+                       </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest block mb-2">Cliente / Fiado de Cliente</label>
+                    <input 
+                      type="text" 
+                      placeholder="Buscar Cliente por Nome ou CPF..." 
+                      value={searchCustomerText}
+                      onChange={(e) => {
+                        setSearchCustomerText(e.target.value);
+                        if (e.target.value.length >= 2) setShowCustomerDropdown(true);
+                        else setShowCustomerDropdown(false);
+                      }}
+                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 mb-3"
+                    />
+                    {showCustomerDropdown && searchCustomerText.length >= 2 && (
+                      <div className="absolute z-50 w-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
+                        {customers.filter(c => c.name.toLowerCase().includes(searchCustomerText.toLowerCase()) || (c.cpf && c.cpf.includes(searchCustomerText))).map(c => (
+                          <div key={c.id} onClick={() => { setSelectedCustomer(c); setSearchCustomerText(c.name); setShowCustomerDropdown(false); }} className="p-3 border-b border-slate-100 hover:bg-slate-50 cursor-pointer flex justify-between items-center">
+                             <span className="text-xs font-bold text-slate-800">{c.name}</span>
+                             {c.isBlocked && <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded">BLOQUEADO</span>}
+                          </div>
+                        ))}
+                        <div onClick={() => { setShowNewCustomerModal(true); setShowCustomerDropdown(false); }} className="p-3 bg-emerald-50 hover:bg-emerald-100 cursor-pointer text-emerald-700 text-xs font-black text-center">
+                          ➕ Cadastrar Novo Cliente
+                        </div>
+                      </div>
+                    )}
+
+                    {!loadedTab && (
+                      <>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Aplicar Desconto Manual</label>
+                        <div className="flex gap-2">
+                          <select value={discountType} onChange={e => setDiscountType(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 text-xs font-bold text-slate-700 cursor-pointer"><option value="R$">R$</option><option value="%">%</option></select>
+                          <input type="number" step="0.01" value={discountValue} onChange={e => setDiscountValue(e.target.value)} placeholder="Valor..." className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500" />
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
-              </>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-y-auto space-y-3 hide-scrollbar pr-2">
-            {(cart || []).map((item, idx) => (
-              <div key={idx} className="flex flex-col bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-sm relative">
-                <div className="flex justify-between items-start mb-1">
-                  <p className="text-xs font-bold text-slate-800 leading-tight pr-2"><span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}</p>
-                  <span className="font-black text-slate-800 text-sm whitespace-nowrap">R$ {(item.price * item.quantity).toFixed(2)}</span>
-                </div>
-                {/* 🍕 Mostra as metades escolhidas no carrinho */}
-                {item.flavors && <p className="text-[9px] text-slate-500 font-bold leading-tight mt-0.5">{item.flavors.map(f => f.name).join(' + ')}</p>}
-                
-                {item.seatLabel && <p className="text-[9px] text-blue-500 font-black uppercase mt-0.5">{item.seatLabel}</p>}
-                
-                {!loadedTab && (
-                  <div className="flex justify-between items-center mt-2 border-t border-slate-200 pt-2">
-                    <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1">
-                      <button type="button" onClick={() => updateQty(idx, -1)} className="w-6 h-6 flex items-center justify-center bg-slate-100 rounded text-slate-700 font-black cursor-pointer">-</button>
-                      <span className="text-xs font-black w-6 text-center">{item.quantity}</span>
-                      <button type="button" onClick={() => updateQty(idx, 1)} className="w-6 h-6 flex items-center justify-center bg-slate-100 rounded text-slate-700 font-black cursor-pointer">+</button>
-                    </div>
-                    <button type="button" onClick={() => removeFromCart(idx)} className="text-red-500 text-xs font-bold cursor-pointer">Remover</button>
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
 
-          <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
-            <div className="flex justify-between items-center text-slate-500 text-xs font-bold"><span>Subtotal:</span><span>R$ {subtotal.toFixed(2)}</span></div>
-            {isEmployeePurchase && selectedEmployeeBuyer?.discountPercent > 0 && <div className="flex justify-between items-center text-amber-600 text-xs font-bold"><span>Desconto Equipe (-{selectedEmployeeBuyer.discountPercent}%):</span><span>-R$ {(subtotal * (selectedEmployeeBuyer.discountPercent / 100)).toFixed(2)}</span></div>}
-            
-            <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-              <span className="font-bold text-slate-500 uppercase tracking-widest text-[10px]">Total a Pagar</span>
-              <span className="font-black text-3xl text-slate-800 tracking-tighter">R$ {cartTotal.toFixed(2)}</span>
+              <div className="flex-1 overflow-y-auto space-y-3 hide-scrollbar pr-2">
+                {(cart || []).map((item, idx) => (
+                  <div key={idx} className="flex flex-col bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-sm relative">
+                    <div className="flex justify-between items-start mb-1">
+                      <p className="text-xs font-bold text-slate-800 leading-tight pr-2"><span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}</p>
+                      <span className="font-black text-slate-800 text-sm whitespace-nowrap">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                    </div>
+                    {item.flavors && <p className="text-[9px] text-slate-500 font-bold leading-tight mt-0.5">{item.flavors.map(f => f.name).join(' + ')}</p>}
+                    
+                    {item.seatLabel && <p className="text-[9px] text-blue-500 font-black uppercase mt-0.5">{item.seatLabel}</p>}
+                    
+                    {!loadedTab && (
+                      <div className="flex justify-between items-center mt-2 border-t border-slate-200 pt-2">
+                        <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1">
+                          <button type="button" onClick={() => updateQty(idx, -1)} className="w-6 h-6 flex items-center justify-center bg-slate-100 rounded text-slate-700 font-black cursor-pointer">-</button>
+                          <span className="text-xs font-black w-6 text-center">{item.quantity}</span>
+                          <button type="button" onClick={() => updateQty(idx, 1)} className="w-6 h-6 flex items-center justify-center bg-slate-100 rounded text-slate-700 font-black cursor-pointer">+</button>
+                        </div>
+                        <button type="button" onClick={() => removeFromCart(idx)} className="text-red-500 text-xs font-bold cursor-pointer">Remover</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-slate-100 space-y-4 shrink-0">
+                <div className="flex justify-between items-center text-slate-500 text-xs font-bold"><span>Subtotal:</span><span>R$ {subtotal.toFixed(2)}</span></div>
+                {isEmployeePurchase && selectedEmployeeBuyer?.discountPercent > 0 && <div className="flex justify-between items-center text-amber-600 text-xs font-bold"><span>Desconto Equipe (-{selectedEmployeeBuyer.discountPercent}%):</span><span>-R$ {(subtotal * (selectedEmployeeBuyer.discountPercent / 100)).toFixed(2)}</span></div>}
+                
+                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                  <span className="font-bold text-slate-500 uppercase tracking-widest text-[10px]">Total a Pagar</span>
+                  <span className="font-black text-3xl text-slate-800 tracking-tighter">R$ {cartTotal.toFixed(2)}</span>
+                </div>
+
+                <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className={`w-full border rounded-xl p-3 text-sm font-black focus:outline-none cursor-pointer ${isEmployeePurchase ? 'bg-amber-100 border-amber-300 text-amber-800 focus:border-amber-500' : 'bg-slate-100 border-slate-200 text-slate-700 focus:border-blue-500'}`}>
+                  {isEmployeePurchase ? (
+                     <option value="EMPLOYEE_ACCOUNT">Fiado / Agendamento Funcionário</option>
+                  ) : (
+                     <>
+                       <option value="CASH">Dinheiro Físico</option>
+                       <option value="CREDIT_CARD_DELIVERY">Cartão de Crédito</option>
+                       <option value="DEBIT_CARD">Cartão de Débito</option>
+                       <option value="PIX">PIX (Máquina/QR Code)</option>
+                       <option value="CUSTOMER_ACCOUNT">Fiado / Deixar Pendente</option>
+                     </>
+                  )}
+                </select>
+
+                <button type="button" onClick={() => handleCheckoutPDV(null)} disabled={(cart || []).length === 0} className={`w-full text-white font-black py-4 rounded-xl shadow-lg transition-all text-lg cursor-pointer disabled:bg-slate-300 ${isEmployeePurchase ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-500 hover:bg-emerald-600'}`}>
+                  {loadedTab ? 'Receber Valor' : 'Finalizar Venda'}
+                </button>
+              </div>
             </div>
-
-            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className={`w-full border rounded-xl p-3 text-sm font-black focus:outline-none cursor-pointer ${isEmployeePurchase ? 'bg-amber-100 border-amber-300 text-amber-800 focus:border-amber-500' : 'bg-slate-100 border-slate-200 text-slate-700 focus:border-blue-500'}`}>
-              {isEmployeePurchase ? (
-                 <option value="EMPLOYEE_ACCOUNT">Fiado / Agendamento Funcionário</option>
-              ) : (
-                 <>
-                   <option value="CASH">Dinheiro Físico</option>
-                   <option value="CREDIT_CARD_DELIVERY">Cartão de Crédito</option>
-                   <option value="DEBIT_CARD">Cartão de Débito</option>
-                   <option value="PIX">PIX (Máquina/QR Code)</option>
-                   <option value="CUSTOMER_ACCOUNT">Fiado / Deixar Pendente</option>
-                 </>
-              )}
-            </select>
-
-            <button type="button" onClick={() => handleCheckoutPDV(null)} disabled={(cart || []).length === 0} className={`w-full text-white font-black py-4 rounded-xl shadow-lg transition-all text-lg cursor-pointer disabled:bg-slate-300 ${isEmployeePurchase ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-500 hover:bg-emerald-600'}`}>
-              {loadedTab ? 'Receber Valor' : 'Finalizar Venda'}
-            </button>
-          </div>
         </div>
+
       </div>
+
+      {/* ========================================================================= */}
+      {/* 🔥 MODAL DE PAGAMENTO DO TOTEM (QUANDO O CAIXA CLICA NO PEDIDO LATERAL) */}
+      {/* ========================================================================= */}
+      {selectedTotemOrder && (
+         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-8 shadow-2xl max-w-sm w-full animate-fade-in-up border-2 border-red-500">
+               <div className="text-center mb-6">
+                  <span className="text-4xl block mb-2">💵</span>
+                  <h2 className="text-xl font-black text-slate-800">Receber Pedido do Totem</h2>
+                  <p className="text-sm font-bold text-slate-500 mt-1">{selectedTotemOrder.customerName}</p>
+                  <p className="text-3xl font-black text-red-600 mt-2">R$ {Number(selectedTotemOrder.total).toFixed(2)}</p>
+               </div>
+
+               <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block text-center">Como o cliente está pagando agora?</label>
+                  <select value={totemPaymentMethod} onChange={e => setTotemPaymentMethod(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-center font-black focus:border-red-500 focus:outline-none cursor-pointer">
+                     <option value="PIX">Pago com PIX</option>
+                     <option value="CASH">Pago em Dinheiro</option>
+                     <option value="CREDIT_CARD_DELIVERY">Pago no Cartão de Crédito</option>
+                     <option value="DEBIT_CARD">Pago no Cartão de Débito</option>
+                  </select>
+
+                  <div className="grid grid-cols-2 gap-3 pt-4">
+                     <button disabled={processingTotem} onClick={cancelTotemOrder} className="bg-slate-100 hover:bg-red-100 text-red-600 font-bold py-3 rounded-xl transition-colors cursor-pointer">
+                        Desistiu
+                     </button>
+                     <button disabled={processingTotem} onClick={approveTotemOrder} className="bg-emerald-500 hover:bg-emerald-600 text-white font-black py-3 rounded-xl shadow-lg transition-transform active:scale-95 cursor-pointer">
+                        Confirmar
+                     </button>
+                  </div>
+                  <button onClick={() => setSelectedTotemOrder(null)} className="w-full text-[10px] font-black text-slate-400 mt-2 hover:underline cursor-pointer">Voltar / Minimizar</button>
+               </div>
+            </div>
+         </div>
+      )}
 
       {/* 🍕 MODAL: CONSTRUTOR DE PIZZA (PDV) */}
       {pizzaBuilderOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6 animate-fade-in-up">
           <div className="bg-white rounded-[2rem] shadow-2xl p-6 w-full max-w-3xl flex flex-col max-h-[90vh]">
-            
             <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4 shrink-0">
               <div>
                  <h2 className="text-2xl font-black text-slate-800">Montar Pizza</h2>
@@ -617,7 +764,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
               </div>
               <button onClick={() => setPizzaBuilderOpen(false)} className="bg-slate-100 text-slate-500 w-10 h-10 rounded-full font-black text-lg hover:bg-slate-200">X</button>
             </div>
-
             <div className="flex-1 overflow-y-auto pr-2">
                 <h3 className="font-black text-slate-700 mb-2 text-sm uppercase tracking-wider">Quantos sabores?</h3>
                 <div className="flex gap-4 mb-6">
@@ -634,18 +780,15 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
                         );
                     })}
                 </div>
-
                 <div className="bg-amber-100 text-amber-800 p-3 rounded-xl mb-6 flex items-center justify-between font-bold border border-amber-200 shadow-inner">
                     <span className="text-sm">Selecionados ({pizzaSelectedFlavors.length}/{pizzaFlavorCount}):</span>
                     <span className="text-xs">{pizzaSelectedFlavors.map(f => f.name).join(' + ')}</span>
                 </div>
-
                 <h3 className="font-black text-slate-700 mb-3 text-sm uppercase tracking-wider">Escolha as metades</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {allProducts.filter(p => p.isPizza).map(flavor => {
                         const isSelected = pizzaSelectedFlavors.find(f => f.id === flavor.id);
                         const isFull = !isSelected && pizzaSelectedFlavors.length >= pizzaFlavorCount;
-                        
                         return (
                             <button 
                                 key={flavor.id}
@@ -661,7 +804,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
                     })}
                 </div>
             </div>
-
             <div className="pt-4 border-t border-slate-100 shrink-0 mt-4">
                <button 
                   onClick={confirmBuiltPizza}
@@ -671,7 +813,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
                   Confirmar Pizza - R$ {getPizzaPricePreview().toFixed(2)}
                </button>
             </div>
-
           </div>
         </div>
       )}
@@ -684,7 +825,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
             <span className="text-5xl mb-4 inline-block">⚠️</span>
             <h3 className="text-xl font-black text-slate-800 mb-2">Limite Excedido!</h3>
             <p className="text-xs text-red-600 font-bold mb-6">{limitErrorMessage}</p>
-            
             <form onSubmit={handleLimitOverrideSubmit} className="space-y-4 text-left">
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Autenticação do Gerente</p>
@@ -712,7 +852,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
               <input type="tel" value={newCustomerForm.phone} onChange={e => setNewCustomerForm({...newCustomerForm, phone: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-blue-500" placeholder="WhatsApp" />
               <input type="date" value={newCustomerForm.birthDate} onChange={e => setNewCustomerForm({...newCustomerForm, birthDate: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-blue-500" title="Data de Nascimento (Opcional)" />
               <input type="text" value={newCustomerForm.address} onChange={e => setNewCustomerForm({...newCustomerForm, address: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-blue-500" placeholder="Endereço Completo" />
-
               <div className="flex gap-3 pt-4">
                  <button type="button" onClick={() => setShowNewCustomerModal(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 py-3 rounded-xl font-bold cursor-pointer">Cancelar</button>
                  <button type="submit" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-3 rounded-xl cursor-pointer">Salvar</button>
@@ -751,13 +890,11 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
                </select>
                <input type="number" step="0.01" required value={movementForm.amount} onChange={e => setMovementForm({...movementForm, amount: e.target.value})} placeholder="Valor R$" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-black text-slate-800 focus:border-amber-500 focus:outline-none" />
                <input type="text" required value={movementForm.reason} onChange={e => setMovementForm({...movementForm, reason: e.target.value})} placeholder="Motivo (Ex: Pagamento Fornecedor)" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold text-slate-800 focus:border-amber-500 focus:outline-none" />
-               
                <div className="pt-3 border-t border-slate-100">
                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Autorização (Gerente)</p>
                  <input type="text" required value={managerAuth.email} onChange={e => setManagerAuth({...managerAuth, email: e.target.value})} placeholder="E-mail ou CPF" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm font-bold text-slate-800 mb-2 focus:border-red-500 focus:outline-none" />
                  <input type="password" required value={managerAuth.password} onChange={e => setManagerAuth({...managerAuth, password: e.target.value})} placeholder="Senha" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm font-bold text-slate-800 focus:border-red-500 focus:outline-none" />
                </div>
-
                <div className="flex gap-3 pt-2">
                  <button type="button" onClick={() => setShowMovementModal(false)} className="flex-1 bg-slate-100 py-3 rounded-xl font-bold text-slate-700 cursor-pointer hover:bg-slate-200">Cancelar</button>
                  <button type="submit" className="flex-1 bg-amber-500 text-slate-950 font-black py-3 rounded-xl cursor-pointer hover:bg-amber-400">Confirmar</button>

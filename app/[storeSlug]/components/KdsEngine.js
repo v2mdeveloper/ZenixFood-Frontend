@@ -168,9 +168,9 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
       const match = order.address.match(/Cliente:\s*(.*?)(?:\s*\||$)/);
       if (match && match[1]) return match[1].trim();
     }
-    return order.client?.name && order.client.name !== 'Totem Autoatendimento' 
+    return order.customerName || (order.client?.name && order.client.name !== 'Totem Autoatendimento' 
       ? order.client.name 
-      : (order.origin === 'TOTEM' ? 'Cliente Totem' : 'Cliente Avulso');
+      : (order.origin === 'TOTEM' ? 'Cliente Totem' : 'Cliente Avulso'));
   };
 
   useEffect(() => {
@@ -331,6 +331,9 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
   const totemPreparing = filteredTotemOrders.filter(o => o.status === 'PREPARING');
   const totemReady = filteredTotemOrders.filter(o => o.status === 'READY');
   const totemCompleted = filteredTotemOrders.filter(o => o.status === 'DELIVERED').reverse();
+  
+  // 🔥 NOVO: Pedidos do Totem aguardando pagamento
+  const totemAwaitingPayment = filteredTotemOrders.filter(o => o.status === 'AWAITING_PAYMENT');
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans p-4 flex flex-col overflow-hidden">
@@ -354,6 +357,87 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
 
       <div className="flex gap-4 flex-1 items-start overflow-x-auto hide-scrollbar w-full pb-4">
         
+        {/* COLUNA 1: AGENDADOS / PENDENTES (INCLUI TOTEM AGUARDANDO CAIXA) */}
+        <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-shrink-0 max-h-[85vh] ${mode === 'DELIVERY' ? 'w-80' : 'w-[320px]'}`}>
+          <div className="p-3 bg-purple-50 border-b border-purple-100 rounded-t-2xl flex justify-between items-center shrink-0">
+            <h3 className="font-black text-purple-700 text-xs uppercase tracking-widest">
+                {mode === 'DELIVERY' ? 'Agendados' : 'Na Fila / PENDENTES'}
+            </h3>
+            <span className="bg-purple-200 text-purple-800 text-xs font-black px-2 py-0.5 rounded-lg">
+                {mode === 'DELIVERY' ? deliveryScheduled.length : (totemAwaitingPayment.length + deliveryScheduled.length)}
+            </span>
+          </div>
+          <div className="p-3 overflow-y-auto space-y-3 flex-1 hide-scrollbar">
+            
+            {/* PEDIDOS DO TOTEM AGUARDANDO PAGAMENTO */}
+            {mode !== 'DELIVERY' && totemAwaitingPayment.map(order => (
+              <div key={order.id} onClick={() => setSelectedOrderDetails(order)} className="bg-red-50/50 border-2 border-red-300 p-4 rounded-xl shadow-xs cursor-pointer hover:border-red-500 transition-colors relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full bg-red-500 text-white text-[10px] font-black uppercase tracking-widest text-center py-0.5 z-10 shadow-sm">
+                   🚨 Aguardando Pag. no Caixa 🚨
+                </div>
+                
+                <div className="flex justify-between items-start mb-1 mt-4">
+                   <span className="font-black text-slate-800 text-base">💻 Totem #{order.shortId}</span>
+                   <button onClick={(e) => { e.stopPropagation(); triggerManualPrint(order); }} className="text-slate-400 hover:text-blue-500 text-lg cursor-pointer">🖨️</button>
+                </div>
+                <p className="text-xs font-bold text-slate-700 mb-2">{extractName(order)}</p>
+                
+                <div className="my-2 space-y-2 bg-white p-2 rounded-lg border border-red-100 shadow-inner">
+                  {order.items.filter(i => (mode === 'BEBIDAS' ? i.product?.category?.isDrink : !i.product?.category?.isDrink)).map(i => (
+                    <div key={i.id} className="border-b border-slate-50 last:border-0 pb-1 last:pb-0">
+                      <FormattedItemName item={i} baseClassName="text-xs font-bold text-slate-800" />
+                      <ItemExtras item={i} />
+                    </div>
+                  ))}
+                </div>
+                
+                <p className="text-[10px] text-red-600 font-bold text-center mt-2 opacity-70">
+                    *Não inicie o preparo até o caixa aprovar.
+                </p>
+              </div>
+            ))}
+
+            {/* PEDIDOS DO DELIVERY PENDENTES / AGENDADOS */}
+            {deliveryScheduled.map(order => (
+              <div key={order.id} onClick={() => setSelectedOrderDetails(order)} className="bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-xs cursor-pointer hover:border-amber-400 transition-colors relative">
+                
+                {order.status === 'PENDING' && (
+                   <div className="absolute top-0 left-0 w-full bg-red-500 text-white text-[10px] font-black uppercase tracking-widest text-center py-0.5 z-10 shadow-sm rounded-t-xl">
+                     Aguardando Pagamento
+                   </div>
+                )}
+
+                <div className={`flex justify-between items-start mb-1 ${order.status === 'PENDING' ? 'mt-3' : ''}`}>
+                   <span className="font-black text-slate-800 text-base">#{order.shortId}</span>
+                   <button onClick={(e) => { e.stopPropagation(); triggerManualPrint(order); }} className="text-slate-400 hover:text-blue-500 text-lg cursor-pointer">🖨️</button>
+                </div>
+                <p className="text-xs font-bold text-slate-700 mb-2">Cliente: {extractName(order)}</p>
+                
+                <div className="my-2 space-y-2 bg-white p-2 rounded-lg border border-slate-100 shadow-inner">
+                  {order.items.map(i => (
+                    <div key={i.id} className="border-b border-slate-50 last:border-0 pb-1 last:pb-0">
+                      <FormattedItemName item={i} baseClassName="text-xs font-bold text-slate-800" />
+                      <ItemExtras item={i} />
+                    </div>
+                  ))}
+                </div>
+                
+                {order.status === 'PENDING' && (
+                  <button onClick={(e) => { e.stopPropagation(); updateOrderStatus(order.id, 'PREPARING'); }} className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg text-xs font-black cursor-pointer shadow-sm">
+                    💰 Confirmar Pagamento
+                  </button>
+                )}
+                {order.status === 'PREPARING' && (
+                  <button onClick={(e) => { e.stopPropagation(); updateOrderStatus(order.id, 'READY'); }} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-xs font-black cursor-pointer shadow-sm mt-1">
+                    ✅ Marcar Pronto
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* COLUNA 2: DELIVERY ONLINE (SÓ PARA EXPEDIÇÃO) */}
         {mode === 'DELIVERY' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-shrink-0 w-80 max-h-[85vh]">
             <div className="p-3 bg-red-50 border-b border-red-100 rounded-t-2xl flex justify-between items-center shrink-0">
@@ -369,7 +453,6 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   </div>
                   <p className="text-xs font-bold text-slate-700 mb-2">Cliente: {extractName(order)}</p>
 
-                  {/* ITENS DO PEDIDO PENDENTE */}
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-2 mb-3 shadow-inner">
                     {order.items.map(i => (
                       <div key={i.id} className="border-b border-slate-100 last:border-0 pb-1 last:pb-0">
@@ -389,55 +472,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
           </div>
         )}
 
-        {mode === 'DELIVERY' && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-shrink-0 w-80 max-h-[85vh]">
-            <div className="p-3 bg-purple-50 border-b border-purple-100 rounded-t-2xl flex justify-between items-center shrink-0">
-              <h3 className="font-black text-purple-700 text-xs uppercase tracking-widest">Agendados</h3>
-              <span className="bg-purple-200 text-purple-800 text-xs font-black px-2 py-0.5 rounded-lg">{deliveryScheduled.length}</span>
-            </div>
-            <div className="p-3 overflow-y-auto space-y-3 flex-1 hide-scrollbar">
-              {deliveryScheduled.map(order => (
-                <div key={order.id} onClick={() => setSelectedOrderDetails(order)} className="bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-xs cursor-pointer hover:border-amber-400 transition-colors relative">
-                  
-                  {order.status === 'PENDING' && (
-                     <div className="absolute top-0 left-0 w-full bg-red-500 text-white text-[10px] font-black uppercase tracking-widest text-center py-0.5 z-10 shadow-sm rounded-t-xl">
-                        Aguardando Pagamento
-                     </div>
-                  )}
-
-                  <div className={`flex justify-between items-start mb-1 ${order.status === 'PENDING' ? 'mt-3' : ''}`}>
-                     <span className="font-black text-slate-800 text-base">#{order.shortId}</span>
-                     <button onClick={(e) => { e.stopPropagation(); triggerManualPrint(order); }} className="text-slate-400 hover:text-blue-500 text-lg cursor-pointer">🖨️</button>
-                  </div>
-                  <p className="text-xs font-bold text-slate-700 mb-2">Cliente: {extractName(order)}</p>
-                  
-                  {/* ITENS DO PEDIDO AGENDADO */}
-                  <div className="my-2 space-y-2 bg-white p-2 rounded-lg border border-slate-100 shadow-inner">
-                    {order.items.map(i => (
-                      <div key={i.id} className="border-b border-slate-50 last:border-0 pb-1 last:pb-0">
-                        <FormattedItemName item={i} baseClassName="text-xs font-bold text-slate-800" />
-                        <ItemExtras item={i} />
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {order.status === 'PENDING' && (
-                    <button onClick={(e) => { e.stopPropagation(); updateOrderStatus(order.id, 'PREPARING'); }} className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg text-xs font-black cursor-pointer shadow-sm">
-                      💰 Confirmar Pagamento
-                    </button>
-                  )}
-                  {order.status === 'PREPARING' && (
-                    <button onClick={(e) => { e.stopPropagation(); updateOrderStatus(order.id, 'READY'); }} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-xs font-black cursor-pointer shadow-sm mt-1">
-                      ✅ Marcar Pronto
-                    </button>
-                  )}
-
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
+        {/* COLUNA 3: EM PREPARO (A COLUNA PRINCIPAL DA COZINHA) */}
         <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-shrink-0 max-h-[85vh] ${mode === 'DELIVERY' ? 'w-80' : 'w-[400px]'}`}>
           <div className="p-3 bg-amber-50 border-b border-amber-100 rounded-t-2xl flex justify-between items-center shrink-0">
             <h3 className="font-black text-amber-700 text-xs uppercase tracking-widest">🔥 Em Preparo</h3>
@@ -463,7 +498,6 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   </div>
                   <p className="text-xs font-bold text-slate-700 mb-2">Cliente: {extractName(order)}</p>
                   
-                  {/* ITENS DELIVERY EM PREPARO */}
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-2 mb-3 shadow-inner">
                     {order.items.map(i => (
                       <div key={i.id} className="border-b border-slate-100 last:border-0 pb-1 last:pb-0">
@@ -502,7 +536,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
               <div key={order.id} className="bg-slate-50 border-2 border-pink-200 p-4 rounded-xl shadow-xs hover:border-pink-400 transition-colors">
                 <div className="flex justify-between items-center mb-1">
                   <span className="font-black text-slate-900 text-sm">💻 Totem #{order.shortId}</span>
-                  <span className="bg-pink-100 text-pink-700 text-[10px] font-black px-2 py-0.5 rounded">Totem</span>
+                  <span className="bg-pink-100 text-pink-700 text-[10px] font-black px-2 py-0.5 rounded">Pago & Liberado</span>
                 </div>
                 <p className="text-xs font-bold text-slate-700 mb-2">{extractName(order)}</p>
                 
@@ -523,6 +557,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
           </div>
         </div>
 
+        {/* COLUNA 4: PRONTOS / EXPEDIÇÃO */}
         <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-shrink-0 max-h-[85vh] ${mode === 'DELIVERY' ? 'w-80' : 'w-[400px]'}`}>
           <div className="p-3 bg-emerald-50 border-b border-emerald-100 rounded-t-2xl flex justify-between items-center shrink-0">
             <h3 className="font-black text-emerald-700 text-xs uppercase tracking-widest">
@@ -542,7 +577,6 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                 </div>
                 <p className="text-xs font-bold text-slate-700 mt-1">Cliente: {extractName(order)}</p>
 
-                {/* ITENS AGUARDANDO ROTA (EXPEDIÇÃO) */}
                 <div className="bg-white/70 p-2.5 rounded-lg border border-emerald-100 space-y-2 mb-2 shadow-inner">
                   {order.items.map(i => (
                     <div key={i.id} className="border-b border-emerald-50 last:border-0 pb-1 last:pb-0">
@@ -581,6 +615,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
           </div>
         </div>
 
+        {/* COLUNA 5: EM ROTA (SÓ EXPEDIÇÃO) */}
         {mode === 'DELIVERY' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-shrink-0 w-80 max-h-[85vh]">
             <div className="p-3 bg-blue-50 border-b border-blue-100 rounded-t-2xl flex justify-between items-center shrink-0">
@@ -596,7 +631,6 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                   </div>
                   <p className="text-xs font-bold text-slate-700 mb-1">Cliente: {extractName(order)}</p>
 
-                  {/* ITENS EM ROTA */}
                   <div className="bg-white/70 p-2.5 rounded-lg border border-blue-100 space-y-2 mb-1 shadow-inner">
                     {order.items.map(i => (
                       <div key={i.id} className="border-b border-blue-50 last:border-0 pb-1 last:pb-0">
@@ -622,6 +656,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
           </div>
         )}
 
+        {/* COLUNA 6: CONCLUÍDOS */}
         <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-shrink-0 max-h-[85vh] ${mode === 'DELIVERY' ? 'w-80' : 'w-[300px]'}`}>
           <div className="p-3 bg-slate-100 border-b border-slate-200 rounded-t-2xl flex justify-between items-center shrink-0">
             <h3 className="font-black text-slate-700 text-xs uppercase tracking-widest">Concluídos (Turno)</h3>
@@ -638,7 +673,6 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                 </div>
                 <p className="text-[10px] text-slate-500 mt-0.5 mb-2">{extractName(order)}</p>
                 
-                {/* RESUMO DOS ITENS ENTREGUES */}
                 <div className="space-y-0.5 pl-1 border-l-2 border-slate-200">
                   {order.items.map(i => (
                     <FormattedItemName key={i.id} item={i} baseClassName="text-[9px] text-slate-500 font-bold" />
