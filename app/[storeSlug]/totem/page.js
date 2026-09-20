@@ -56,27 +56,27 @@ export default function TotemModerno() {
       touchToStart: "Toque para Iniciar", selectLanguage: "Selecione seu idioma", cancelOrder: "Cancelar Pedido",
       emptyCart: "Seu pedido está vazio. Toque nos itens para adicionar.", totalToPay: "Total a Pagar",
       checkout: "FINALIZAR PEDIDO", selectCategory: "Selecione uma categoria",
-      namePrompt: "Como quer ser chamado?", payMethodPrompt: "Retire a sua senha e", payNow: "Emitir Senha do Pedido",
-      payMachine: "Máquina de Cartão", payPix: "Pix", payCash: "Pague no Caixa Principal", insertingOrder: "Enviando para o caixa...",
-      orderSuccessTitle: "Pedido Confirmado!", orderSuccessSub: "Vá até o Caixa para efetuar o pagamento.", passwordIs: "Sua Senha:",
+      namePrompt: "Como quer ser chamado?", payMethodPrompt: "Como você prefere pagar?", payNow: "Confirmar Pedido",
+      payMachine: "Máquina de Cartão (Aqui no Totem)", payPix: "Pix", payCash: "Pagar no Caixa Principal", insertingOrder: "Enviando...",
+      orderSuccessTitle: "Pedido Confirmado!", orderSuccessSub: "Aguarde o seu nome ou número no painel.", passwordIs: "Sua Senha:",
       buildPizza: "Montar Pizza", howManyFlavors: "Quantos sabores?", chooseFlavors: "Escolha suas metades", confirmPizza: "Confirmar Pizza"
     },
     en: {
       touchToStart: "Touch to Start", selectLanguage: "Select your language", cancelOrder: "Cancel Order",
       emptyCart: "Your order is empty. Tap items to add.", totalToPay: "Total to Pay",
       checkout: "CHECKOUT", selectCategory: "Select a category",
-      namePrompt: "What's your name?", payMethodPrompt: "Take your ticket and", payNow: "Print Order Ticket",
-      payMachine: "Credit/Debit Card", payPix: "Pix", payCash: "Pay at the Counter", insertingOrder: "Sending to cashier...",
-      orderSuccessTitle: "Order Confirmed!", orderSuccessSub: "Please proceed to the counter to pay.", passwordIs: "Your Password:",
+      namePrompt: "What's your name?", payMethodPrompt: "How would you like to pay?", payNow: "Confirm Order",
+      payMachine: "Card Terminal", payPix: "Pix", payCash: "Pay at the Counter", insertingOrder: "Sending...",
+      orderSuccessTitle: "Order Confirmed!", orderSuccessSub: "Wait for your name or number on the screen.", passwordIs: "Your Password:",
       buildPizza: "Build Pizza", howManyFlavors: "How many flavors?", chooseFlavors: "Choose your flavors", confirmPizza: "Confirm Pizza"
     },
     es: {
       touchToStart: "Toca para Empezar", selectLanguage: "Selecciona tu idioma", cancelOrder: "Cancelar Pedido",
       emptyCart: "Tu pedido está vacío. Toca los artículos para añadir.", totalToPay: "Total a Pagar",
       checkout: "FINALIZAR PEDIDO", selectCategory: "Selecciona una categoría",
-      namePrompt: "¿Cómo te llamas?", payMethodPrompt: "Tome su contraseña y", payNow: "Emitir Contraseña",
-      payMachine: "Tarjeta (Débito/Crédito)", payPix: "Pix", payCash: "Pagar en la Caja", insertingOrder: "Enviando a la caja...",
-      orderSuccessTitle: "¡Pedido Confirmado!", orderSuccessSub: "Vaya a la caja para pagar.", passwordIs: "Tu Contraseña:",
+      namePrompt: "¿Cómo te llamas?", payMethodPrompt: "¿Cómo prefieres pagar?", payNow: "Confirmar Pedido",
+      payMachine: "Tarjeta en el Totem", payPix: "Pix", payCash: "Pagar en la Caja", insertingOrder: "Enviando...",
+      orderSuccessTitle: "¡Pedido Confirmado!", orderSuccessSub: "Espera tu nombre o número en la pantalla.", passwordIs: "Tu Contraseña:",
       buildPizza: "Armar Pizza", howManyFlavors: "¿Cuántos sabores?", chooseFlavors: "Elige tus sabores", confirmPizza: "Confirmar Pizza"
     }
   };
@@ -203,18 +203,18 @@ export default function TotemModerno() {
   };
 
   // ==========================================
-  // FINALIZAÇÃO DE PEDIDO (Ajustado para Pagar no Caixa)
+  // FINALIZAÇÃO DE PEDIDO (Agora com as 3 opções de Pagamento)
   // ==========================================
   const handleFinalizeOrder = async () => {
-    if (!customerName.trim()) return alert(t.namePrompt);
+    if (!customerName.trim() || !paymentMethod) return alert(t.namePrompt);
     setIsSubmitting(true);
     
     try {
       const payload = {
-        clientId: "TOTEM_MODE", // Identifica que veio do Totem
+        clientId: "TOTEM_MODE", 
         origin: "TOTEM",
         customerName: customerName,
-        paymentMethod: "PAGAR_NO_CAIXA", // 🔥 ROTA CRÍTICA PARA O PDV PEGAR
+        paymentMethod: paymentMethod, // Usa a opção que o cliente clicou (CREDIT_CARD, PIX, PAGAR_NO_CAIXA)
         total: totalCart,
         items: cart.map(item => ({ 
           productId: item.productId || item.id, 
@@ -275,12 +275,17 @@ export default function TotemModerno() {
   // TELA DE SUCESSO
   // ==========================================
   if (orderSuccessData) {
+    // Se o cliente escolheu Pagar no Caixa, a mensagem de sucesso orienta ele a ir ao Caixa
+    const orientacao = orderSuccessData.paymentMethod === 'PAGAR_NO_CAIXA' 
+       ? (lang === 'pt' ? 'Vá até o Caixa para efetuar o pagamento.' : lang === 'en' ? 'Please proceed to the counter to pay.' : 'Vaya a la caja para pagar.')
+       : t.orderSuccessSub;
+
     return (
       <div className="relative w-screen h-screen flex flex-col items-center justify-center bg-emerald-600 animate-fade-in-up">
         <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center max-w-2xl w-[90%]">
           <span className="text-7xl block mb-6 animate-bounce">✅</span>
           <h1 className="text-4xl font-black text-slate-900 mb-2">{t.orderSuccessTitle}</h1>
-          <p className="text-xl text-slate-500 font-bold mb-8">{t.orderSuccessSub}</p>
+          <p className="text-xl text-amber-600 font-black mb-8">{orientacao}</p>
           
           <div className="bg-slate-100 p-8 rounded-3xl border-2 border-slate-200 mb-8 inline-block w-full">
             <p className="text-lg text-slate-500 font-bold uppercase tracking-widest">{t.passwordIs}</p>
@@ -452,37 +457,63 @@ export default function TotemModerno() {
         </div>
       )}
 
-      {/* 🎯 MODAL DE CHECKOUT (NOME E PAGAMENTO AUTOMÁTICO) */}
+      {/* 🎯 MODAL DE CHECKOUT (NOME E PAGAMENTO) */}
       {isCheckoutOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fade-in-up">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 md:p-12 w-full max-w-3xl flex flex-col text-center items-center">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 md:p-12 w-full max-w-4xl flex flex-col">
             
-            <div className="w-full flex justify-between items-center mb-6">
-              <h2 className="text-3xl font-black text-slate-800">Seu Pedido</h2>
+            <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-4">
+              <h2 className="text-3xl font-black text-slate-800">{t.checkout}</h2>
               <button onClick={() => setIsCheckoutOpen(false)} className="bg-slate-100 text-slate-500 w-12 h-12 rounded-full font-black text-xl hover:bg-slate-200">X</button>
             </div>
 
-            <div className="w-full max-w-md">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+              
+              {/* Lado Esquerdo: Nome */}
+              <div>
                 <label className="text-sm font-black text-slate-500 uppercase tracking-widest mb-3 block">{t.namePrompt}</label>
                 <input 
                   type="text" 
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
                   placeholder="Ex: João Silva"
-                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl p-6 text-center text-3xl font-black text-slate-800 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors mb-8"
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl p-6 text-2xl font-bold text-slate-800 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors"
                 />
-            </div>
+              </div>
 
-            <div className="bg-emerald-50 border-2 border-emerald-500 w-full max-w-md rounded-3xl p-8 shadow-inner mb-8">
-               <span className="text-6xl mb-4 block">💵</span>
-               <h3 className="text-xl font-black text-slate-800 mb-2">{t.payMethodPrompt}</h3>
-               <h2 className="text-3xl font-black text-emerald-600">{t.payCash}</h2>
+              {/* Lado Direito: Seleção de Pagamento */}
+              <div>
+                <label className="text-sm font-black text-slate-500 uppercase tracking-widest mb-3 block">{t.payMethodPrompt}</label>
+                <div className="flex flex-col gap-3">
+                  <button 
+                    onClick={() => setPaymentMethod('CREDIT_CARD')} 
+                    className={`p-5 rounded-2xl border-2 font-black text-left transition-all ${paymentMethod === 'CREDIT_CARD' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-amber-300'}`}
+                  >
+                    💳 {t.payMachine}
+                  </button>
+                  
+                  <button 
+                    onClick={() => setPaymentMethod('PIX')} 
+                    className={`p-5 rounded-2xl border-2 font-black text-left transition-all ${paymentMethod === 'PIX' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-amber-300'}`}
+                  >
+                    💠 {t.payPix}
+                  </button>
+                  
+                  <button 
+                    onClick={() => setPaymentMethod('PAGAR_NO_CAIXA')} 
+                    className={`p-5 rounded-2xl border-2 font-black text-left transition-all ${paymentMethod === 'PAGAR_NO_CAIXA' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-emerald-300'}`}
+                  >
+                    💵 {t.payCash}
+                  </button>
+                </div>
+              </div>
+
             </div>
 
             <button 
               onClick={handleFinalizeOrder} 
-              disabled={isSubmitting || !customerName.trim()}
-              className="w-full max-w-md bg-emerald-500 disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-emerald-600 text-white py-6 rounded-2xl font-black text-2xl shadow-xl active:scale-95 transition-all"
+              disabled={isSubmitting || !customerName.trim() || !paymentMethod}
+              className="w-full mt-10 bg-emerald-500 disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-emerald-600 text-white py-6 rounded-2xl font-black text-2xl shadow-xl active:scale-95 transition-all"
             >
               {isSubmitting ? t.insertingOrder : t.payNow}
             </button>
