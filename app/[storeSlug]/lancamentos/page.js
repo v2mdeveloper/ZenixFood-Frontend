@@ -568,7 +568,7 @@ export default function LancamentosPage() {
             </div>
             <nav className="p-2 md:p-4 flex flex-row md:flex-col gap-2 overflow-x-auto hide-scrollbar w-full justify-around md:justify-start items-center md:items-stretch">
                <button onClick={() => { setActiveMenu('mesas'); setSelectedTab(null); }} className={`flex flex-col md:flex-row items-center gap-1 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl font-black text-[10px] md:text-sm transition-all cursor-pointer ${activeMenu === 'mesas' ? 'bg-amber-500 text-slate-950 shadow-md' : textMenuUnselected}`}>
-                  <span className="text-xl md:text-lg">🪑</span> <span className="hidden sm:block md:inline">Mesas</span>
+                  <span className="text-xl md:text-lg">🪑</span> <span className="hidden sm:block md:inline">Mesas e Comandas</span>
                </button>
                <button onClick={() => { setActiveMenu('aberturas'); setSelectedTab(null); }} className={`flex flex-col md:flex-row items-center gap-1 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl font-black text-[10px] md:text-sm transition-all cursor-pointer ${activeMenu === 'aberturas' ? 'bg-amber-500 text-slate-950 shadow-md' : textMenuUnselected}`}>
                   <span className="text-xl md:text-lg">➕</span> <span className="hidden sm:block md:inline">Abertura</span>
