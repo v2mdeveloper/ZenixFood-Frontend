@@ -696,6 +696,9 @@ export default function LancamentosPage() {
                <button onClick={() => { setActiveMenu('transferencias'); setSelectedTab(null); }} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-black text-sm transition-all whitespace-nowrap cursor-pointer ${activeMenu === 'transferencias' ? 'bg-amber-500 text-slate-950 shadow-md' : textMenuUnselected}`}>
                   <span className="text-lg">🔄</span> Transferências
                </button>
+               <button onClick={() => router.push(`/${storeSlug}/recepcao`)} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-black text-sm transition-all whitespace-nowrap cursor-pointer ${textMenuUnselected}`}>
+                  <span className="text-lg">🎟️</span> Recepção / Porta
+               </button>
             </nav>
          </div>
          <div className={`p-4 border-t ${borderSidebar} flex flex-row md:flex-col gap-2 overflow-x-auto hide-scrollbar`}>
