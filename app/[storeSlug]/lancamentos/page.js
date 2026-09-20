@@ -18,7 +18,7 @@ export default function LancamentosPage() {
   const [loadingLogin, setLoadingLogin] = useState(false);
 
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const [activeMenu, setActiveMenu] = useState('mesas');
+  const [activeMenu, setActiveMenu] = useState('mesas'); // mesas, aberturas, transferencias, caixa
 
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
@@ -72,6 +72,17 @@ export default function LancamentosPage() {
   const [pizzaFlavorCount, setPizzaFlavorCount] = useState(1);
   const [pizzaSelectedFlavors, setPizzaSelectedFlavors] = useState([]);
 
+  // 💰 ESTADOS DO CAIXA AMBULANTE E PAGAMENTOS
+  const [meuCaixa, setMeuCaixa] = useState(null);
+  const [caixaLoading, setCaixaLoading] = useState(false);
+  const [openingBalance, setOpeningBalance] = useState('');
+  const [showCloseCaixaModal, setShowCloseCaixaModal] = useState(false);
+  const [closingForm, setClosingForm] = useState({ balance: '', details: '' });
+
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [pagamentos, setPagamentos] = useState([]);
+  const [pagamentoAtual, setPagamentoAtual] = useState({ metodo: 'PIX', valor: '' });
+
   // Identifica e valida a loja pelo slug da URL
   useEffect(() => {
     if (!storeSlug) return;
@@ -123,13 +134,13 @@ export default function LancamentosPage() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated && storeStatus === 'FOUND') {
-      fetchTabs(); fetchMenu(); fetchUpsells(); fetchPeople(); 
-      const interval = setInterval(fetchTabs, 5000);
+    if (isAuthenticated && storeStatus === 'FOUND' && employeeUser) {
+      fetchTabs(); fetchMenu(); fetchUpsells(); fetchPeople(); fetchMeuCaixa();
+      const interval = setInterval(() => { fetchTabs(); fetchMeuCaixa(); }, 5000);
       const clock = setInterval(() => setCurrentTime(Date.now()), 1000);
       return () => { clearInterval(interval); clearInterval(clock); };
     }
-  }, [isAuthenticated, storeStatus]);
+  }, [isAuthenticated, storeStatus, employeeUser]);
 
   useEffect(() => {
     if (!tabs.length || !employeeUser) return;
@@ -227,6 +238,71 @@ export default function LancamentosPage() {
   };
 
   const fetchUpsells = async () => { try { const res = await fetchWithStore(`${API_URL}/api/upsells`); if (res.ok) setUpsells(await res.json()); } catch (e) {} };
+
+  // 💰 LÓGICA DO CAIXA AMBULANTE (SMART POS)
+  const fetchMeuCaixa = async () => {
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/mobile-pos/meu-caixa`, { headers: { 'x-employee-name': employeeUser.name } });
+      if (res.ok) { const data = await res.json(); setMeuCaixa(data.caixa); }
+    } catch (e) {}
+  };
+
+  const handleAbrirCaixa = async (e) => {
+    e.preventDefault(); setCaixaLoading(true);
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/mobile-pos/abrir`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeName: employeeUser.name, openingBalance: Number(openingBalance || 0) })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) { setMeuCaixa(data.caixa); alert("Caixa aberto com sucesso! Boas vendas!"); setOpeningBalance(''); } 
+      else alert(data.error || "Erro ao abrir o caixa.");
+    } catch (e) { alert("Erro de comunicação."); } finally { setCaixaLoading(false); }
+  };
+
+  const handleFecharCaixa = async (e) => {
+    e.preventDefault(); setCaixaLoading(true);
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/mobile-pos/fechar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-employee-name': employeeUser.name },
+        body: JSON.stringify({ caixaId: meuCaixa.id, closingBalance: Number(closingForm.balance), closingDetails: closingForm.details })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) { 
+        setMeuCaixa(null); setShowCloseCaixaModal(false); 
+        alert("Caixa encerrado com sucesso! Entregue o dinheiro físico ao gerente."); 
+        setActiveMenu('mesas'); 
+        setClosingForm({ balance: '', details: '' });
+      } else alert(data.error);
+    } catch (e) { alert("Erro de comunicação ao fechar caixa."); } finally { setCaixaLoading(false); }
+  };
+
+  const handleAdicionarPagamento = () => {
+    const val = Number(pagamentoAtual.valor);
+    if (val <= 0) return alert("Digite um valor válido.");
+    setPagamentos([...pagamentos, { metodo: pagamentoAtual.metodo, valor: val }]);
+    setPagamentoAtual({ metodo: 'PIX', valor: '' });
+  };
+
+  const handleRemoverPagamento = (index) => { setPagamentos(pagamentos.filter((_, i) => i !== index)); };
+
+  const handleConfirmarPagamento = async () => {
+    if (pagamentos.length === 0) return alert("Adicione pelo menos um método de pagamento.");
+    setCaixaLoading(true);
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/mobile-pos/pagar-conta`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-employee-name': employeeUser.name },
+        body: JSON.stringify({ tabId: selectedTab.id, pagamentos })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+         alert("Conta Paga e Encerrada com Sucesso!");
+         setShowCheckoutModal(false); setPagamentos([]); setSelectedTab(null);
+         fetchTabs(); fetchMeuCaixa();
+      } else alert(data.error);
+    } catch (e) { alert("Erro ao processar pagamento."); } finally { setCaixaLoading(false); }
+  };
+
 
   const handleCpfChange = (e) => {
     let val = e.target.value.replace(/\D/g, ''); if (val.length > 11) val = val.slice(0, 11); 
@@ -406,6 +482,12 @@ export default function LancamentosPage() {
     return currentCat ? currentCat.products || [] : [];
   };
 
+  // 🔥 CÁLCULOS DO CHECKOUT
+  const totalDevido = selectedTab ? calculateTotal(selectedTab.items) : 0;
+  const totalPago = pagamentos.reduce((acc, p) => acc + p.valor, 0);
+  const valorRestante = Math.max(0, totalDevido - totalPago);
+  const troco = Math.max(0, totalPago - totalDevido);
+
   if (storeStatus === 'LOADING') return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500 font-black text-xl animate-pulse">Carregando painel de salão...</div>;
   if (storeStatus === 'NOT_FOUND') return <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6"><span className="text-6xl mb-4">🚫</span><h1 className="text-3xl font-black text-white mb-2">Acesso Negado</h1></div>;
   if (!isAuthenticated) return (
@@ -452,7 +534,6 @@ export default function LancamentosPage() {
         ))}
       </div>
 
-      {/* SIDEBAR RESPONSIVA - Vira barra inferior no mobile */}
       <aside className={`${bgSidebar} border-r ${borderSidebar} w-full md:w-64 flex-shrink-0 flex flex-row md:flex-col justify-between transition-colors z-40 fixed md:sticky bottom-0 md:top-0 h-[80px] md:h-screen shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] md:shadow-none`}>
          <div className="flex flex-row md:flex-col w-full h-full">
             <div className={`hidden md:flex p-6 border-b ${borderSidebar} items-center gap-3`}>
@@ -473,7 +554,11 @@ export default function LancamentosPage() {
                   <span className="text-xl md:text-lg">🔄</span> <span className="hidden sm:block md:inline">Transferir</span>
                </button>
                
-               {/* 🎟️ BOTÃO DA RECEPÇÃO RESPONSIVO */}
+               {/* 💰 NOVO BOTÃO DO CAIXA AMBULANTE */}
+               <button onClick={() => { setActiveMenu('caixa'); setSelectedTab(null); }} className={`flex flex-col md:flex-row items-center gap-1 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl font-black text-[10px] md:text-sm transition-all cursor-pointer ${activeMenu === 'caixa' ? 'bg-emerald-500 text-slate-950 shadow-md' : textMenuUnselected}`}>
+                  <span className="text-xl md:text-lg">💰</span> <span className="hidden sm:block md:inline">Meu Caixa</span>
+               </button>
+
                <button onClick={() => router.push(`/${storeSlug}/recepcao`)} className={`flex flex-col md:flex-row items-center gap-1 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl font-black text-[10px] md:text-sm transition-all cursor-pointer ${textMenuUnselected}`}>
                   <span className="text-xl md:text-lg">🎟️</span> <span className="hidden sm:block md:inline">Porta</span>
                </button>
@@ -488,46 +573,95 @@ export default function LancamentosPage() {
 
       <main className="flex-1 h-[calc(100vh-80px)] md:h-screen pb-[100px] md:pb-0 overflow-y-auto hide-scrollbar relative">
         
+        {/* ========================================================================= */}
+        {/* 💰 ABA: MEU CAIXA (SMART POS) */}
+        {/* ========================================================================= */}
+        {activeMenu === 'caixa' && (
+           <div className="p-4 md:p-10 max-w-2xl mx-auto animate-fade-in-up md:mt-6">
+              <div className={`${bgCard} border p-6 md:p-8 rounded-[2.5rem] shadow-xl relative overflow-hidden`}>
+                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-emerald-600"></div>
+                 
+                 <div className="text-center mb-8">
+                    <span className="text-5xl mb-4 inline-block">💰</span>
+                    <h2 className="text-2xl font-black">Meu Caixa (Smart POS)</h2>
+                    <p className={`text-xs ${textMuted} mt-2 font-medium`}>Gerencie seus recebimentos diretamente na mesa.</p>
+                 </div>
+
+                 {!meuCaixa ? (
+                    <form onSubmit={handleAbrirCaixa} className="space-y-6">
+                       <div className={`p-6 border rounded-2xl ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                          <h3 className="text-sm font-black uppercase tracking-widest mb-4 flex items-center justify-center gap-2"><span>🔓</span> Abrir Novo Caixa</h3>
+                          <label className={`text-xs font-bold ${textMuted} uppercase block mb-2`}>Fundo de Troco (R$)</label>
+                          <input type="number" step="0.01" min="0" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} placeholder="Ex: 50.00" className={`w-full border rounded-xl p-4 text-center text-xl font-black focus:outline-none focus:border-emerald-500 ${bgInput}`} />
+                       </div>
+                       <button type="submit" disabled={caixaLoading} className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-black py-4 rounded-2xl shadow-lg cursor-pointer transition-colors text-lg">
+                          {caixaLoading ? 'Abrindo...' : 'Abrir Meu Caixa Agora'}
+                       </button>
+                    </form>
+                 ) : (
+                    <div className="space-y-6">
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'}`}>
+                             <p className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-emerald-500' : 'text-emerald-700'}`}>Fundo de Troco</p>
+                             <p className="text-2xl font-black text-emerald-600 mt-1">R$ {Number(meuCaixa.openingBalance).toFixed(2)}</p>
+                          </div>
+                          <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'}`}>
+                             <p className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-blue-500' : 'text-blue-700'}`}>Total Recebido</p>
+                             <p className="text-2xl font-black text-blue-600 mt-1">R$ {meuCaixa.movements?.filter(m => m.type === 'IN').reduce((acc, m) => acc + m.amount, 0).toFixed(2)}</p>
+                          </div>
+                       </div>
+
+                       <div className={`border p-4 rounded-2xl ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                          <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Histórico de Recebimentos</h4>
+                          <div className="max-h-40 overflow-y-auto space-y-2 hide-scrollbar">
+                             {meuCaixa.movements?.length === 0 ? <p className="text-xs text-slate-500 font-bold text-center py-4">Nenhuma cobrança realizada ainda.</p> : null}
+                             {meuCaixa.movements?.filter(m => m.type === 'IN').map(m => (
+                                <div key={m.id} className="flex justify-between items-center text-xs font-bold border-b border-slate-200/20 pb-2">
+                                   <span className="text-slate-500">{new Date(m.createdAt).toLocaleTimeString([],{hour:'2-digit', minute:'2-digit'})} - {m.reason}</span>
+                                   <span className="text-emerald-500">+ R$ {m.amount.toFixed(2)}</span>
+                                </div>
+                             ))}
+                          </div>
+                       </div>
+
+                       <button onClick={() => setShowCloseCaixaModal(true)} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-4 rounded-2xl shadow-lg cursor-pointer transition-colors flex items-center justify-center gap-2">
+                          🔒 Encerrar Turno (Fechar Caixa)
+                       </button>
+                    </div>
+                 )}
+              </div>
+           </div>
+        )}
+
+        {/* ========================================================================= */}
         {activeMenu === 'aberturas' && !selectedTab && (
            <div className="p-4 md:p-10 max-w-xl mx-auto animate-fade-in-up md:mt-10">
               <div className={`${bgCard} border p-6 md:p-8 rounded-[2.5rem] shadow-xl relative overflow-visible`}>
                  <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
-                 <div className="text-center mb-8">
-                    <span className="text-5xl mb-4 inline-block">📝</span>
-                    <h2 className="text-2xl font-black">Abrir Atendimento</h2>
-                 </div>
-                 
+                 <div className="text-center mb-8"><span className="text-5xl mb-4 inline-block">📝</span><h2 className="text-2xl font-black">Abrir Atendimento</h2></div>
                  <form onSubmit={handleOpenTab} className="space-y-5">
                     <div>
                       <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Número da Mesa / Comanda</label>
                       <input type="number" required min="1" value={openForm.number} onChange={e => setOpenForm({...openForm, number: e.target.value})} className={`w-full border rounded-2xl p-4 text-3xl text-center font-black focus:outline-none focus:border-emerald-500 ${bgInput}`} placeholder="Nº..." />
                     </div>
-
                     {numeroDigitadoNum >= 1000 && (
                       <div className={`border p-5 rounded-2xl space-y-4 animate-fade-in-up ${isDarkMode ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-200'}`}>
                         <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest text-center mb-1">Dados do Titular (Obrigatório para Comandas)</p>
-                        <div>
-                           <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-1`}>CPF</label>
-                           <input type="text" value={openForm.customerCpf} onChange={handleCpfChange} maxLength={14} className={`w-full border rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-amber-500 ${bgInput}`} placeholder="000.000.000-00 (Opcional)" />
-                        </div>
+                        <div><label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-1`}>CPF</label><input type="text" value={openForm.customerCpf} onChange={handleCpfChange} maxLength={14} className={`w-full border rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-amber-500 ${bgInput}`} placeholder="000.000.000-00 (Opcional)" /></div>
                         <div className="relative">
                           <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-1`}>Nome Completo</label>
                           <input type="text" value={openForm.customerName} onChange={handleNameChange} onFocus={() => { if(openForm.customerName.length >= 2) setShowSuggestions(true); }} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} className={`w-full border rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-amber-500 ${bgInput}`} placeholder="Nome Completo do Cliente" />
                           {showSuggestions && suggestions.length > 0 && (
                             <div className={`absolute z-50 w-full mt-1 border rounded-xl shadow-2xl max-h-48 overflow-y-auto ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                               {suggestions.map((s, i) => (
-                                <div key={i} onMouseDown={(e) => { e.preventDefault(); selectPerson(s); }} className={`p-3 border-b cursor-pointer flex justify-between items-center transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-700' : 'border-slate-100 hover:bg-slate-50'}`}>
-                                   <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{s.name}</span>
-                                </div>
+                                <div key={i} onMouseDown={(e) => { e.preventDefault(); selectPerson(s); }} className={`p-3 border-b cursor-pointer flex justify-between items-center transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-700' : 'border-slate-100 hover:bg-slate-50'}`}><span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{s.name}</span></div>
                               ))}
                             </div>
                           )}
                         </div>
                       </div>
                     )}
-                    <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg mt-8 cursor-pointer transition-colors text-lg">
-                        Abrir Atendimento Agora
-                    </button>
+                    <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg mt-8 cursor-pointer transition-colors text-lg">Abrir Atendimento Agora</button>
                  </form>
               </div>
            </div>
@@ -537,37 +671,21 @@ export default function LancamentosPage() {
            <div className="p-4 md:p-10 max-w-4xl mx-auto animate-fade-in-up">
               <div className={`${bgCard} border p-6 md:p-8 rounded-[2.5rem] shadow-xl relative`}>
                  <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-purple-500 to-pink-500"></div>
-                 <div className="mb-8 text-center md:text-left">
-                    <span className="text-4xl mb-4 inline-block">🔄</span>
-                    <h2 className="text-2xl font-black">Central de Transferências</h2>
-                 </div>
+                 <div className="mb-8 text-center md:text-left"><span className="text-4xl mb-4 inline-block">🔄</span><h2 className="text-2xl font-black">Central de Transferências</h2></div>
                  <form onSubmit={handleTransferSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-start">
                     <div className={`${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'} border p-5 rounded-2xl`}>
                        <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-3`}>1. Atendimento Origem</label>
-                       <select value={transferSourceId} onChange={e => { setTransferSourceId(e.target.value); setTransferItemId(''); }} className={`w-full border rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-purple-500 ${bgInput} cursor-pointer`}>
-                          <option value="">Selecione...</option>
-                          {tabs.map(t => <option key={t.id} value={t.id}>{t.type === 'TABLE' ? `Mesa ${t.number}` : `Comanda #${t.number}`} {t.customerName ? `(${t.customerName})` : ''}</option>)}
-                       </select>
+                       <select value={transferSourceId} onChange={e => { setTransferSourceId(e.target.value); setTransferItemId(''); }} className={`w-full border rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-purple-500 ${bgInput} cursor-pointer`}><option value="">Selecione...</option>{tabs.map(t => <option key={t.id} value={t.id}>{t.type === 'TABLE' ? `Mesa ${t.number}` : `Comanda #${t.number}`} {t.customerName ? `(${t.customerName})` : ''}</option>)}</select>
                     </div>
                     <div className={`${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'} border p-5 rounded-2xl`}>
                        <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-3`}>2. Item a Transferir</label>
-                       <select value={transferItemId} onChange={e => setTransferItemId(e.target.value)} disabled={!transferSourceId || !transferSourceTabObj?.items?.length} className={`w-full border rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-purple-500 ${bgInput} cursor-pointer disabled:opacity-50`}>
-                          <option value="">Selecione o item...</option>
-                          {transferSourceTabObj?.items?.map(i => <option key={i.id} value={i.id}>{i.quantity}x {i.name}</option>)}
-                       </select>
+                       <select value={transferItemId} onChange={e => setTransferItemId(e.target.value)} disabled={!transferSourceId || !transferSourceTabObj?.items?.length} className={`w-full border rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-purple-500 ${bgInput} cursor-pointer disabled:opacity-50`}><option value="">Selecione o item...</option>{transferSourceTabObj?.items?.map(i => <option key={i.id} value={i.id}>{i.quantity}x {i.name}</option>)}</select>
                     </div>
                     <div className={`${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'} border p-5 rounded-2xl`}>
                        <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-3`}>3. Atendimento Destino</label>
-                       <select value={transferTargetId} onChange={e => setTransferTargetId(e.target.value)} disabled={!transferItemId} className={`w-full border rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-purple-500 ${bgInput} cursor-pointer disabled:opacity-50`}>
-                          <option value="">Para onde vai?</option>
-                          {tabs.filter(t => t.id !== transferSourceId).map(t => <option key={t.id} value={t.id}>{t.type === 'TABLE' ? `Mesa ${t.number}` : `Comanda #${t.number}`}</option>)}
-                       </select>
+                       <select value={transferTargetId} onChange={e => setTransferTargetId(e.target.value)} disabled={!transferItemId} className={`w-full border rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-purple-500 ${bgInput} cursor-pointer disabled:opacity-50`}><option value="">Para onde vai?</option>{tabs.filter(t => t.id !== transferSourceId).map(t => <option key={t.id} value={t.id}>{t.type === 'TABLE' ? `Mesa ${t.number}` : `Comanda #${t.number}`}</option>)}</select>
                     </div>
-                    <div className="md:col-span-3 pt-4 border-t border-slate-200/20">
-                       <button type="submit" disabled={!transferSourceId || !transferItemId || !transferTargetId} className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-black py-4 rounded-2xl shadow-lg cursor-pointer transition-colors text-lg flex items-center justify-center gap-2">
-                          Confirmar Transferência 🚀
-                       </button>
-                    </div>
+                    <div className="md:col-span-3 pt-4 border-t border-slate-200/20"><button type="submit" disabled={!transferSourceId || !transferItemId || !transferTargetId} className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-black py-4 rounded-2xl shadow-lg cursor-pointer transition-colors text-lg flex items-center justify-center gap-2">Confirmar Transferência 🚀</button></div>
                  </form>
               </div>
            </div>
@@ -575,7 +693,6 @@ export default function LancamentosPage() {
 
         {activeMenu === 'mesas' && !selectedTab && (
           <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-10 animate-fade-in-up">
-            
             <section>
               <div className="flex items-center justify-between mb-6">
                 <h3 className="font-black text-xl md:text-2xl flex items-center gap-3">🪑 Mesas Físicas</h3>
@@ -586,20 +703,12 @@ export default function LancamentosPage() {
                   {mesas.map(tab => {
                     const isOtherWaiter = tab.openedBy !== employeeUser?.name && tab.openedBy !== 'Admin';
                     const isEvento = tab.eventoId !== null && tab.eventoId !== undefined;
-
                     return (
                       <button key={tab.id} onClick={() => setSelectedTab(tab)} className={`${bgCard} border p-4 md:p-5 rounded-3xl flex flex-col items-center text-center transition-all hover:-translate-y-1 hover:border-blue-500 hover:shadow-xl cursor-pointer relative overflow-hidden group`}>
                         {isOtherWaiter && <span className="absolute top-3 right-3 w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" title="Sendo atendida por outro garçom"></span>}
-                        
                         <span className="text-3xl md:text-4xl mb-2 group-hover:scale-110 transition-transform">🪑</span>
                         <span className="font-black text-lg md:text-xl mb-1 leading-none">Mesa {tab.number}</span>
-                        
-                        {isEvento ? (
-                           <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded mb-3 uppercase tracking-widest">🎉 Evento</span>
-                        ) : (
-                           <span className={`text-[9px] ${textMuted} font-bold tracking-widest uppercase mb-3 truncate w-full`}>{tab.openedBy}</span>
-                        )}
-
+                        {isEvento ? (<span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded mb-3 uppercase tracking-widest">🎉 Evento</span>) : (<span className={`text-[9px] ${textMuted} font-bold tracking-widest uppercase mb-3 truncate w-full`}>{tab.openedBy}</span>)}
                         <span className="text-xs md:text-sm font-black text-blue-500 bg-blue-500/10 px-2 py-1.5 rounded-xl w-full">R$ {calculateTotal(tab.items).toFixed(2)}</span>
                       </button>
                     )
@@ -607,7 +716,6 @@ export default function LancamentosPage() {
                 </div>
               )}
             </section>
-
             <section>
               <div className="flex items-center justify-between mb-6">
                 <h3 className="font-black text-xl md:text-2xl flex items-center gap-3">💳 Comandas Individuais</h3>
@@ -620,20 +728,13 @@ export default function LancamentosPage() {
                     const isLinked = tab.linkedTable !== null;
                     const isEvento = tab.eventoId !== null && tab.eventoId !== undefined;
                     const cardStyle = isLinked ? (isDarkMode ? 'border-purple-500 bg-purple-500/10' : 'border-purple-400 bg-purple-50') : bgCard;
-
                     return (
                       <button key={tab.id} onClick={() => setSelectedTab(tab)} className={`${cardStyle} border p-4 md:p-5 rounded-3xl flex flex-col items-center text-center transition-all hover:-translate-y-1 hover:border-purple-400 hover:shadow-xl cursor-pointer relative overflow-hidden group`}>
                         {isOtherWaiter && <span className="absolute top-3 right-3 w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" title="Sendo atendida por outro garçom"></span>}
                         <span className="text-3xl md:text-4xl mb-2 group-hover:scale-110 transition-transform">💳</span>
                         <span className="font-black text-lg md:text-xl mb-1 leading-none">#{tab.number}</span>
                         {tab.customerName ? <span className={`text-[10px] md:text-[11px] font-bold ${isLinked ? 'text-purple-600' : 'text-amber-500'} truncate w-full mb-2`}>{tab.customerName.split(' ')[0]}</span> : <span className="mb-2 block"></span>}
-                        
-                        {isLinked ? (
-                           <span className="text-[9px] bg-purple-500 text-white px-2 py-0.5 rounded font-black w-full text-center mb-2 shadow-sm truncate">🔗 MESA {tab.linkedTable}</span>
-                        ) : isEvento ? (
-                           <span className="text-[9px] bg-emerald-500 text-white px-2 py-0.5 rounded font-black w-full text-center mb-2 shadow-sm truncate">👥 CONVIDADO</span>
-                        ) : null}
-
+                        {isLinked ? (<span className="text-[9px] bg-purple-500 text-white px-2 py-0.5 rounded font-black w-full text-center mb-2 shadow-sm truncate">🔗 MESA {tab.linkedTable}</span>) : isEvento ? (<span className="text-[9px] bg-emerald-500 text-white px-2 py-0.5 rounded font-black w-full text-center mb-2 shadow-sm truncate">👥 CONVIDADO</span>) : null}
                         <span className="text-xs md:text-sm font-black text-emerald-500 bg-emerald-500/10 px-2 py-1.5 rounded-xl w-full mt-auto">R$ {calculateTotal(tab.items).toFixed(2)}</span>
                       </button>
                     )
@@ -645,7 +746,7 @@ export default function LancamentosPage() {
         )}
 
         {/* ========================================================================= */}
-        {/* TELA DE LANÇAMENTO DA MESA/COMANDA ABERTA */}
+        {/* TELA DE LANÇAMENTO DA MESA E COBRANÇA */}
         {/* ========================================================================= */}
         {activeMenu === 'mesas' && selectedTab && (
           <div className="flex flex-col lg:flex-row gap-4 h-full animate-fade-in-up p-4">
@@ -653,7 +754,6 @@ export default function LancamentosPage() {
             <div className={`w-full lg:w-[400px] flex-shrink-0 flex flex-col gap-4 overflow-y-auto hide-scrollbar pb-10 lg:pb-0`}>
                <div className={`${bgCard} border p-5 rounded-3xl flex flex-col gap-3 shadow-sm relative overflow-hidden`}>
                   <div className={`absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r ${selectedTab.type === 'TABLE' ? 'from-blue-400 to-blue-600' : 'from-amber-400 to-amber-600'}`}></div>
-                  
                   <div className="flex justify-between items-start pt-1">
                      <div>
                        <span className={`text-[10px] font-black ${textMuted} uppercase tracking-widest mb-1 block`}>{selectedTab.type === 'TABLE' ? 'Mesa Salão' : 'Comanda Indiv.'}</span>
@@ -661,33 +761,39 @@ export default function LancamentosPage() {
                      </div>
                      <button onClick={() => { setSelectedTab(null); setCart([]); setSearchTerm(''); }} className="w-8 h-8 rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors cursor-pointer font-bold">✕</button>
                   </div>
-
                   {selectedTab.type === 'TAB' && (
                      <div className="flex items-center gap-2 mt-2">
                         {selectedTab.linkedTable ? (
-                          <>
-                            <span className="text-[10px] font-black bg-purple-500/10 text-purple-500 px-2 py-1 rounded">🔗 Mesa {selectedTab.linkedTable}</span>
-                            <button onClick={() => handleLinkTab(selectedTab.id, null)} className="text-[10px] font-black text-red-500 hover:underline cursor-pointer">Desvincular</button>
-                          </>
+                          <><span className="text-[10px] font-black bg-purple-500/10 text-purple-500 px-2 py-1 rounded">🔗 Mesa {selectedTab.linkedTable}</span><button onClick={() => handleLinkTab(selectedTab.id, null)} className="text-[10px] font-black text-red-500 hover:underline cursor-pointer">Desvincular</button></>
                         ) : (
                           <button onClick={() => { const m = prompt('Nº da Mesa para sentar:'); if(m) handleLinkTab(selectedTab.id, m); }} className="text-[10px] font-black bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-sm">🔗 Vincular à Mesa</button>
                         )}
                      </div>
                   )}
-
+                  
+                  {/* 🔥 ÁREA DE TOTAL E BOTÃO DE COBRANÇA */}
                   <div className="flex justify-between items-end mt-2 pt-3 border-t border-slate-200/20">
-                     <span className={`text-[10px] font-black ${textMuted} uppercase tracking-widest`}>Parcial Lançado</span>
-                     <span className="text-2xl font-black text-emerald-500">R$ {calculateTotal(selectedTab.items).toFixed(2)}</span>
+                     <div>
+                        <span className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-1`}>Total Acumulado</span>
+                        <span className="text-2xl font-black text-emerald-500">R$ {calculateTotal(selectedTab.items).toFixed(2)}</span>
+                     </div>
+                     {selectedTab.status === 'OPEN' && selectedTab.items?.length > 0 && (
+                        <button onClick={() => {
+                           if(!meuCaixa) { alert("Você precisa abrir o seu caixa (Menu 'Meu Caixa') para poder receber pagamentos."); return; }
+                           setShowCheckoutModal(true);
+                           setPagamentoAtual({ metodo: 'PIX', valor: calculateTotal(selectedTab.items) });
+                        }} className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-4 py-2 rounded-xl shadow-md cursor-pointer transition-transform active:scale-95 text-sm flex items-center gap-2">
+                           💳 Cobrar
+                        </button>
+                     )}
                   </div>
                </div>
 
                <div className={`${bgCard} border p-5 rounded-3xl flex flex-col gap-3 shadow-sm flex-1 min-h-[250px] overflow-y-auto hide-scrollbar`}>
                   <h3 className="font-black text-xs uppercase tracking-widest text-slate-500 sticky top-0 bg-inherit pb-2 z-10">Histórico de Lançamentos</h3>
-                  
                   {(!selectedTab.items || selectedTab.items.length === 0) ? (
                      <div className="flex-1 flex flex-col items-center justify-center opacity-50">
-                        <span className="text-4xl mb-2">🍽️</span>
-                        <p className="text-xs font-bold text-center">Nenhum item lançado ainda.</p>
+                        <span className="text-4xl mb-2">🍽️</span><p className="text-xs font-bold text-center">Nenhum item lançado ainda.</p>
                         <button onClick={() => handleCancelTab(selectedTab.id)} className="mt-4 bg-red-500/10 text-red-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer hover:bg-red-500/20 transition-colors">🗑️ Cancelar Abertura</button>
                      </div>
                   ) : (
@@ -695,29 +801,18 @@ export default function LancamentosPage() {
                         {selectedTab.items.map((item) => {
                            const ageSeconds = (currentTime - new Date(item.createdAt).getTime()) / 1000;
                            const canUndo = ageSeconds <= 30 && item.status === 'PREPARING';
-
                            return (
                               <div key={item.id} className={`p-3 rounded-xl border flex flex-col gap-2 relative overflow-hidden ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                                  <div className="flex justify-between items-start">
                                     <div className="flex-1 pr-2">
-                                       <p className={`text-[11px] font-bold leading-tight ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                                          <span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}
-                                       </p>
+                                       <p className={`text-[11px] font-bold leading-tight ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}><span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}</p>
                                        {item.flavors && <p className="text-[8px] text-amber-600 font-bold mt-0.5">{item.flavors.map(f => f.name).join(' + ')}</p>}
                                        {item.seatLabel && <span className="inline-block mt-1 bg-blue-500/10 text-blue-500 border border-blue-500/20 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">{item.seatLabel}</span>}
                                     </div>
                                     <div className="text-right flex flex-col items-end gap-1.5 shrink-0">
                                        <span className={`font-black text-[11px] mb-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>R$ {(item.price * item.quantity).toFixed(2)}</span>
-                                       {canUndo && (
-                                          <button onClick={() => handleUndoItem(item.id)} className="text-[8px] bg-red-500 text-white font-black px-2 py-0.5 rounded animate-pulse cursor-pointer shadow-sm">
-                                              Desfazer ({Math.max(0, 30 - Math.floor(ageSeconds))}s)
-                                          </button>
-                                       )}
-                                       {item.status === 'READY' && (
-                                          <button onClick={() => updateTabItemStatus(item.id, 'SERVED')} className="text-[9px] bg-emerald-500 text-white font-black px-2 py-1 rounded shadow-md cursor-pointer animate-bounce">
-                                              Retirar 🏃
-                                          </button>
-                                       )}
+                                       {canUndo && (<button onClick={() => handleUndoItem(item.id)} className="text-[8px] bg-red-500 text-white font-black px-2 py-0.5 rounded animate-pulse cursor-pointer shadow-sm">Desfazer ({Math.max(0, 30 - Math.floor(ageSeconds))}s)</button>)}
+                                       {item.status === 'READY' && (<button onClick={() => updateTabItemStatus(item.id, 'SERVED')} className="text-[9px] bg-emerald-500 text-white font-black px-2 py-1 rounded shadow-md cursor-pointer animate-bounce">Retirar 🏃</button>)}
                                     </div>
                                  </div>
                               </div>
@@ -733,12 +828,8 @@ export default function LancamentosPage() {
                      <div className="max-h-40 overflow-y-auto space-y-2 hide-scrollbar pr-1">
                         {cart.map((item, idx) => (
                            <div key={idx} className={`${bgCard} border p-2.5 rounded-xl flex justify-between items-center shadow-sm`}>
-                              <div className="flex-1 pr-2">
-                                 <p className={`text-[10px] font-bold truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}><span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}</p>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                 <button onClick={() => removeCartItem(idx)} className="text-red-500 bg-red-500/10 rounded w-5 h-5 flex items-center justify-center font-bold text-xs">✕</button>
-                              </div>
+                              <div className="flex-1 pr-2"><p className={`text-[10px] font-bold truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}><span className="text-amber-500 font-black mr-1">{item.quantity}x</span> {item.name}</p></div>
+                              <div className="flex items-center gap-2 shrink-0"><button onClick={() => removeCartItem(idx)} className="text-red-500 bg-red-500/10 rounded w-5 h-5 flex items-center justify-center font-bold text-xs">✕</button></div>
                            </div>
                         ))}
                      </div>
@@ -750,7 +841,6 @@ export default function LancamentosPage() {
             <div className={`${bgCard} border rounded-3xl flex-1 flex flex-col shadow-sm overflow-hidden p-2`}>
                <div className="p-3 md:p-4 border-b border-slate-200/20 shrink-0">
                   <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="🔍 Buscar lanche, bebida..." className={`w-full rounded-2xl py-3 px-4 text-sm font-bold focus:outline-none focus:border-amber-500 transition-colors mb-3 ${bgInput}`} />
-                  
                   <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
                      <button onClick={() => setActiveCategory(null)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shrink-0 transition-colors cursor-pointer ${!activeCategory ? 'bg-amber-500 text-slate-950 shadow-md' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500')}`}>Tudo</button>
                      {menu.map(cat => (
@@ -758,7 +848,6 @@ export default function LancamentosPage() {
                      ))}
                   </div>
                </div>
-
                <div className="flex-1 overflow-y-auto p-3 hide-scrollbar">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 md:gap-3">
                      {visibleProducts.map(prod => (
@@ -783,7 +872,7 @@ export default function LancamentosPage() {
       </main>
 
       {/* ========================================================================= */}
-      {/* 🔥 MODAIS RESTAURADOS (PRODUTO, PIZZA, DÍVIDAS, LIMITES, UPSELL E JUNÇÃO) */}
+      {/* 🔥 MODAIS RESTAURADOS (PRODUTO, PIZZA, CAIXA, CHECKOUT E TRANSFERÊNCIAS) */}
       {/* ========================================================================= */}
 
       {/* 🍔 MODAL DO PRODUTO SIMPLES */}
@@ -794,7 +883,6 @@ export default function LancamentosPage() {
                <div><h3 className="text-lg font-black leading-tight mb-1">{selectedProduct.name}</h3><p className="text-amber-500 font-black">R$ {Number(selectedProduct.price).toFixed(2)}</p></div>
                <button onClick={() => setSelectedProduct(null)} className="w-8 h-8 rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center font-bold cursor-pointer hover:bg-red-500 hover:text-white transition-colors">✕</button>
             </div>
-
             {selectedTab?.number <= 999 && (
               <div className="bg-blue-500/5 p-3 rounded-2xl border border-blue-500/20">
                 <label className="text-[10px] font-black text-blue-500 uppercase block mb-2">Posição na Mesa</label>
@@ -805,7 +893,6 @@ export default function LancamentosPage() {
                 </div>
               </div>
             )}
-
             <div className="flex gap-3">
                <div className="w-1/3">
                   <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Qtd</label>
@@ -820,7 +907,6 @@ export default function LancamentosPage() {
                   <input type="text" value={itemObservation} onChange={e => setItemObservation(e.target.value)} placeholder="Opcional..." className={`w-full h-10 rounded-xl px-3 text-xs font-bold focus:outline-none border ${isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-200 bg-slate-50 text-slate-900'}`} />
                </div>
             </div>
-
             <button onClick={confirmAddToCart} className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-4 rounded-xl shadow-md mt-2 flex justify-center items-center gap-2 cursor-pointer transition-all active:scale-95">
                Adicionar <span className="bg-slate-950/10 px-2 py-0.5 rounded text-[10px]">R$ {(Number(selectedProduct.price) * itemQuantity).toFixed(2)}</span>
             </button>
@@ -877,6 +963,96 @@ export default function LancamentosPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 💳 MODAL DE CHECKOUT (SMART POS) */}
+      {showCheckoutModal && (
+         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+            <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 md:p-8 w-full max-w-lg animate-fade-in-up`}>
+               <div className="flex justify-between items-center mb-6">
+                  <h2 className={`text-2xl font-black ${textMain}`}>Cobrar Conta</h2>
+                  <button onClick={() => { setShowCheckoutModal(false); setPagamentos([]); }} className={`w-8 h-8 rounded-full ${bgInput} font-black hover:text-red-500 transition-colors`}>✕</button>
+               </div>
+               
+               <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                     <p className={`text-[10px] font-black uppercase tracking-widest ${textMuted}`}>Total Devido</p>
+                     <p className="text-2xl font-black text-blue-500 mt-1">R$ {totalDevido.toFixed(2)}</p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                     <p className={`text-[10px] font-black uppercase tracking-widest ${textMuted}`}>Restante</p>
+                     <p className={`text-2xl font-black mt-1 ${valorRestante > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                        R$ {valorRestante.toFixed(2)}
+                     </p>
+                  </div>
+               </div>
+
+               <div className="space-y-4 mb-6">
+                  <h3 className={`text-sm font-black uppercase tracking-widest ${textMuted}`}>Adicionar Pagamento</h3>
+                  <div className="flex gap-2">
+                     <select value={pagamentoAtual.metodo} onChange={e => setPagamentoAtual({...pagamentoAtual, metodo: e.target.value})} className={`flex-1 border rounded-xl p-3 font-bold focus:outline-none focus:border-emerald-500 ${bgInput} cursor-pointer`}>
+                        <option value="PIX">Pix</option>
+                        <option value="CREDITO">Cartão de Crédito</option>
+                        <option value="DEBITO">Cartão de Débito</option>
+                        <option value="DINHEIRO">Dinheiro Vivo</option>
+                     </select>
+                     <input type="number" step="0.01" value={pagamentoAtual.valor} onChange={e => setPagamentoAtual({...pagamentoAtual, valor: e.target.value})} placeholder="Valor (R$)" className={`w-32 border rounded-xl p-3 font-black text-center focus:outline-none focus:border-emerald-500 ${bgInput}`} />
+                     <button onClick={handleAdicionarPagamento} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3 rounded-xl font-black transition-colors shadow-sm">+</button>
+                  </div>
+                  
+                  {pagamentos.length > 0 && (
+                     <div className={`mt-4 border rounded-xl p-4 space-y-2 max-h-32 overflow-y-auto ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        {pagamentos.map((pag, idx) => (
+                           <div key={idx} className="flex justify-between items-center text-sm font-bold border-b border-slate-200/20 last:border-0 pb-2 last:pb-0">
+                              <span className={textMain}>{pag.metodo}</span>
+                              <div className="flex items-center gap-3">
+                                 <span className="text-emerald-500">R$ {pag.valor.toFixed(2)}</span>
+                                 <button onClick={() => handleRemoverPagamento(idx)} className="text-red-500 font-black w-6 h-6 bg-red-500/10 rounded flex items-center justify-center">✕</button>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  )}
+               </div>
+
+               {troco > 0 && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl mb-6 text-center shadow-inner">
+                     <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Troco a Devolver</p>
+                     <p className="text-3xl font-black text-emerald-500">R$ {troco.toFixed(2)}</p>
+                  </div>
+               )}
+
+               <button onClick={handleConfirmarPagamento} disabled={totalPago < totalDevido || caixaLoading} className="w-full bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-400 hover:bg-emerald-600 text-white font-black text-xl py-4 rounded-2xl shadow-xl transition-all active:scale-95 flex justify-center items-center gap-2">
+                  {caixaLoading ? 'Processando...' : 'Finalizar Pagamento ✅'}
+               </button>
+            </div>
+         </div>
+      )}
+
+      {/* 🔒 MODAL: FECHAR CAIXA */}
+      {showCloseCaixaModal && meuCaixa && (
+         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+            <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 md:p-8 w-full max-w-md animate-fade-in-up text-center`}>
+               <span className="text-6xl mb-4 inline-block">🔒</span>
+               <h2 className={`text-2xl font-black mb-2 ${textMain}`}>Fechar Meu Caixa</h2>
+               <p className={`text-xs ${textMuted} mb-6`}>Conte as notas e comprovantes, e informe o valor final encontrado no seu caixa (incluindo o troco inicial de R$ {Number(meuCaixa.openingBalance).toFixed(2)}).</p>
+               
+               <form onSubmit={handleFecharCaixa} className="space-y-4 text-left">
+                  <div>
+                     <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Dinheiro Contado (R$)</label>
+                     <input type="number" required step="0.01" min="0" value={closingForm.balance} onChange={e => setClosingForm({...closingForm, balance: e.target.value})} className={`w-full border rounded-xl p-4 text-2xl font-black text-center focus:outline-none focus:border-red-500 ${bgInput}`} />
+                  </div>
+                  <div>
+                     <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Observações (Faltou ou sobrou dinheiro?)</label>
+                     <input type="text" value={closingForm.details} onChange={e => setClosingForm({...closingForm, details: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 ${bgInput}`} placeholder="Opcional..." />
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                     <button type="button" onClick={() => setShowCloseCaixaModal(false)} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-bold cursor-pointer transition-colors`}>Cancelar</button>
+                     <button type="submit" disabled={caixaLoading} className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black py-3 rounded-xl shadow-lg transition-all cursor-pointer">Confirmar Fecho</button>
+                  </div>
+               </form>
+            </div>
+         </div>
       )}
 
       {/* 💳 MODAL: DÍVIDA DO CLIENTE (GERENTE) */}
