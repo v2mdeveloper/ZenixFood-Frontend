@@ -20,19 +20,18 @@ export default function RecepcaoHostessPage() {
   const [eventos, setEventos] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
   
-  // NAVEGAÇÃO PRINCIPAL
-  const [activeTab, setActiveTab] = useState('HOJE'); // 'HOJE', 'CALENDARIO', 'HISTORICO'
+  const [activeTab, setActiveTab] = useState('HOJE'); 
   
-  // ESTADOS DO CALENDÁRIO
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
 
-  // MODAIS E INTERAÇÕES
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedEvento, setSelectedEvento] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   
+  const [viewingGuest, setViewingGuest] = useState(null); // 🔥 NOVO ESTADO: Ver Conta do Cliente
+
   const [novoEventoForm, setNovoEventoForm] = useState({ id: null, nome: '', tipo: 'MISTO', dataHoraInicio: '', dataHoraFim: '', qtdPessoas: 1, observacoes: '' });
   const [csvPreview, setCsvPreview] = useState([]);
   const [isImporting, setIsImporting] = useState(false);
@@ -97,7 +96,6 @@ export default function RecepcaoHostessPage() {
     } catch (e) { console.error(e); } finally { setLoadingData(false); }
   };
 
-  // 🔥 FORMATAR DATA PARA FUSO LOCAL (Corrige o problema do input datetime-local)
   const toLocalISOString = (dateObj) => {
     const tzOffset = (new Date()).getTimezoneOffset() * 60000;
     return (new Date(dateObj - tzOffset)).toISOString().slice(0, 16);
@@ -112,13 +110,10 @@ export default function RecepcaoHostessPage() {
   const openEditModal = (evento) => {
     setIsEditing(true);
     setNovoEventoForm({
-      id: evento.id,
-      nome: evento.nome,
-      tipo: evento.tipo,
+      id: evento.id, nome: evento.nome, tipo: evento.tipo,
       dataHoraInicio: toLocalISOString(new Date(evento.dataHoraInicio)),
       dataHoraFim: evento.dataHoraFim ? toLocalISOString(new Date(evento.dataHoraFim)) : '',
-      qtdPessoas: evento.qtdPessoas,
-      observacoes: evento.observacoes || ''
+      qtdPessoas: evento.qtdPessoas, observacoes: evento.observacoes || ''
     });
     setIsCreateModalOpen(true);
   };
@@ -129,16 +124,13 @@ export default function RecepcaoHostessPage() {
       const url = isEditing ? `${API_URL}/api/eventos/${novoEventoForm.id}` : `${API_URL}/api/eventos`;
       const method = isEditing ? 'PUT' : 'POST';
       const res = await fetchWithStore(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novoEventoForm) });
-      if (res.ok) { 
-        alert(`Evento ${isEditing ? 'atualizado' : 'criado'}!`); 
-        setIsCreateModalOpen(false); 
-        fetchEventos(); 
-      } else alert('Erro ao salvar evento.');
+      if (res.ok) { alert(`Evento ${isEditing ? 'atualizado' : 'criado'}!`); setIsCreateModalOpen(false); fetchEventos(); } 
+      else alert('Erro ao salvar evento.');
     } catch (e) { alert('Erro de conexão.'); }
   };
 
   const handleFinalizarEvento = async (eventoId) => {
-    if(!confirm("Tem certeza que deseja finalizar este evento? Ele será movido para o histórico e o relatório estará disponível.")) return;
+    if(!confirm("Tem certeza que deseja finalizar este evento?")) return;
     try {
       const res = await fetchWithStore(`${API_URL}/api/eventos/${eventoId}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'FINALIZADO' })
@@ -158,17 +150,25 @@ export default function RecepcaoHostessPage() {
     } catch (e) { alert('Erro ao realizar check-in'); }
   };
 
-  // 🔥 GERADOR DE RELATÓRIO EXCEL/CSV
+  // 🔥 GERADOR DE RELATÓRIO ATUALIZADO (Inclui Mesas e Comandas)
   const handleDownloadRelatorio = async (evento) => {
     try {
       const res = await fetchWithStore(`${API_URL}/api/eventos/${evento.id}/relatorio`);
       const data = await res.json();
       if (data.success) {
-        let csvContent = "NOME,CPF,EMAIL,MESA,COMANDA,CHECK-IN,GASTO (R$)\n";
+        let csvContent = "NOME,CPF,EMAIL,MESA,COMANDA,CHECK-IN,GASTO INDIVIDUAL (R$)\n";
         data.convidados.forEach(c => {
           csvContent += `"${c.nome}","${c.cpf}","${c.email}","${c.mesa}","${c.comanda}","${c.checkIn}","${c.gasto}"\n`;
         });
-        csvContent += `\n,,,,,TOTAL DO EVENTO,"R$ ${data.totalGasto}"\n`;
+
+        if (data.mesasColetivas && data.mesasColetivas.length > 0) {
+           csvContent += `\nCONSUMO COMPARTILHADO (Lancado direto na Mesa)\nMESA,QTD ITENS,GASTO DA MESA (R$)\n`;
+           data.mesasColetivas.forEach(m => {
+              csvContent += `"Mesa ${m.mesa}","${m.qtdItens} itens","${m.gasto}"\n`;
+           });
+        }
+
+        csvContent += `\n,,,,,TOTAL GERAL DO EVENTO,"R$ ${data.totalGasto}"\n`;
 
         const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -236,11 +236,7 @@ export default function RecepcaoHostessPage() {
     } catch (e) { alert('Erro na comunicação com o servidor.'); } finally { setIsImporting(false); }
   };
 
-  // 🔥 LÓGICA DO CALENDÁRIO E FILTROS
-  const isSameDay = (d1, d2) => {
-    return d1.getDate() === d2.getDate() && d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
-  };
-
+  const isSameDay = (d1, d2) => d1.getDate() === d2.getDate() && d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
   const getDaysInMonth = (month, year) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (month, year) => new Date(year, month, 1).getDay();
 
@@ -254,24 +250,17 @@ export default function RecepcaoHostessPage() {
     const daysInMonth = getDaysInMonth(currentDate.getMonth(), currentDate.getFullYear());
     const firstDay = getFirstDayOfMonth(currentDate.getMonth(), currentDate.getFullYear());
     const days = [];
-    
     const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
     for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="w-10 h-10"></div>);
-    
     for (let d = 1; d <= daysInMonth; d++) {
       const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), d);
       const isSelected = isSameDay(dayDate, selectedDate);
       const isToday = isSameDay(dayDate, new Date());
-      
-      // Verifica se tem evento não finalizado neste dia
       const hasEvent = eventos.some(e => e.status !== 'FINALIZADO' && isSameDay(new Date(e.dataHoraInicio), dayDate));
 
       days.push(
-        <button 
-          key={d} onClick={() => setSelectedDate(dayDate)} 
-          className={`w-10 h-10 rounded-full flex flex-col items-center justify-center font-bold text-sm relative transition-all cursor-pointer ${isSelected ? 'bg-blue-600 text-white shadow-md' : isToday ? 'border-2 border-blue-500 text-blue-600' : 'text-slate-600 hover:bg-slate-200'}`}
-        >
+        <button key={d} onClick={() => setSelectedDate(dayDate)} className={`w-10 h-10 rounded-full flex flex-col items-center justify-center font-bold text-sm relative transition-all cursor-pointer ${isSelected ? 'bg-blue-600 text-white shadow-md' : isToday ? 'border-2 border-blue-500 text-blue-600' : 'text-slate-600 hover:bg-slate-200'}`}>
           {d}
           {hasEvent && <span className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-amber-500'}`}></span>}
         </button>
@@ -288,14 +277,11 @@ export default function RecepcaoHostessPage() {
          <div className="grid grid-cols-7 gap-2 mb-2 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
             {weekDays.map(wd => <span key={wd}>{wd}</span>)}
          </div>
-         <div className="grid grid-cols-7 gap-2 place-items-center">
-            {days}
-         </div>
+         <div className="grid grid-cols-7 gap-2 place-items-center">{days}</div>
       </div>
     );
   };
 
-  // 🔥 LISTAS FILTRADAS POR ABA
   const eventosHoje = eventos.filter(e => e.status !== 'FINALIZADO' && isSameDay(new Date(e.dataHoraInicio), new Date()));
   const eventosSelecionadosCalendario = eventos.filter(e => e.status !== 'FINALIZADO' && isSameDay(new Date(e.dataHoraInicio), selectedDate));
   const eventosHistorico = eventos.filter(e => e.status === 'FINALIZADO').sort((a,b) => new Date(b.dataHoraInicio) - new Date(a.dataHoraInicio));
@@ -316,8 +302,19 @@ export default function RecepcaoHostessPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col md:h-screen">
-      <header className="bg-slate-900 text-white p-4 flex flex-col md:flex-row justify-between items-center shadow-lg shrink-0 gap-4">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col md:h-screen relative">
+      
+      {/* 🔥 ESTILOS PARA A IMPRESSÃO DA CONTA */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .print-area, .print-area * { visibility: visible; }
+          .print-area { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; border: none; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+
+      <header className="bg-slate-900 text-white p-4 flex flex-col md:flex-row justify-between items-center shadow-lg shrink-0 gap-4 no-print">
          <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
             <div className="flex items-center gap-3">
                <span className="text-3xl hidden sm:block">🥂</span>
@@ -326,7 +323,6 @@ export default function RecepcaoHostessPage() {
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Hostess: {employeeUser?.name}</p>
                </div>
             </div>
-            {/* SUB-MENU RESPONSIVO */}
             <div className="flex bg-slate-800 p-1 rounded-xl">
                <button onClick={() => {setActiveTab('HOJE'); setSelectedEvento(null);}} className={`px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-black transition-colors ${activeTab === 'HOJE' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:text-white'}`}>HOJE</button>
                <button onClick={() => {setActiveTab('CALENDARIO'); setSelectedEvento(null);}} className={`px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-black transition-colors ${activeTab === 'CALENDARIO' ? 'bg-blue-500 text-white' : 'text-slate-400 hover:text-white'}`}>CALENDÁRIO</button>
@@ -339,12 +335,10 @@ export default function RecepcaoHostessPage() {
          </div>
       </header>
 
-      {/* MUDANÇA PRINCIPAL: flex-col no mobile, flex-row no desktop */}
-      <main className="flex-1 overflow-hidden flex flex-col md:flex-row p-4 gap-4">
+      <main className="flex-1 overflow-hidden flex flex-col md:flex-row p-4 gap-4 no-print">
         
-        {/* LISTA ESQUERDA (Dinâmica baseada na aba) */}
+        {/* LISTA ESQUERDA */}
         <div className={`w-full md:w-1/3 flex flex-col gap-4 ${selectedEvento ? 'hidden md:flex' : 'flex'}`}>
-           
            {activeTab === 'HOJE' && (
              <div className="flex flex-col h-full gap-4">
                 <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm flex justify-between items-center shrink-0">
@@ -443,7 +437,7 @@ export default function RecepcaoHostessPage() {
                <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
                   <div className="space-y-3">
                       {convidadosFiltrados.map(conv => (
-                         <div key={conv.id} className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-blue-300 transition-colors">
+                         <div key={conv.id} onClick={() => setViewingGuest(conv)} className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-blue-300 transition-colors cursor-pointer">
                             <div className="flex-1">
                                <p className="font-black text-slate-800 text-base">{conv.nome}</p>
                                <div className="flex flex-wrap gap-2 mt-2">
@@ -456,7 +450,7 @@ export default function RecepcaoHostessPage() {
                                   <div className="bg-emerald-50 border border-emerald-200 text-emerald-600 px-4 py-2 rounded-xl text-xs font-black w-full text-center">✅ Check-in às {new Date(conv.horaCheckIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                ) : (
                                   activeTab !== 'HISTORICO' ? (
-                                     <button onClick={() => handleCheckIn(conv.id)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-black shadow-sm transition-colors cursor-pointer active:scale-95 w-full">Dar Check-in</button>
+                                     <button onClick={(e) => { e.stopPropagation(); handleCheckIn(conv.id); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-black shadow-sm transition-colors cursor-pointer active:scale-95 w-full">Dar Check-in</button>
                                   ) : (
                                      <span className="text-xs font-bold text-slate-400">Não compareceu</span>
                                   )
@@ -465,28 +459,65 @@ export default function RecepcaoHostessPage() {
                          </div>
                       ))}
                   </div>
-                  {convidadosFiltrados.length === 0 && (
-                     <div className="flex flex-col items-center justify-center py-20 opacity-50">
-                        <span className="text-5xl mb-4">📋</span>
-                        <p className="text-lg font-black text-slate-800">A lista está vazia.</p>
-                        {activeTab !== 'HISTORICO' && <p className="text-sm text-slate-500">Clique em "Importar Lista" para enviar o arquivo CSV.</p>}
-                     </div>
-                  )}
                </div>
              </>
            ) : (
              <div className="flex-1 flex flex-col items-center justify-center opacity-30">
                 <span className="text-6xl mb-4">🥂</span>
                 <p className="text-2xl font-black">Selecione um evento</p>
-                <p className="text-sm font-medium mt-2">Para ver a lista e gerir convidados.</p>
              </div>
            )}
         </div>
       </main>
 
-      {/* MODAL CRIAR/EDITAR EVENTO */}
+      {/* 🔥 MODAL PARA VISUALIZAR CONTA DO CLIENTE E IMPRIMIR */}
+      {viewingGuest && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+           <div className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-md shadow-2xl relative animate-fade-in-up print-area">
+              <button onClick={() => setViewingGuest(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 font-black hover:text-red-500 transition-colors flex items-center justify-center no-print">✕</button>
+              
+              <h2 className="text-2xl font-black mb-1 text-slate-800">{viewingGuest.nome}</h2>
+              <p className="text-sm text-slate-500 mb-4 font-bold">
+                 {viewingGuest.comandaIndicada ? `💳 Comanda #${viewingGuest.comandaIndicada}` : ''} 
+                 {viewingGuest.comandaIndicada && viewingGuest.mesaIndicada ? ' | ' : ''}
+                 {viewingGuest.mesaIndicada ? `🪑 Mesa ${viewingGuest.mesaIndicada}` : ''}
+              </p>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 max-h-60 overflow-y-auto hide-scrollbar">
+                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Extrato de Consumo</h4>
+                 {viewingGuest.tab?.items?.length > 0 ? (
+                    <div className="space-y-2">
+                       {viewingGuest.tab.items.map(item => (
+                          <div key={item.id} className="flex justify-between text-sm border-b border-slate-100 pb-2">
+                             <span className="font-bold text-slate-700">{item.quantity}x {item.name}</span>
+                             <span className="font-black text-slate-900">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                          </div>
+                       ))}
+                    </div>
+                 ) : (
+                    <p className="text-xs text-slate-500 font-bold text-center py-4">Nenhum item lançado na comanda individual.</p>
+                 )}
+              </div>
+              
+              <div className="flex justify-between items-center mb-6 bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
+                 <span className="font-black text-emerald-700 uppercase tracking-widest text-xs">Total Gasto:</span>
+                 <span className="text-2xl font-black text-emerald-600">
+                    R$ {viewingGuest.tab?.items?.reduce((a, b) => a + (b.price * b.quantity), 0).toFixed(2) || '0.00'}
+                 </span>
+              </div>
+
+              <div className="flex gap-3 no-print">
+                 <button onClick={() => window.print()} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-black transition-colors flex items-center justify-center gap-2">
+                    🖨️ Imprimir Conta
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* OUTROS MODAIS DA RECEPÇÃO (Criar Evento, Importar Planilha, etc)... */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
            <div className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up">
               <h2 className="text-2xl font-black mb-6 text-slate-800">{isEditing ? '✏️ Editar Evento' : '✨ Novo Evento'}</h2>
               <form onSubmit={handleSaveEvento} className="space-y-4">
@@ -517,9 +548,8 @@ export default function RecepcaoHostessPage() {
         </div>
       )}
 
-      {/* MODAL IMPORTAR PLANILHA */}
       {showImportModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
            <div className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-2xl shadow-2xl animate-fade-in-up flex flex-col max-h-[90vh]">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 border-b pb-4 gap-4">
                  <div>
@@ -551,7 +581,6 @@ export default function RecepcaoHostessPage() {
                              </div>
                           </div>
                        ))}
-                       {csvPreview.length > 50 && <p className="text-center text-xs font-bold text-slate-400 pt-2">E mais {csvPreview.length - 50} linhas...</p>}
                     </div>
                  </div>
               )}
