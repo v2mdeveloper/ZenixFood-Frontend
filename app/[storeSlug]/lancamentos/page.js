@@ -1,10 +1,10 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation'; // 🔥 ADICIONADO O useRouter
+import { useParams, useRouter } from 'next/navigation';
 
 export default function LancamentosPage() {
   const params = useParams();
-  const router = useRouter(); // 🔥 INICIALIZADO AQUI
+  const router = useRouter();
   const storeSlug = params.storeSlug;
 
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
@@ -585,7 +585,7 @@ export default function LancamentosPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4">
                   {mesas.map(tab => {
                     const isOtherWaiter = tab.openedBy !== employeeUser?.name && tab.openedBy !== 'Admin';
-                    const isEvento = tab.eventoId !== null && tab.eventoId !== undefined; // 🔥 DETETA SE É UMA MESA DE EVENTO
+                    const isEvento = tab.eventoId !== null && tab.eventoId !== undefined;
 
                     return (
                       <button key={tab.id} onClick={() => setSelectedTab(tab)} className={`${bgCard} border p-4 md:p-5 rounded-3xl flex flex-col items-center text-center transition-all hover:-translate-y-1 hover:border-blue-500 hover:shadow-xl cursor-pointer relative overflow-hidden group`}>
@@ -594,7 +594,6 @@ export default function LancamentosPage() {
                         <span className="text-3xl md:text-4xl mb-2 group-hover:scale-110 transition-transform">🪑</span>
                         <span className="font-black text-lg md:text-xl mb-1 leading-none">Mesa {tab.number}</span>
                         
-                        {/* 🔥 TAG VISUAL DO EVENTO */}
                         {isEvento ? (
                            <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded mb-3 uppercase tracking-widest">🎉 Evento</span>
                         ) : (
@@ -619,7 +618,7 @@ export default function LancamentosPage() {
                   {comandas.map(tab => {
                     const isOtherWaiter = tab.openedBy !== employeeUser?.name && tab.openedBy !== 'Admin';
                     const isLinked = tab.linkedTable !== null;
-                    const isEvento = tab.eventoId !== null && tab.eventoId !== undefined; // 🔥 DETETA SE É COMANDA DE EVENTO
+                    const isEvento = tab.eventoId !== null && tab.eventoId !== undefined;
                     const cardStyle = isLinked ? (isDarkMode ? 'border-purple-500 bg-purple-500/10' : 'border-purple-400 bg-purple-50') : bgCard;
 
                     return (
@@ -629,7 +628,6 @@ export default function LancamentosPage() {
                         <span className="font-black text-lg md:text-xl mb-1 leading-none">#{tab.number}</span>
                         {tab.customerName ? <span className={`text-[10px] md:text-[11px] font-bold ${isLinked ? 'text-purple-600' : 'text-amber-500'} truncate w-full mb-2`}>{tab.customerName.split(' ')[0]}</span> : <span className="mb-2 block"></span>}
                         
-                        {/* 🔥 TAG DE MESA VINCULADA OU EVENTO */}
                         {isLinked ? (
                            <span className="text-[9px] bg-purple-500 text-white px-2 py-0.5 rounded font-black w-full text-center mb-2 shadow-sm truncate">🔗 MESA {tab.linkedTable}</span>
                         ) : isEvento ? (
@@ -784,13 +782,17 @@ export default function LancamentosPage() {
         )}
       </main>
 
-      {/* MODAL DO PRODUTO (REDUZIDO PARA MOBILE) */}
+      {/* ========================================================================= */}
+      {/* 🔥 MODAIS RESTAURADOS (PRODUTO, PIZZA, DÍVIDAS, LIMITES, UPSELL E JUNÇÃO) */}
+      {/* ========================================================================= */}
+
+      {/* 🍔 MODAL DO PRODUTO SIMPLES */}
       {selectedProduct && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className={`${bgCard} border p-6 rounded-t-[2rem] sm:rounded-3xl w-full max-w-md shadow-2xl space-y-4 animate-fade-in-up transition-colors`}>
             <div className="flex justify-between items-start">
                <div><h3 className="text-lg font-black leading-tight mb-1">{selectedProduct.name}</h3><p className="text-amber-500 font-black">R$ {Number(selectedProduct.price).toFixed(2)}</p></div>
-               <button onClick={() => setSelectedProduct(null)} className="w-8 h-8 rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center font-bold">✕</button>
+               <button onClick={() => setSelectedProduct(null)} className="w-8 h-8 rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center font-bold cursor-pointer hover:bg-red-500 hover:text-white transition-colors">✕</button>
             </div>
 
             {selectedTab?.number <= 999 && (
@@ -798,7 +800,7 @@ export default function LancamentosPage() {
                 <label className="text-[10px] font-black text-blue-500 uppercase block mb-2">Posição na Mesa</label>
                 <div className="grid grid-cols-3 gap-2 mb-2">
                   {seatOptions.slice(0, 6).map(pos => (
-                    <button key={pos} type="button" onClick={() => setSeatPosition(pos)} className={`py-2 rounded-xl text-[10px] font-black transition-colors border ${seatPosition === pos ? 'bg-blue-600 border-blue-600 text-white' : (isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-400' : 'bg-white border-slate-200 text-slate-600')}`}>{pos}</button>
+                    <button key={pos} type="button" onClick={() => setSeatPosition(pos)} className={`py-2 rounded-xl text-[10px] font-black transition-colors border cursor-pointer ${seatPosition === pos ? 'bg-blue-600 border-blue-600 text-white' : (isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-400' : 'bg-white border-slate-200 text-slate-600')}`}>{pos}</button>
                   ))}
                 </div>
               </div>
@@ -808,9 +810,9 @@ export default function LancamentosPage() {
                <div className="w-1/3">
                   <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Qtd</label>
                   <div className={`flex items-center justify-between ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'} p-1 rounded-xl border`}>
-                     <button onClick={() => setItemQuantity(Math.max(1, itemQuantity - 1))} className="w-8 h-8 bg-slate-800 text-white rounded-lg font-black">-</button>
+                     <button onClick={() => setItemQuantity(Math.max(1, itemQuantity - 1))} className="w-8 h-8 bg-slate-800 text-white rounded-lg font-black cursor-pointer">-</button>
                      <span className="text-sm font-black w-6 text-center">{itemQuantity}</span>
-                     <button onClick={() => setItemQuantity(itemQuantity + 1)} className="w-8 h-8 bg-slate-800 text-white rounded-lg font-black">+</button>
+                     <button onClick={() => setItemQuantity(itemQuantity + 1)} className="w-8 h-8 bg-slate-800 text-white rounded-lg font-black cursor-pointer">+</button>
                   </div>
                </div>
                <div className="flex-1">
@@ -819,11 +821,140 @@ export default function LancamentosPage() {
                </div>
             </div>
 
-            <button onClick={confirmAddToCart} className="w-full bg-amber-500 text-slate-950 font-black py-4 rounded-xl shadow-md mt-2 flex justify-center items-center gap-2">
+            <button onClick={confirmAddToCart} className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-4 rounded-xl shadow-md mt-2 flex justify-center items-center gap-2 cursor-pointer transition-all active:scale-95">
                Adicionar <span className="bg-slate-950/10 px-2 py-0.5 rounded text-[10px]">R$ {(Number(selectedProduct.price) * itemQuantity).toFixed(2)}</span>
             </button>
           </div>
         </div>
+      )}
+
+      {/* 🍕 MODAL: CONSTRUTOR DE PIZZA */}
+      {pizzaBuilderOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 w-full max-w-3xl flex flex-col max-h-[90vh] animate-fade-in-up`}>
+            <div className={`flex justify-between items-center mb-6 border-b pb-4 shrink-0 ${borderSidebar}`}>
+              <div>
+                 <h2 className={`text-2xl font-black ${textMain}`}>Montar Pizza</h2>
+                 <p className={`${textMuted} font-bold text-sm`}>{pizzaBase?.name}</p>
+              </div>
+              <button onClick={() => setPizzaBuilderOpen(false)} className={`w-10 h-10 rounded-full ${bgInput} font-black text-lg hover:text-red-500 transition-colors cursor-pointer`}>✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto pr-2 hide-scrollbar">
+               <h3 className={`font-black ${textMain} mb-2 text-sm uppercase tracking-wider`}>Quantos sabores?</h3>
+               <div className="flex gap-3 mb-6">
+                  {[1, 2, 3].map(num => {
+                      if (num > (pizzaBase?.maxFlavors || 1)) return null;
+                      return (
+                          <button key={num} onClick={() => { setPizzaFlavorCount(num); setPizzaSelectedFlavors([pizzaBase]); }} className={`flex-1 py-3 rounded-2xl font-black text-base border-2 transition-all cursor-pointer ${pizzaFlavorCount === num ? 'border-amber-500 bg-amber-500/10 text-amber-500' : `${bgInput} text-slate-500 hover:border-amber-500/50${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}`}>
+                              {num} {num === 1 ? 'Sabor' : 'Sabores'}
+                          </button>
+                      );
+                  })}
+               </div>
+               <div className="bg-amber-500/10 text-amber-500 p-3 rounded-xl mb-6 flex items-center justify-between font-bold border border-amber-500/20 shadow-inner">
+                  <span className="text-sm">Selecionados ({pizzaSelectedFlavors.length}/{pizzaFlavorCount}):</span>
+                  <span className="text-xs">{pizzaSelectedFlavors.map(f => f.name).join(' + ')}</span>
+               </div>
+               <h3 className={`font-black ${textMain} mb-3 text-sm uppercase tracking-wider`}>Escolha as metades</h3>
+               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {allPizzaFlavors.map(flavor => {
+                      const isSelected = pizzaSelectedFlavors.find(f => f.id === flavor.id);
+                      const isFull = !isSelected && pizzaSelectedFlavors.length >= pizzaFlavorCount;
+                      return (
+                          <button key={flavor.id} disabled={isFull} onClick={() => togglePizzaFlavor(flavor)} className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center text-center cursor-pointer ${isSelected ? 'border-amber-500 bg-amber-500/10' : isFull ? `${bgInput} opacity-30 cursor-not-allowed` : `${bgInput} hover:border-amber-500/50`}`}>
+                              <span className="text-2xl mb-1">🍕</span>
+                              <span className={`font-bold ${textMain} text-[10px] leading-tight line-clamp-2 min-h-[28px]`}>{flavor.name}</span>
+                              <span className="text-emerald-500 font-black text-[10px] mt-1">+ R$ {Number(flavor.price).toFixed(2)}</span>
+                          </button>
+                      )
+                  })}
+               </div>
+            </div>
+            <div className={`pt-4 border-t ${borderSidebar} shrink-0 mt-4`}>
+               <button onClick={confirmBuiltPizza} disabled={pizzaSelectedFlavors.length !== pizzaFlavorCount} className="w-full bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-amber-600 text-slate-950 py-4 rounded-xl font-black text-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                  Confirmar Metades
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 💳 MODAL: DÍVIDA DO CLIENTE (GERENTE) */}
+      {showManagerDebtModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className={`${bgCard} border border-red-500 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden animate-fade-in-up text-center`}>
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-500 to-red-700"></div>
+            <span className="text-5xl mb-4 inline-block">⚠️</span>
+            <h3 className={`text-xl font-black mb-2 ${textMain}`}>Cliente com Pendências!</h3>
+            <p className="text-xs text-red-500 font-bold mb-6">{debtAmountMsg} <br/><br/>Deseja que o gerente autorize e puxe essa dívida para esta nova comanda?</p>
+            <form onSubmit={handleDebtOverrideSubmit} className="space-y-4 text-left">
+              <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Autenticação do Gerente</p>
+                <input type="text" required value={managerAuthDebt.email} onChange={e => setManagerAuthDebt({...managerAuthDebt, email: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 mb-2 ${bgInput}`} placeholder="E-mail ou CPF do Gerente" />
+                <input type="password" required value={managerAuthDebt.password} onChange={e => setManagerAuthDebt({...managerAuthDebt, password: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 ${bgInput}`} placeholder="Senha" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                 <button type="button" onClick={() => setShowManagerDebtModal(false)} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-bold cursor-pointer`}>Cancelar</button>
+                 <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black py-3 rounded-xl shadow-lg transition-all cursor-pointer">Autorizar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ MODAL: LIMITE DE CRÉDITO (GERENTE) */}
+      {showLimitOverrideModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white border border-red-500 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden animate-fade-in-up text-center">
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-500 to-red-700"></div>
+            <span className="text-5xl mb-4 inline-block">⚠️</span>
+            <h3 className="text-xl font-black text-slate-800 mb-2">Limite Excedido!</h3>
+            <p className="text-xs text-red-600 font-bold mb-6">{limitErrorMessage}</p>
+            <form onSubmit={handleLimitOverrideSubmit} className="space-y-4 text-left">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Autenticação do Gerente</p>
+                <input type="text" required value={managerAuthLimit.email} onChange={e => setManagerAuthLimit({...managerAuthLimit, email: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 mb-2 text-slate-900" placeholder="E-mail ou CPF" />
+                <input type="password" required value={managerAuthLimit.password} onChange={e => setManagerAuthLimit({...managerAuthLimit, password: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 text-slate-900" placeholder="Senha" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                 <button type="button" onClick={() => { setShowLimitOverrideModal(false); setLoadingData(false); }} className="flex-1 bg-slate-100 hover:bg-slate-200 py-3 rounded-xl font-bold text-slate-700 cursor-pointer">Cancelar</button>
+                 <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black py-3 rounded-xl shadow-lg transition-all cursor-pointer">Autorizar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🔄 MODAL: JUNTAR CONTAS */}
+      {showMergeModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+           <div className={`${bgCard} border p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up text-center`}>
+              <h3 className="text-xl font-black mb-2">Juntar Contas</h3>
+              <p className={`text-xs ${textMuted} font-medium mb-6`}>Digite o número da Mesa ou Comanda que será ENCERRADA e transferida para a atual.</p>
+              <form onSubmit={handleMergeTabs} className="space-y-4">
+                 <input type="number" required min="1" value={mergeSourceTabNumber} onChange={e => setMergeSourceTabNumber(e.target.value)} className={`w-full border rounded-xl p-4 text-2xl text-center font-black focus:outline-none focus:border-blue-500 ${bgInput}`} placeholder="Nº Origem" />
+                 <div className="flex gap-3 pt-2">
+                    <button type="button" onClick={() => setShowMergeModal(false)} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-bold cursor-pointer`}>Cancelar</button>
+                    <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-black cursor-pointer shadow-lg">Juntar Agora</button>
+                 </div>
+              </form>
+           </div>
+        </div>
+      )}
+
+      {/* ✨🎁 MODAL: UPSELL */}
+      {showUpsellModal && pendingUpsellItem && activeUpsellRule && (
+         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+            <div className={`${bgCard} border p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up text-center`}>
+               <span className="text-6xl mb-4 inline-block">✨🎁</span>
+               <h3 className="text-xl font-black mb-2">Completar o Pedido?</h3>
+               <p className={`text-sm ${textMuted} font-medium mb-6`}>Deseja adicionar <strong className="text-amber-500">{activeUpsellRule.offerProductName}</strong> por apenas <strong>R$ {Number(activeUpsellRule.offerPrice).toFixed(2)}</strong>?</p>
+               <div className="flex gap-3">
+                  <button onClick={declineUpsell} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-black cursor-pointer`}>Não, Obrigado</button>
+                  <button onClick={acceptUpsell} className="flex-1 bg-amber-500 text-slate-950 py-3 rounded-xl font-black cursor-pointer shadow-lg">Sim, Adicionar!</button>
+               </div>
+            </div>
+         </div>
       )}
 
     </div>
