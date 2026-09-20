@@ -107,14 +107,43 @@ export default function RecepcaoHostessPage() {
     setIsEditing(true); setNovoEventoForm({ id: evento.id, nome: evento.nome, tipo: evento.tipo, dataHoraInicio: toLocalISOString(new Date(evento.dataHoraInicio)), dataHoraFim: evento.dataHoraFim ? toLocalISOString(new Date(evento.dataHoraFim)) : '', qtdPessoas: evento.qtdPessoas, observacoes: evento.observacoes || '' }); setIsCreateModalOpen(true);
   };
 
+  // 🔥 SALVAR EVENTO (CORRIGIDO PARA FUSO HORÁRIO E DATA RETROATIVA)
   const handleSaveEvento = async (e) => {
     e.preventDefault();
+    
+    // Converte a string do input do browser para um Data Real no fuso do Brasil
+    const dataInicioObj = new Date(novoEventoForm.dataHoraInicio);
+    
+    // Verificação de Segurança no Frontend
+    const agora = new Date();
+    agora.setHours(agora.getHours() - 1); 
+    
+    if (!isEditing && dataInicioObj < agora) {
+       return alert("❌ Erro: Não é permitido agendar eventos em datas ou horas passadas.");
+    }
+
     try {
       const url = isEditing ? `${API_URL}/api/eventos/${novoEventoForm.id}` : `${API_URL}/api/eventos`;
       const method = isEditing ? 'PUT' : 'POST';
-      const res = await fetchWithStore(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novoEventoForm) });
-      if (res.ok) { alert(`Evento ${isEditing ? 'atualizado' : 'criado'}!`); setIsCreateModalOpen(false); fetchEventos(); } else alert('Erro ao salvar evento.');
-    } catch (e) { alert('Erro de conexão.'); }
+      
+      // Envia as datas no formato absoluto (UTC/ISO) para o servidor não confundir os horários
+      const payload = {
+         ...novoEventoForm,
+         dataHoraInicio: dataInicioObj.toISOString(),
+         dataHoraFim: novoEventoForm.dataHoraFim ? new Date(novoEventoForm.dataHoraFim).toISOString() : null
+      };
+
+      const res = await fetchWithStore(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      
+      if (res.ok && data.success) { 
+          alert(`Evento ${isEditing ? 'atualizado' : 'criado'} com sucesso!`); 
+          setIsCreateModalOpen(false); 
+          fetchEventos(); 
+      } else {
+          alert(data.error || 'Erro ao salvar evento.');
+      }
+    } catch (e) { alert('Erro de conexão com o servidor.'); }
   };
 
   const handleFinalizarEvento = async (eventoId) => {
@@ -207,11 +236,26 @@ export default function RecepcaoHostessPage() {
   const renderCalendar = () => {
     const daysInMonth = getDaysInMonth(currentDate.getMonth(), currentDate.getFullYear()); const firstDay = getFirstDayOfMonth(currentDate.getMonth(), currentDate.getFullYear()); const days = []; const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="w-10 h-10"></div>);
+    
+    // 🔥 DATA DE ONTEM PARA BLOQUEAR CLIQUE NO PASSADO
+    const ontem = new Date();
+    ontem.setDate(ontem.getDate() - 1);
+    ontem.setHours(23, 59, 59);
+
     for (let d = 1; d <= daysInMonth; d++) {
-      const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), d); const isSelected = isSameDay(dayDate, selectedDate); const isToday = isSameDay(dayDate, new Date());
+      const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), d); 
+      const isSelected = isSameDay(dayDate, selectedDate); 
+      const isToday = isSameDay(dayDate, new Date());
       const hasEvent = eventos.some(e => e.status !== 'FINALIZADO' && isSameDay(new Date(e.dataHoraInicio), dayDate));
+      const isPast = dayDate < ontem;
+
       days.push(
-        <button key={d} onClick={() => setSelectedDate(dayDate)} className={`w-10 h-10 rounded-full flex flex-col items-center justify-center font-bold text-sm relative transition-all cursor-pointer ${isSelected ? 'bg-blue-600 text-white shadow-md' : isToday ? 'border-2 border-blue-500 text-blue-600' : 'text-slate-600 hover:bg-slate-200'}`}>
+        <button 
+           key={d} 
+           onClick={() => !isPast && setSelectedDate(dayDate)} 
+           disabled={isPast}
+           className={`w-10 h-10 rounded-full flex flex-col items-center justify-center font-bold text-sm relative transition-all ${isPast ? 'opacity-30 cursor-not-allowed text-slate-400' : 'cursor-pointer'} ${isSelected && !isPast ? 'bg-blue-600 text-white shadow-md' : isToday && !isPast ? 'border-2 border-blue-500 text-blue-600' : !isPast ? 'text-slate-600 hover:bg-slate-200' : ''}`}
+        >
           {d} {hasEvent && <span className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-amber-500'}`}></span>}
         </button>
       );
@@ -229,7 +273,6 @@ export default function RecepcaoHostessPage() {
   const eventosSelecionadosCalendario = eventos.filter(e => e.status !== 'FINALIZADO' && isSameDay(new Date(e.dataHoraInicio), selectedDate));
   const eventosHistorico = eventos.filter(e => e.status === 'FINALIZADO').sort((a,b) => new Date(b.dataHoraInicio) - new Date(a.dataHoraInicio));
   
-  // LÓGICA DE DADOS BLINDADA
   const extratoSeguro = selectedEvento?.extratoFechamento ? (typeof selectedEvento.extratoFechamento === 'string' ? JSON.parse(selectedEvento.extratoFechamento) : selectedEvento.extratoFechamento) : { convidados: [], mesasColetivas: [], totalGasto: 0 };
   const convidadosSeguros = extratoSeguro.convidados || [];
   const convidadosFiltrados = convidadosSeguros.filter(c => c.nome.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -252,9 +295,7 @@ export default function RecepcaoHostessPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col md:h-screen relative">
-      <style>{`
-        @media print { body * { visibility: hidden; } .print-area, .print-area * { visibility: visible; } .print-area { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; border: none; } .no-print { display: none !important; } }
-      `}</style>
+      <style>{`@media print { body * { visibility: hidden; } .print-area, .print-area * { visibility: visible; } .print-area { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; border: none; } .no-print { display: none !important; } }`}</style>
 
       <header className="bg-slate-900 text-white p-4 flex flex-col md:flex-row justify-between items-center shadow-lg shrink-0 gap-4 no-print">
          <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
@@ -335,11 +376,8 @@ export default function RecepcaoHostessPage() {
                       <h2 className="text-xl md:text-3xl font-black text-slate-800">{selectedEvento.nome}</h2>
                     </div>
                     <p className="text-xs md:text-sm text-slate-500 font-medium md:pl-0 pl-10 mb-2">{selectedEvento.observacoes || 'Sem observações especiais.'}</p>
-                    
                     <div className="md:pl-0 pl-10 flex gap-2">
-                       <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 shadow-sm uppercase tracking-widest">
-                          Total Evento: R$ {totalEventoGasto.toFixed(2)}
-                       </span>
+                       <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 shadow-sm uppercase tracking-widest">Total Evento: R$ {totalEventoGasto.toFixed(2)}</span>
                     </div>
                   </div>
                   
@@ -430,14 +468,13 @@ export default function RecepcaoHostessPage() {
         </div>
       </main>
 
+      {/* MODAL MESA COLETIVA */}
       {viewingTable && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
            <div className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-md shadow-2xl relative animate-fade-in-up print-area">
               <button onClick={() => setViewingTable(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 font-black hover:text-red-500 transition-colors flex items-center justify-center no-print">✕</button>
-              
               <h2 className="text-2xl font-black mb-1 text-slate-800">Mesa {viewingTable.mesa}</h2>
               <p className="text-sm text-slate-500 mb-4 font-bold">Consumo Compartilhado (Coletivo)</p>
-
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 max-h-60 overflow-y-auto hide-scrollbar">
                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Extrato da Mesa</h4>
                  {viewingTable.itemsSnapshot?.length > 0 ? (
@@ -449,16 +486,12 @@ export default function RecepcaoHostessPage() {
                           </div>
                        ))}
                     </div>
-                 ) : (
-                    <p className="text-xs text-slate-500 font-bold text-center py-4">Nenhum item lançado direto nesta mesa.</p>
-                 )}
+                 ) : ( <p className="text-xs text-slate-500 font-bold text-center py-4">Nenhum item lançado direto nesta mesa.</p> )}
               </div>
-              
               <div className="flex justify-between items-center mb-6 bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
                  <span className="font-black text-emerald-700 uppercase tracking-widest text-xs">Total da Mesa:</span>
                  <span className="text-2xl font-black text-emerald-600">R$ {Number(viewingTable.gastoBruto || 0).toFixed(2)}</span>
               </div>
-
               <div className="flex gap-3 no-print">
                  <button onClick={() => window.print()} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-black transition-colors flex items-center justify-center gap-2">🖨️ Imprimir Fechamento da Mesa</button>
               </div>
@@ -466,18 +499,17 @@ export default function RecepcaoHostessPage() {
         </div>
       )}
 
+      {/* MODAL CONVIDADO INDIVIDUAL */}
       {viewingGuest && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
            <div className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-md shadow-2xl relative animate-fade-in-up print-area">
               <button onClick={() => setViewingGuest(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 font-black hover:text-red-500 transition-colors flex items-center justify-center no-print">✕</button>
-              
               <h2 className="text-2xl font-black mb-1 text-slate-800">{viewingGuest.nome}</h2>
               <p className="text-sm text-slate-500 mb-4 font-bold">
                  {viewingGuest.comanda !== '-' ? `💳 Comanda #${viewingGuest.comanda}` : ''} 
                  {viewingGuest.comanda !== '-' && viewingGuest.mesa !== '-' ? ' | ' : ''}
                  {viewingGuest.mesa !== '-' ? `🪑 Mesa ${viewingGuest.mesa}` : ''}
               </p>
-
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 max-h-60 overflow-y-auto hide-scrollbar">
                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Extrato Individual de Consumo</h4>
                  {viewingGuest.itemsSnapshot?.length > 0 ? (
@@ -489,16 +521,12 @@ export default function RecepcaoHostessPage() {
                           </div>
                        ))}
                     </div>
-                 ) : (
-                    <p className="text-xs text-slate-500 font-bold text-center py-4">Nenhum item individual lançado.</p>
-                 )}
+                 ) : ( <p className="text-xs text-slate-500 font-bold text-center py-4">Nenhum item individual lançado.</p> )}
               </div>
-              
               <div className="flex justify-between items-center mb-6 bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
                  <span className="font-black text-emerald-700 uppercase tracking-widest text-xs">Gasto do Cliente:</span>
                  <span className="text-2xl font-black text-emerald-600">R$ {Number(viewingGuest.gastoBruto || 0).toFixed(2)}</span>
               </div>
-
               <div className="flex gap-3 no-print">
                  <button onClick={() => window.print()} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-black transition-colors flex items-center justify-center gap-2">🖨️ Imprimir Conta do Cliente</button>
               </div>
@@ -508,7 +536,6 @@ export default function RecepcaoHostessPage() {
 
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
-           {/* Modal Criar Conteudo (Inalterado) */}
            <div className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up">
               <h2 className="text-2xl font-black mb-6 text-slate-800">{isEditing ? '✏️ Editar Evento' : '✨ Novo Evento'}</h2>
               <form onSubmit={handleSaveEvento} className="space-y-4">
@@ -517,8 +544,9 @@ export default function RecepcaoHostessPage() {
                     <option value="MISTO">Misto (Mesas + Comandas)</option><option value="APENAS_MESAS">Apenas Reserva de Mesas</option><option value="APENAS_COMANDAS">Apenas Lista com Comandas</option>
                  </select>
                  <div className="flex gap-2">
-                    <div className="flex-1"><label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Início</label><input type="datetime-local" required value={novoEventoForm.dataHoraInicio} onChange={e => setNovoEventoForm({...novoEventoForm, dataHoraInicio: e.target.value})} className="w-full border rounded-xl p-3 text-xs font-bold bg-slate-50 focus:outline-none focus:border-blue-500" /></div>
-                    <div className="flex-1"><label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Fim</label><input type="datetime-local" value={novoEventoForm.dataHoraFim} onChange={e => setNovoEventoForm({...novoEventoForm, dataHoraFim: e.target.value})} className="w-full border rounded-xl p-3 text-xs font-bold bg-slate-50 focus:outline-none focus:border-blue-500" /></div>
+                    {/* 🔥 DATA MINIMA ADICIONADA PARA NÃO PERMITIR CLICAR EM DATAS PASSADAS */}
+                    <div className="flex-1"><label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Início</label><input type="datetime-local" min={!isEditing ? toLocalISOString(new Date()) : undefined} required value={novoEventoForm.dataHoraInicio} onChange={e => setNovoEventoForm({...novoEventoForm, dataHoraInicio: e.target.value})} className="w-full border rounded-xl p-3 text-xs font-bold bg-slate-50 focus:outline-none focus:border-blue-500" /></div>
+                    <div className="flex-1"><label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Fim</label><input type="datetime-local" min={!isEditing ? toLocalISOString(new Date()) : undefined} value={novoEventoForm.dataHoraFim} onChange={e => setNovoEventoForm({...novoEventoForm, dataHoraFim: e.target.value})} className="w-full border rounded-xl p-3 text-xs font-bold bg-slate-50 focus:outline-none focus:border-blue-500" /></div>
                  </div>
                  <div><label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Observações (Opcional)</label><textarea value={novoEventoForm.observacoes} onChange={e => setNovoEventoForm({...novoEventoForm, observacoes: e.target.value})} placeholder="Instruções para a equipe..." className="w-full border rounded-xl p-3 text-sm bg-slate-50 focus:outline-none focus:border-blue-500" rows="2"></textarea></div>
                  <div className="flex gap-4 pt-4"><button type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-bold cursor-pointer transition-colors">Cancelar</button><button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-black shadow-md cursor-pointer transition-colors">Salvar</button></div>
@@ -529,7 +557,6 @@ export default function RecepcaoHostessPage() {
 
       {showImportModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
-           {/* Modal Importar (Inalterado) */}
            <div className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-2xl shadow-2xl animate-fade-in-up flex flex-col max-h-[90vh]">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 border-b pb-4 gap-4">
                  <div><h2 className="text-xl md:text-2xl font-black text-slate-800 mb-1">Importar Convidados (CSV)</h2><p className="text-[10px] md:text-xs text-slate-500 font-bold">Colunas requeridas: <span className="bg-slate-100 px-1 rounded text-slate-700">nome, cpf, email, telefone, mesa, posicao, comanda</span></p></div>
