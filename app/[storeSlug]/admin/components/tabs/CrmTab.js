@@ -43,7 +43,6 @@ export default function CrmTab({
   setSearchCustomer,
   filteredCustomers,
   setEditingCustomer,
-  // Precisamos da função fetchCustomers do Admin para recarregar a lista quando adicionarmos um novo
   fetchCustomers = () => { window.location.reload(); } 
 }) {
   const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
@@ -122,7 +121,6 @@ export default function CrmTab({
   const parseAddressString = (addressString) => {
     if (!addressString) return { logradouro: '', numero: '', bairro: '', complemento: '', cidade: '', uf: '', cep: '' };
     const cleanAddress = addressString.split('| OBS:')[0].split('| CUPOM')[0].trim();
-    // Exemplo: Rua A, 123, Bairro B
     const parts = cleanAddress.split(',').map(s => s.trim());
     return {
        logradouro: parts[0] || cleanAddress,
@@ -153,7 +151,7 @@ export default function CrmTab({
         bairro: addr.bairro,
         cidade: addr.cidade,
         uf: addr.uf,
-        password: '' // Só preenche se quiser mudar a senha
+        password: ''
      });
      setShowCustomerModal(true);
   };
@@ -162,30 +160,26 @@ export default function CrmTab({
     e.preventDefault();
     if (!customerForm.name || !customerForm.email) return alert("Nome e Email são obrigatórios!");
 
-    // Constrói a string de endereço (como o banco do admin salva hoje)
     const newAddressString = `${customerForm.logradouro}, ${customerForm.numero}, ${customerForm.bairro}${customerForm.complemento ? ' - ' + customerForm.complemento : ''}${customerForm.cidade ? ' - ' + customerForm.cidade + '/' + customerForm.uf : ''}`;
 
     const payload = {
        name: customerForm.name,
        email: customerForm.email,
-       cpf: customerForm.cpf.replace(/\D/g, ''), // Limpa máscara pro banco
+       cpf: customerForm.cpf.replace(/\D/g, ''),
        phone: customerForm.phone,
        birthDate: customerForm.birthDate,
        address: newAddressString !== ', , ' ? newAddressString : '',
-       password: customerForm.password || undefined // Só envia se tiver digitado algo
+       password: customerForm.password || undefined
     };
 
     try {
       if (customerForm.id) {
-         // EDITA EXISTENTE
          const res = await fetchWithStore(`${API_URL}/api/admin/customers/${customerForm.id}`, { 
             method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) 
          });
          const data = await res.json();
          if (data.success) { alert('Cliente atualizado!'); setShowCustomerModal(false); fetchCustomers(); } else alert(data.error || 'Erro.');
       } else {
-         // CRIA NOVO (Usa a mesma rota que o App/Totem usa para Register)
-         // Como os admins precisam de uma senha inicial, vamos gerar uma automática se estiver vazia
          payload.password = payload.password || ('ZenixFood' + Math.floor(Math.random() * 10000) + '!');
          
          const res = await fetchWithStore(`${API_URL}/api/auth/register`, { 
@@ -198,7 +192,44 @@ export default function CrmTab({
   };
 
   // ============================================================================
+  // EXPORTAÇÃO DE HISTÓRICO DE CONSUMO GERAL DO CLIENTE
+  // ============================================================================
+  const exportCustomerOrdersToExcel = (cliente) => {
+    if (!cliente || !cliente.orders || cliente.orders.length === 0) {
+      return alert("Este cliente ainda não possui histórico de consumo.");
+    }
 
+    const statusMap = { 
+      PENDING: 'Pendente', 
+      PREPARING: 'Preparando', 
+      READY: 'Pronto/Aguardando', 
+      IN_TRANSIT: 'Em Rota', 
+      DELIVERED: 'Concluído', 
+      CANCELED: 'Cancelado' 
+    };
+    
+    const rows = cliente.orders.map(o => [
+       new Date(o.createdAt).toLocaleDateString('pt-BR'),
+       new Date(o.createdAt).toLocaleTimeString('pt-BR'),
+       `#${o.shortId || o.id.substring(0,6)}`,
+       statusMap[o.status] || o.status,
+       o.paymentMethod || 'Não Informado',
+       `R$ ${Number(o.total || 0).toFixed(2).replace('.', ',')}`
+    ]);
+
+    const csvContent = ["Data;Hora;Pedido;Status;Forma Pagamento;Total (R$)", ...rows.map(e => e.join(";"))].join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a"); 
+    link.href = URL.createObjectURL(blob); 
+    link.download = `Historico_Consumo_${cliente.name.replace(/\s/g,'_')}.csv`; 
+    document.body.appendChild(link); 
+    link.click(); 
+    document.body.removeChild(link);
+  };
+
+  // ============================================================================
+  // CONTROLE DE FIADO (INADIMPLENTES)
+  // ============================================================================
   const handlePayAccount = async (e) => {
     e.preventDefault();
     try {
@@ -232,7 +263,6 @@ export default function CrmTab({
     } catch(e) { alert('Erro ao atualizar bloqueio.'); }
   };
 
-  // Filtro Dinâmico para o Extrato
   const filteredMovements = selectedAccount?.accountMovements?.filter(m => {
     if (extratoStartDate && new Date(m.createdAt) < new Date(extratoStartDate + 'T00:00:00')) return false;
     if (extratoEndDate && new Date(m.createdAt) > new Date(extratoEndDate + 'T23:59:59')) return false;
@@ -244,7 +274,7 @@ export default function CrmTab({
     const rows = filteredMovements.map(m => [ new Date(m.createdAt).toLocaleDateString('pt-BR'), m.type === 'CHARGE' ? 'Compra' : 'Pagamento', m.description, `R$ ${m.amount.toFixed(2)}`, m.isPaid ? 'Pago' : 'Pendente' ]);
     const csvContent = ["Data;Tipo;Descrição;Valor;Status", ...rows.map(e => e.join(";"))].join("\n");
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `Extrato_Cliente_${selectedAccount.name.replace(/\s/g,'_')}.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `Extrato_Fiado_${selectedAccount.name.replace(/\s/g,'_')}.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
   return (
@@ -290,8 +320,11 @@ export default function CrmTab({
                     <td className="px-6 py-4 text-center"><span className="bg-slate-200 text-slate-800 px-3 py-1 rounded-full font-bold">{c.orders?.length || 0}</span></td>
                     <td className="px-6 py-4 text-right"><span className="font-bold text-emerald-600">R$ {Number(c.cashback?.balance || 0).toFixed(2)}</span></td>
                     <td className="px-6 py-4 text-center flex justify-center gap-2">
+                      <button onClick={() => exportCustomerOrdersToExcel(c)} title="Exportar Histórico Completo de Pedidos" className="text-emerald-600 hover:text-emerald-700 font-bold bg-emerald-100 hover:bg-emerald-200 px-3 py-1.5 rounded-lg transition-colors text-xs cursor-pointer">
+                        📊 Histórico
+                      </button>
                       <button onClick={() => handleOpenEditCustomer(c)} className="text-blue-600 hover:text-blue-700 font-bold bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-lg transition-colors text-xs cursor-pointer">Editar</button>
-                      <button onClick={() => handleToggleBlock(c)} className={`font-bold px-3 py-1.5 rounded-lg transition-colors text-xs cursor-pointer ${c.isBlocked ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
+                      <button onClick={() => handleToggleBlock(c)} className={`font-bold px-3 py-1.5 rounded-lg transition-colors text-xs cursor-pointer ${c.isBlocked ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
                          {c.isBlocked ? 'Desbloquear' : 'Bloquear'}
                       </button>
                     </td>
@@ -323,7 +356,7 @@ export default function CrmTab({
                   </div>
 
                   <div className="flex gap-2 mt-4 pt-4 border-t border-red-200/50 shrink-0">
-                     <button onClick={() => { setSelectedAccount(c); setShowExtratoModal(true); setExtratoStartDate(''); setExtratoEndDate(''); }} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2.5 rounded-xl cursor-pointer shadow-sm transition-all">Ver Extrato</button>
+                     <button onClick={() => { setSelectedAccount(c); setShowExtratoModal(true); setExtratoStartDate(''); setExtratoEndDate(''); }} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2.5 rounded-xl cursor-pointer shadow-sm transition-all">Ver Extrato Fiado</button>
                      <button onClick={() => { setSelectedAccount(c); setShowPayModal(true); }} disabled={!c.currentDebt || c.currentDebt <= 0} className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-300 text-white text-xs font-black py-2.5 rounded-xl cursor-pointer shadow-sm transition-all disabled:cursor-not-allowed">Quitar Dívida</button>
                   </div>
                </div>
@@ -426,7 +459,7 @@ export default function CrmTab({
         </div>
       )}
 
-      {/* MODAL: VER EXTRATO ANALÍTICO */}
+      {/* MODAL: VER EXTRATO ANALÍTICO (FIADO) */}
       {showExtratoModal && selectedAccount && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-6 md:p-8 rounded-3xl w-full max-w-4xl shadow-2xl animate-fade-in-up flex flex-col max-h-[90vh]">
