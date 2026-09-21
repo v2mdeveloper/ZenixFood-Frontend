@@ -21,6 +21,7 @@ import MinhaEmpresaTab from '../admin/components/tabs/MinhaEmpresaTab';
 import RhTab from '../admin/components/tabs/RhTab'; 
 import ContasTab from '../admin/components/tabs/ContasTab'; 
 import RelatorioTab from '../admin/components/tabs/RelatorioTab'; 
+import IntegracoesTab from '../admin/components/tabs/IntegracoesTab'; // 🔥 Import do novo componente
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
@@ -253,6 +254,7 @@ function FuncionariosPortal({ storeSlug }) {
     { id: 'impressoes', label: 'Impressoras & Praças', icon: '🖨️' },
     { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: '🧾' },
     { id: 'rh', label: 'RH & Funcionários', icon: '👔' }, 
+    { id: 'integracoes', label: 'Integrações Delivery', icon: '📱' }, // 🔥 Integrações ADDED
     { id: 'config', label: 'Configurações', icon: '⚙️' }
   ];
 
@@ -280,6 +282,7 @@ function FuncionariosPortal({ storeSlug }) {
       case 'rh': return perms.includes('rh');
       case 'impressoes': return perms.includes('config') || perms.includes('impressoes');
       case 'fiscal': return perms.includes('fiscal');
+      case 'integracoes': return perms.includes('config'); // 🔥 Integrações ligadas ao acesso de configuração
       case 'config': return perms.includes('config');
       default: return false; 
     }
@@ -953,6 +956,10 @@ function FuncionariosPortal({ storeSlug }) {
            {activeTab === 'estoque' && isPermitted('estoque') && <StockTab estoqueSubTab={estoqueSubTab} setEstoqueSubTab={setEstoqueSubTab} fetchMovimentacoes={fetchMovimentacoes} handleUploadXMLPreview={handleUploadXMLPreview} setXmlFile={setXmlFile} novaMovimentacao={novaMovimentacao} setNovaMovimentacao={setNovaMovimentacao} insumos={insumos} handleMovimentacaoManual={handleMovimentacaoManual} novoInsumo={novoInsumo} setNovoInsumo={setNovoInsumo} handleSalvarInsumo={handleSalvarInsumo} toggleInsumoStatus={toggleInsumoStatus} setEditingInsumo={setEditingInsumo} editingInsumo={editingInsumo} handleEditInsumoSubmit={handleEditInsumoSubmit} allProducts={allProducts} fichasVisiveis={fichasVisiveis} carregarFicha={carregarFicha} setFichasVisiveis={setFichasVisiveis} calculateCmv={calculateCmv} getCmvColor={getCmvColor} handleRemoveFicha={handleRemoveFicha} handleAddFicha={handleAddFicha} movimentacoes={movimentacoes} showXmlModal={showXmlModal} setShowXmlModal={setShowXmlModal} xmlPreviewData={xmlPreviewData} xmlMappings={xmlMappings} updateMapping={updateMapping} handleConfirmXmlImport={handleConfirmXmlImport} />}
            {activeTab === 'impressoes' && isPermitted('impressoes') && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
            {activeTab === 'fiscal' && isPermitted('fiscal') && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
+           
+           {/* 🔥 RENDERIZAÇÃO DA NOVA ABA DE INTEGRAÇÕES */}
+           {activeTab === 'integracoes' && isPermitted('config') && <IntegracoesTab />}
+           
            {activeTab === 'config' && isPermitted('config') && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={handleUpdateAdminConfig} />}
            {activeTab === 'rh' && isPermitted('rh') && <RhTab />}
            
@@ -966,6 +973,10 @@ function FuncionariosPortal({ storeSlug }) {
             <h3 className="text-xl font-black text-amber-600 mb-4">Editar Categoria</h3>
             <form onSubmit={handleEditCategory} className="space-y-4">
               <input type="text" required value={editingCategory.name} onChange={(e) => setEditingCategory({...editingCategory, name: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500 mb-4" />
+              <label className="flex items-center gap-3 cursor-pointer bg-slate-50 p-3 rounded-xl border border-slate-200 hover:border-blue-300 transition-colors">
+                <input type="checkbox" checked={editingCategory.isDrink || false} onChange={e => setEditingCategory({...editingCategory, isDrink: e.target.checked})} className="w-5 h-5 accent-blue-600 cursor-pointer shrink-0" />
+                <span className="text-xs font-black text-slate-800">KDS Bar</span>
+              </label>
               <div className="flex gap-4 pt-4 border-t border-slate-100 mt-2">
                 <button type="button" onClick={() => setEditingCategory(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all cursor-pointer">Cancelar</button>
                 <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-black py-3 rounded-xl transition-all shadow-md cursor-pointer">Salvar</button>

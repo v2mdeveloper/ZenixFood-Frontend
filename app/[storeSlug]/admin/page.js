@@ -21,6 +21,7 @@ import MinhaEmpresaTab from './components/tabs/MinhaEmpresaTab';
 import ContasTab from './components/tabs/ContasTab'; 
 import RelatorioTab from './components/tabs/RelatorioTab'; 
 import OrderDetailsModal from './components/modals/OrderDetailsModal';
+import IntegracoesTab from './components/tabs/IntegracoesTab'; // 🔥 Import do novo componente
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
@@ -243,9 +244,10 @@ export default function AdminDashboard() {
     { id: 'crm', label: 'Clientes', icon: '👥', perm: 'crm' },
     { id: 'fornecedores', label: 'Parceiros/Fornecedores', icon: '🤝', perm: 'fornecedores' },
     { id: 'rh', label: 'RH & Funcionários', icon: '👔', perm: 'rh' }, 
-    { id: 'estoque', label: 'Estoque & Fichas', icon: '📦', perm: 'estoque' },
+    { id: 'estoque', label: 'Estoque & Receitas', icon: '📦', perm: 'estoque' },
     { id: 'impressoes', label: 'Impressoras & Praças', icon: '🖨️', perm: 'impressoes' }, 
     { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: '🧾', perm: 'fiscal' },
+    { id: 'integracoes', label: 'Integrações Delivery', icon: '📱', perm: 'config' }, // 🔥 NOVO MENU ADDED HERE (Usando perm config por segurança)
     { id: 'config', label: 'Configurações', icon: '⚙️', perm: 'config' }
   ];
 
@@ -976,6 +978,7 @@ const handleAddProduct = async (e) => {
            {activeTab === 'estoque' && <StockTab estoqueSubTab={estoqueSubTab} setEstoqueSubTab={setEstoqueSubTab} fetchMovimentacoes={fetchMovimentacoes} handleUploadXMLPreview={handleUploadXMLPreview} setXmlFile={setXmlFile} novaMovimentacao={novaMovimentacao} setNovaMovimentacao={setNovaMovimentacao} insumos={insumos} handleMovimentacaoManual={handleMovimentacaoManual} novoInsumo={novoInsumo} setNovoInsumo={setNovoInsumo} handleSalvarInsumo={handleSalvarInsumo} toggleInsumoStatus={toggleInsumoStatus} setEditingInsumo={setEditingInsumo} editingInsumo={editingInsumo} handleEditInsumoSubmit={handleEditInsumoSubmit} allProducts={allProducts} fichasVisiveis={fichasVisiveis} carregarFicha={carregarFicha} setFichasVisiveis={setFichasVisiveis} calculateCmv={calculateCmv} getCmvColor={getCmvColor} handleRemoveFicha={handleRemoveFicha} handleAddFicha={handleAddFicha} movimentacoes={movimentacoes} showXmlModal={showXmlModal} setShowXmlModal={setShowXmlModal} xmlPreviewData={xmlPreviewData} xmlMappings={xmlMappings} updateMapping={updateMapping} handleConfirmXmlImport={handleConfirmXmlImport} />}
            {activeTab === 'impressoes' && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
            {activeTab === 'fiscal' && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
+           {activeTab === 'integracoes' && <IntegracoesTab />} {/* 🔥 AQUI CARREGA O COMPONENTE DE INTEGRAÇÕES */}
            {activeTab === 'config' && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={handleUpdateAdminConfig} />}
            {activeTab === 'minha-empresa' && canViewCompany && <MinhaEmpresaTab />}
         </div>
