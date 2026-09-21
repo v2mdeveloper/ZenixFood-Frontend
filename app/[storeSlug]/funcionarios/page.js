@@ -21,7 +21,7 @@ import MinhaEmpresaTab from '../admin/components/tabs/MinhaEmpresaTab';
 import RhTab from '../admin/components/tabs/RhTab'; 
 import ContasTab from '../admin/components/tabs/ContasTab'; 
 import RelatorioTab from '../admin/components/tabs/RelatorioTab'; 
-import IntegracoesTab from '../admin/components/tabs/IntegracoesTab'; // 🔥 Import do novo componente
+import IntegracoesTab from '../admin/integracoes/IntegracoesTab'; 
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
