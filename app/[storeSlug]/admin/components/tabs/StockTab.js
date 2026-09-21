@@ -14,12 +14,17 @@ export default function StockTab({
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiResult, setAiResult] = useState(null);
-  const [savedRecipes, setSavedRecipes] = useState([]);
-  const [loadingRecipes, setLoadingRecipes] = useState(false);
+  const [savedAiRecipes, setSavedAiRecipes] = useState([]);
+  const [loadingAiRecipes, setLoadingAiRecipes] = useState(false);
 
   // ESTADOS DO CONSELHEIRO FINANCEIRO IA
   const [isAnalyzingFinance, setIsAnalyzingFinance] = useState(false);
   const [financeAnalysis, setFinanceAnalysis] = useState(null);
+
+  // 🔥 NOVOS ESTADOS: RECEITAS E PREPAROS (SUB-RECEITAS)
+  const [receitasDB, setReceitasDB] = useState([]);
+  const [formReceita, setFormReceita] = useState({ id: null, nome: '', insumoSaidaId: '', rendimento: '', preparo: '', itens: [], isActive: true });
+  const [multiplicadores, setMultiplicadores] = useState({}); // Controla a quantidade a produzir de cada receita
 
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
@@ -42,25 +47,124 @@ export default function StockTab({
     return response;
   };
 
-  const fetchRecipes = useCallback(async () => {
-    setLoadingRecipes(true);
+  // ==========================================
+  // FUNÇÕES DE SUB-RECEITAS E PREPAROS (NOVO)
+  // ==========================================
+  const fetchReceitasDB = useCallback(async () => {
     try {
-      const res = await fetchWithStore(`${API_URL}/api/ai/receitas`);
-      if (res.ok) {
-        const data = await res.json();
-        setSavedRecipes(data || []);
-      }
-    } catch (e) {
-      console.error("Erro ao puxar receitas", e);
-    }
-    setLoadingRecipes(false);
+      const res = await fetchWithStore(`${API_URL}/api/receitas`);
+      if (res.ok) setReceitasDB(await res.json());
+    } catch (e) { console.error(e); }
   }, [API_URL]);
 
   useEffect(() => {
-    if (estoqueSubTab === 'receitas') {
-      fetchRecipes();
-    }
-  }, [estoqueSubTab, fetchRecipes]);
+    if (estoqueSubTab === 'receitas') fetchReceitasDB();
+    if (estoqueSubTab === 'chef-ia') fetchAiRecipes();
+  }, [estoqueSubTab, fetchReceitasDB]);
+
+  const handleAddIngredienteReceita = () => {
+    setFormReceita({ ...formReceita, itens: [...formReceita.itens, { insumoId: '', quantity: '' }] });
+  };
+
+  const handleIngredienteReceitaChange = (index, field, value) => {
+    const novosItens = [...formReceita.itens];
+    novosItens[index][field] = value;
+    setFormReceita({ ...formReceita, itens: novosItens });
+  };
+
+  const handleRemoverIngredienteReceita = (index) => {
+    const novosItens = formReceita.itens.filter((_, i) => i !== index);
+    setFormReceita({ ...formReceita, itens: novosItens });
+  };
+
+  const handleSalvarReceita = async (e) => {
+    e.preventDefault();
+    if (formReceita.itens.length === 0) return alert("Adicione pelo menos 1 ingrediente.");
+    
+    try {
+      const isEdit = !!formReceita.id;
+      const url = isEdit ? `${API_URL}/api/receitas/${formReceita.id}` : `${API_URL}/api/receitas`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetchWithStore(url, {
+        method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formReceita)
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        alert(isEdit ? "Receita atualizada!" : "Receita salva com sucesso!");
+        setFormReceita({ id: null, nome: '', insumoSaidaId: '', rendimento: '', preparo: '', itens: [], isActive: true });
+        fetchReceitasDB();
+        // Recarrega insumos para atualizar o custo na tabela principal
+        if (typeof handleMovimentacaoManual === 'function') fetchMovimentacoes(); 
+      } else alert(data.error);
+    } catch (error) { alert("Erro ao salvar a receita."); }
+  };
+
+  const handleEditReceita = (receita) => {
+    const dados = JSON.parse(receita.ingredientes || '{}');
+    setFormReceita({
+      id: receita.id,
+      nome: receita.nome,
+      insumoSaidaId: dados.insumoSaidaId || '',
+      rendimento: dados.rendimento || '',
+      preparo: receita.preparo || '',
+      itens: dados.itens || [],
+      isActive: dados.isActive !== false
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteReceita = async (id) => {
+    if (!confirm("Tem a certeza que deseja excluir esta receita?")) return;
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/receitas/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchReceitasDB();
+    } catch (e) { alert("Erro ao excluir."); }
+  };
+
+  const handleToggleReceitaStatus = async (receita) => {
+    const dados = JSON.parse(receita.ingredientes || '{}');
+    const newStatus = dados.isActive === false ? true : false;
+    try {
+      await fetchWithStore(`${API_URL}/api/receitas/${receita.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...receita, ...dados, isActive: newStatus })
+      });
+      fetchReceitasDB();
+    } catch (e) { alert("Erro ao mudar status."); }
+  };
+
+  const handleProduzirReceita = async (receitaId) => {
+    const multiplicador = multiplicadores[receitaId] || 1;
+    if (!confirm(`Confirma a produção de ${multiplicador}x esta receita?\n\nOs ingredientes serão descontados do estoque.`)) return;
+    
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/receitas/${receitaId}/produzir`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ multiplicador })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Produção concluída! Estoque atualizado.");
+        setMultiplicadores(prev => ({ ...prev, [receitaId]: 1 }));
+        fetchMovimentacoes(); // Atualiza a aba de entradas e saídas
+      } else {
+        alert(data.error);
+      }
+    } catch (e) { alert("Erro ao produzir."); }
+  };
+
+  // ==========================================
+  // FUNÇÕES DO CHEF IA
+  // ==========================================
+  const fetchAiRecipes = useCallback(async () => {
+    setLoadingAiRecipes(true);
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/ai/receitas`);
+      if (res.ok) setSavedAiRecipes(await res.json());
+    } catch (e) { console.error(e); }
+    setLoadingAiRecipes(false);
+  }, [API_URL]);
 
   const handleGenerateRecipe = async (e) => {
     e.preventDefault();
@@ -87,7 +191,7 @@ export default function StockTab({
       if (data.success) {
         alert(`🎉 Receita Aprovada e Salva!\n\n${data.insumosCriados} novos insumos foram cadastrados no estoque!`);
         setAiResult(null); setAiPrompt('');
-        fetchRecipes(); 
+        fetchAiRecipes(); 
       } else alert(data.error);
     } catch (e) { alert('Erro ao salvar.'); }
   };
@@ -147,34 +251,38 @@ export default function StockTab({
 
   const tabs = [
     { id: 'insumos', label: 'Ingredientes (Insumos)' },
-    { id: 'fichas', label: 'Fichas Técnicas & CMV' },
-    { id: 'lucratividade', label: '📊 Relatório de Lucros' },
-    { id: 'receitas', label: '✨ Chef IA & Receitas' },
+    { id: 'fichas', label: 'Fichas & CMV' },
+    { id: 'lucratividade', label: '📊 Lucros' },
+    { id: 'receitas', label: '🍲 Preparos (Sub-receitas)' },
+    { id: 'chef-ia', label: '✨ Chef IA' },
     { id: 'movimentacoes', label: 'Entradas/Saídas' }
   ];
 
   return (
     <main className="space-y-6">
       
-      <div className="flex flex-wrap gap-2 mb-6 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-wrap gap-2 mb-6 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto hide-scrollbar">
         {tabs.map(tab => (
           <button 
             key={tab.id}
             onClick={() => { setEstoqueSubTab(tab.id); if(tab.id === 'movimentacoes') fetchMovimentacoes(); }}
-            className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex-1 md:flex-none text-center ${estoqueSubTab === tab.id ? 'bg-amber-500 text-black shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
+            className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${estoqueSubTab === tab.id ? 'bg-amber-500 text-black shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
           >
             {tab.label}
           </button>
         ))}
       </div>
 
+      {/* ============================================================== */}
+      {/* ABA: INGREDIENTES / INSUMOS */}
+      {/* ============================================================== */}
       {estoqueSubTab === 'insumos' && (
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up">
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
               <h2 className="text-lg font-black text-slate-900 mb-4">Cadastrar Insumo</h2>
               <form onSubmit={handleSalvarInsumo} className="space-y-4">
-                <div><label className="text-xs text-slate-500 block mb-1">Nome do Ingrediente</label><input type="text" required value={novoInsumo.name} onChange={(e) => setNovoInsumo({...novoInsumo, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" /></div>
+                <div><label className="text-xs text-slate-500 block mb-1">Nome do Ingrediente / Preparo</label><input type="text" required value={novoInsumo.name} onChange={(e) => setNovoInsumo({...novoInsumo, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" placeholder="Ex: Arroz Cozido" /></div>
                 <div className="grid grid-cols-2 gap-4">
                   <div><label className="text-xs text-slate-500 block mb-1">Unidade</label><select value={novoInsumo.unit} onChange={(e) => setNovoInsumo({...novoInsumo, unit: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500"><option value="UN">Unidade (UN)</option><option value="KG">Quilo (KG)</option><option value="L">Litro (L)</option></select></div>
                   <div><label className="text-xs text-slate-500 block mb-1">Custo (R$)</label><input type="number" step="0.01" required value={novoInsumo.cost} onChange={(e) => setNovoInsumo({...novoInsumo, cost: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-500" /></div>
@@ -192,11 +300,11 @@ export default function StockTab({
               </form>
             </div>
           </div>
-          <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-             <div className="p-6 border-b border-slate-100"><h2 className="text-lg font-black text-slate-900">Seu Estoque Atual</h2></div>
-             <div className="overflow-x-auto">
+          <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[80vh]">
+             <div className="p-6 border-b border-slate-100 shrink-0"><h2 className="text-lg font-black text-slate-900">Seu Estoque Atual</h2></div>
+             <div className="overflow-x-auto flex-1 hide-scrollbar">
                <table className="w-full text-left text-sm text-slate-700">
-                 <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                 <thead className="bg-slate-50 text-xs text-slate-500 uppercase sticky top-0 shadow-sm">
                    <tr><th className="px-6 py-4">Status</th><th className="px-6 py-4">Insumo</th><th className="px-6 py-4 text-right">Qtd Estoque</th><th className="px-6 py-4 text-right">Custo Unid.</th><th className="px-6 py-4 text-center">Ações</th></tr>
                  </thead>
                  <tbody>
@@ -220,8 +328,11 @@ export default function StockTab({
         </section>
       )}
 
+      {/* ============================================================== */}
+      {/* ABA: FICHAS TÉCNICAS E CMV */}
+      {/* ============================================================== */}
       {estoqueSubTab === 'fichas' && (
-        <section className="space-y-6">
+        <section className="space-y-6 animate-fade-in-up">
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <h2 className="text-xl font-black text-slate-900 mb-2">Fichas Técnicas & Rentabilidade (CMV)</h2>
             <p className="text-sm text-slate-500 mb-6">Monte a receita exata de cada produto para calcular o Custo de Mercadoria Vendida (CMV) e abater do estoque automaticamente.</p>
@@ -269,9 +380,11 @@ export default function StockTab({
         </section>
       )}
 
+      {/* ============================================================== */}
+      {/* ABA: RELATÓRIO DE LUCRATIVIDADE */}
+      {/* ============================================================== */}
       {estoqueSubTab === 'lucratividade' && (
         <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm animate-fade-in-up">
-          
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
              <div>
                <h2 className="text-xl font-black text-slate-900">Relatório Geral de Lucratividade</h2>
@@ -293,17 +406,8 @@ export default function StockTab({
 
           {financeAnalysis && (
              <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl mb-8 animate-fade-in-up relative">
-                <button 
-                   onClick={() => setFinanceAnalysis(null)} 
-                   className="absolute top-4 right-4 bg-amber-200 text-amber-800 hover:bg-amber-300 w-8 h-8 rounded-full font-bold flex items-center justify-center transition-colors"
-                >
-                   ✕
-                </button>
-                <div className="flex items-center gap-3 mb-4">
-                   <span className="text-3xl">🧠</span>
-                   <h3 className="text-xl font-black text-amber-900">Análise do Conselheiro IA</h3>
-                </div>
-                
+                <button onClick={() => setFinanceAnalysis(null)} className="absolute top-4 right-4 bg-amber-200 text-amber-800 hover:bg-amber-300 w-8 h-8 rounded-full font-bold flex items-center justify-center transition-colors">✕</button>
+                <div className="flex items-center gap-3 mb-4"><span className="text-3xl">🧠</span><h3 className="text-xl font-black text-amber-900">Análise do Conselheiro IA</h3></div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-amber-100">
                    <div className="text-slate-800 text-sm leading-relaxed whitespace-pre-wrap font-medium">
                       {typeof financeAnalysis === 'string' ? financeAnalysis : financeAnalysis.resumo || "Não foi possível carregar a análise. Tente novamente."}
@@ -315,13 +419,7 @@ export default function StockTab({
           <div className="overflow-x-auto border border-slate-100 rounded-2xl">
              <table className="w-full text-left text-sm text-slate-700">
                <thead className="bg-slate-50 text-xs text-slate-500 uppercase border-b border-slate-100">
-                 <tr>
-                   <th className="px-6 py-4">Produto</th>
-                   <th className="px-6 py-4 text-right">Custo da Receita</th>
-                   <th className="px-6 py-4 text-right">Preço de Venda</th>
-                   <th className="px-6 py-4 text-right">Lucro Bruto (R$)</th>
-                   <th className="px-6 py-4 text-right">Margem de Lucro</th>
-                 </tr>
+                 <tr><th className="px-6 py-4">Produto</th><th className="px-6 py-4 text-right">Custo da Receita</th><th className="px-6 py-4 text-right">Preço de Venda</th><th className="px-6 py-4 text-right">Lucro Bruto (R$)</th><th className="px-6 py-4 text-right">Margem de Lucro</th></tr>
                </thead>
                <tbody>
                  {allProducts.length === 0 && <tr><td colSpan="5" className="text-center py-8">Nenhum produto cadastrado.</td></tr>}
@@ -341,18 +439,10 @@ export default function StockTab({
                    return (
                      <tr key={product.id} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors">
                        <td className="px-6 py-4 font-bold text-slate-900">{product.name}</td>
-                       <td className="px-6 py-4 text-right text-red-500 font-medium">
-                         {custoTotal > 0 ? `R$ ${custoTotal.toFixed(2)}` : <span className="text-slate-300">R$ 0.00</span>}
-                       </td>
+                       <td className="px-6 py-4 text-right text-red-500 font-medium">{custoTotal > 0 ? `R$ ${custoTotal.toFixed(2)}` : <span className="text-slate-300">R$ 0.00</span>}</td>
                        <td className="px-6 py-4 text-right font-medium">R$ {precoVenda.toFixed(2)}</td>
-                       <td className="px-6 py-4 text-right font-black text-emerald-600">
-                         {ficha.length > 0 ? `R$ ${lucroBruto.toFixed(2)}` : '-'}
-                       </td>
-                       <td className="px-6 py-4 text-right">
-                         <span className={`px-3 py-1 rounded-lg font-black text-xs ${margemColor}`}>
-                           {margemLucro !== "Sem Ficha" ? `${margemLucro}%` : margemLucro}
-                         </span>
-                       </td>
+                       <td className="px-6 py-4 text-right font-black text-emerald-600">{ficha.length > 0 ? `R$ ${lucroBruto.toFixed(2)}` : '-'}</td>
+                       <td className="px-6 py-4 text-right"><span className={`px-3 py-1 rounded-lg font-black text-xs ${margemColor}`}>{margemLucro !== "Sem Ficha" ? `${margemLucro}%` : margemLucro}</span></td>
                      </tr>
                    )
                  })}
@@ -362,8 +452,169 @@ export default function StockTab({
         </section>
       )}
 
+      {/* ============================================================== */}
+      {/* ABA: PREPAROS E SUB-RECEITAS (NOVO) */}
+      {/* ============================================================== */}
       {estoqueSubTab === 'receitas' && (
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-fade-in-up">
+          
+          {/* LADO ESQUERDO: FORMULÁRIO DE RECEITA */}
+          <div className="xl:col-span-1">
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm sticky top-4">
+              <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                 <h2 className="text-lg font-black text-slate-900">{formReceita.id ? '✏️ Editar Receita' : '🍲 Nova Receita / Preparo'}</h2>
+                 {formReceita.id && <button onClick={() => setFormReceita({ id: null, nome: '', insumoSaidaId: '', rendimento: '', preparo: '', itens: [], isActive: true })} className="text-xs font-bold text-slate-400 hover:text-red-500">Cancelar Edição</button>}
+              </div>
+              
+              <form onSubmit={handleSalvarReceita} className="space-y-4">
+                <div>
+                  <label className="text-xs text-slate-500 font-bold block mb-1">Nome do Preparo</label>
+                  <input type="text" required value={formReceita.nome} onChange={(e) => setFormReceita({...formReceita, nome: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 font-bold" placeholder="Ex: Panela de Arroz, Molho de Tomate..." />
+                </div>
+                
+                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl shadow-inner">
+                   <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mb-3">O que esta receita produz?</p>
+                   <div className="space-y-3">
+                     <div>
+                       <label className="text-xs text-emerald-800 font-bold block mb-1">Insumo Gerado (Estoque)</label>
+                       <select required value={formReceita.insumoSaidaId} onChange={(e) => setFormReceita({...formReceita, insumoSaidaId: e.target.value})} className="w-full bg-white border border-emerald-300 rounded-xl p-2 text-sm focus:outline-none font-bold text-emerald-900 cursor-pointer">
+                         <option value="">Selecione o Insumo Pronto...</option>
+                         {insumos.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
+                       </select>
+                     </div>
+                     <div>
+                       <label className="text-xs text-emerald-800 font-bold block mb-1">Rendimento (Quantidade Gerada)</label>
+                       <input type="number" step="0.001" required value={formReceita.rendimento} onChange={(e) => setFormReceita({...formReceita, rendimento: e.target.value})} className="w-full bg-white border border-emerald-300 rounded-xl p-2 text-sm focus:outline-none font-bold text-emerald-900" placeholder="Ex: 2.5 (Kg)" />
+                     </div>
+                   </div>
+                </div>
+
+                <div>
+                   <div className="flex justify-between items-center mb-2 mt-4">
+                      <label className="text-xs text-slate-500 font-bold uppercase tracking-widest block">Ingredientes</label>
+                      <button type="button" onClick={handleAddIngredienteReceita} className="text-[10px] bg-amber-100 text-amber-700 font-black px-2 py-1 rounded hover:bg-amber-200">+ Adicionar Insumo</button>
+                   </div>
+                   
+                   <div className="space-y-2">
+                     {formReceita.itens.map((item, index) => (
+                       <div key={index} className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                          <select required value={item.insumoId} onChange={(e) => handleIngredienteReceitaChange(index, 'insumoId', e.target.value)} className="flex-1 bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none">
+                             <option value="">Insumo Cru...</option>
+                             {insumos.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
+                          </select>
+                          <input type="number" step="0.001" required placeholder="Qtd" value={item.quantity} onChange={(e) => handleIngredienteReceitaChange(index, 'quantity', e.target.value)} className="w-20 bg-white border border-slate-200 rounded-lg p-2 text-xs text-center focus:outline-none" />
+                          <button type="button" onClick={() => handleRemoverIngredienteReceita(index)} className="text-red-500 font-black w-6 h-6 flex items-center justify-center hover:bg-red-50 rounded">✕</button>
+                       </div>
+                     ))}
+                     {formReceita.itens.length === 0 && <p className="text-xs text-slate-400 italic text-center py-2 border-2 border-dashed border-slate-200 rounded-xl">Clique em + Adicionar para inserir ingredientes.</p>}
+                   </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-500 font-bold block mb-1">Modo de Preparo (Opcional)</label>
+                  <textarea rows="3" value={formReceita.preparo} onChange={(e) => setFormReceita({...formReceita, preparo: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-blue-500 resize-none" placeholder="Instruções para a cozinha..." />
+                </div>
+
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg transition-all text-sm uppercase tracking-widest mt-2">
+                  {formReceita.id ? 'Salvar Edição' : 'Salvar Nova Receita'}
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* LADO DIREITO: LISTA DE RECEITAS SALVAS */}
+          <div className="xl:col-span-2">
+             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+                   <div>
+                     <h2 className="text-lg font-black text-slate-900">Seus Preparos & Sub-receitas</h2>
+                     <p className="text-xs text-slate-500 mt-1">Produza as receitas para abater o estoque cru e dar entrada no item pronto.</p>
+                   </div>
+                </div>
+                
+                <div className="p-6 overflow-y-auto flex-1 bg-slate-100 space-y-4">
+                   {receitasDB.length === 0 && <div className="text-center py-10 text-slate-400 font-bold">Nenhuma receita cadastrada ainda.</div>}
+                   {receitasDB.map(receita => {
+                      const dados = JSON.parse(receita.ingredientes || '{}');
+                      const insumoGerado = insumos.find(i => i.id === dados.insumoSaidaId);
+                      const isActive = dados.isActive !== false;
+
+                      return (
+                         <div key={receita.id} className={`bg-white rounded-2xl border p-5 shadow-sm transition-all ${isActive ? 'border-blue-200' : 'border-slate-300 opacity-60 grayscale'}`}>
+                            
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                               <div>
+                                  <div className="flex items-center gap-3">
+                                     <h3 className="text-lg font-black text-slate-800">{receita.nome}</h3>
+                                     {!isActive && <span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Inativo</span>}
+                                  </div>
+                                  {insumoGerado && <p className="text-xs font-bold text-emerald-600 mt-1">Gera: {dados.rendimento} {insumoGerado.unit} de {insumoGerado.name}</p>}
+                               </div>
+                               
+                               <div className="flex items-center gap-2">
+                                  <button onClick={() => handleToggleReceitaStatus(receita)} className={`text-[10px] font-black px-3 py-1.5 rounded-lg transition-colors ${isActive ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
+                                     {isActive ? 'Desativar' : 'Ativar'}
+                                  </button>
+                                  <button onClick={() => handleEditReceita(receita)} className="text-[10px] font-black bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100">Editar</button>
+                                  <button onClick={() => handleDeleteReceita(receita.id)} className="text-[10px] font-black bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100">Excluir</button>
+                               </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Ingredientes Usados</p>
+                                  <ul className="space-y-1.5">
+                                     {(dados.itens || []).map((item, i) => {
+                                        const ins = insumos.find(x => x.id === item.insumoId);
+                                        return (
+                                           <li key={i} className="text-xs font-bold text-slate-700 flex justify-between border-b border-slate-200/50 pb-1 last:border-0">
+                                              <span>{ins ? ins.name : 'Insumo Excluído'}</span>
+                                              <span className="text-slate-500">{item.quantity} {ins?.unit}</span>
+                                           </li>
+                                        )
+                                     })}
+                                  </ul>
+                               </div>
+                               <div className="flex flex-col justify-center bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                                  <div className="flex justify-between items-center mb-2">
+                                     <span className="text-xs font-bold text-slate-600">Custo Total da Panela:</span>
+                                     <span className="text-sm font-black text-red-500">R$ {Number(dados.custoTotal || 0).toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                     <span className="text-xs font-bold text-slate-600">Custo por {insumoGerado?.unit || 'Unid'}:</span>
+                                     <span className="text-sm font-black text-emerald-600">R$ {Number(dados.custoPorUnidade || 0).toFixed(2)}</span>
+                                  </div>
+                               </div>
+                            </div>
+
+                            {isActive && (
+                               <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
+                                  <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                                     <span className="text-[10px] font-black uppercase text-slate-500 px-3 bg-white border-r border-slate-200 py-3">Produzir</span>
+                                     <input type="number" min="1" step="0.5" value={multiplicadores[receita.id] || 1} onChange={(e) => setMultiplicadores({...multiplicadores, [receita.id]: e.target.value})} className="w-16 bg-transparent text-center text-sm font-black text-slate-800 focus:outline-none py-2" title="Multiplicador (Quantas vezes fez a receita?)" />
+                                     <span className="text-[10px] font-black uppercase text-slate-500 px-3 bg-white border-l border-slate-200 py-3">Vezes</span>
+                                  </div>
+                                  <button onClick={() => handleProduzirReceita(receita.id)} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-3 rounded-xl shadow-md transition-colors text-sm uppercase tracking-widest">
+                                     👨‍🍳 Confirmar Produção
+                                  </button>
+                               </div>
+                            )}
+
+                         </div>
+                      );
+                   })}
+                </div>
+             </div>
+          </div>
+
+        </section>
+      )}
+
+      {/* ============================================================== */}
+      {/* ABA: CHEF IA (SEPARADA) */}
+      {/* ============================================================== */}
+      {estoqueSubTab === 'chef-ia' && (
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in-up">
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 md:p-8 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden">
              <div className="absolute top-0 right-0 p-6 text-6xl opacity-10">✨</div>
              <h2 className="text-2xl font-black text-amber-500 mb-2 relative z-10">Criador de Receitas com IA</h2>
@@ -401,13 +652,13 @@ export default function StockTab({
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                <h3 className="font-black text-slate-900 mb-4 flex items-center gap-2"><span>📖</span> Livro de Receitas da IA</h3>
                
-               {loadingRecipes ? (
+               {loadingAiRecipes ? (
                  <p className="text-slate-500 text-sm animate-pulse flex justify-center py-6">Consultando livros...</p>
-               ) : savedRecipes.length === 0 ? (
+               ) : savedAiRecipes.length === 0 ? (
                  <p className="text-slate-500 text-sm italic text-center py-6">Nenhuma receita gerada ainda.</p>
                ) : (
                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                   {savedRecipes.map(receita => {
+                   {savedAiRecipes.map(receita => {
                       const listIngredientes = JSON.parse(receita.ingredientes || '[]');
                       return (
                        <div key={receita.id} className="bg-slate-50 border border-slate-100 p-4 rounded-2xl hover:border-amber-200 transition-colors shadow-sm">
@@ -433,6 +684,9 @@ export default function StockTab({
         </section>
       )}
 
+      {/* ============================================================== */}
+      {/* ABA: MOVIMENTAÇÕES (ENTRADAS E SAÍDAS) */}
+      {/* ============================================================== */}
       {estoqueSubTab === 'movimentacoes' && (() => {
         const notasImportadas = Object.values(
           movimentacoes.filter(m => m.xmlRef).reduce((acc, mov) => {
@@ -495,9 +749,9 @@ export default function StockTab({
 
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mt-6">
                <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h2 className="text-lg font-black text-slate-900">Extrato Detalhado de Movimentações (Item a Item)</h2></div>
-               <div className="overflow-x-auto">
+               <div className="overflow-x-auto max-h-[60vh]">
                  <table className="w-full text-left text-sm text-slate-700">
-                   <thead className="bg-slate-50 text-xs text-slate-500 uppercase"><tr><th className="px-6 py-4">Data/Hora</th><th className="px-6 py-4">Tipo</th><th className="px-6 py-4">Insumo</th><th className="px-6 py-4 text-right">Qtd</th><th className="px-6 py-4">Motivo</th></tr></thead>
+                   <thead className="bg-slate-50 text-xs text-slate-500 uppercase sticky top-0 shadow-sm"><tr><th className="px-6 py-4">Data/Hora</th><th className="px-6 py-4">Tipo</th><th className="px-6 py-4">Insumo</th><th className="px-6 py-4 text-right">Qtd</th><th className="px-6 py-4">Motivo</th></tr></thead>
                    <tbody>
                      {movimentacoes.length === 0 && <tr><td colSpan="5" className="text-center py-8 text-slate-400">Nenhuma movimentação.</td></tr>}
                      {movimentacoes.map(mov => (
@@ -517,6 +771,7 @@ export default function StockTab({
         );
       })()}
 
+      {/* MODAL DE EDIÇÃO DE INSUMO (CRU) */}
       {editingInsumo && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up">
@@ -533,6 +788,7 @@ export default function StockTab({
         </div>
       )}
 
+      {/* MODAL DE IMPORTAÇÃO DE XML */}
       {showXmlModal && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in-up">
