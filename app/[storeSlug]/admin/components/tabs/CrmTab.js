@@ -56,6 +56,9 @@ export default function CrmTab({
   const [extratoStartDate, setExtratoStartDate] = useState('');
   const [extratoEndDate, setExtratoEndDate] = useState('');
 
+  // Estado para controlar o botão de exportar
+  const [exportingId, setExportingId] = useState(null);
+
   // 🛡️ Helper local para garantir o envio do x-store-id e Token JWT
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken');
@@ -192,39 +195,74 @@ export default function CrmTab({
   };
 
   // ============================================================================
-  // EXPORTAÇÃO DE HISTÓRICO DE CONSUMO GERAL DO CLIENTE
+  // EXPORTAÇÃO DE HISTÓRICO DE CONSUMO GERAL DO CLIENTE (CORRIGIDA)
   // ============================================================================
-  const exportCustomerOrdersToExcel = (cliente) => {
+  const exportCustomerOrdersToExcel = async (cliente) => {
     if (!cliente || !cliente.orders || cliente.orders.length === 0) {
       return alert("Este cliente ainda não possui histórico de consumo.");
     }
 
-    const statusMap = { 
-      PENDING: 'Pendente', 
-      PREPARING: 'Preparando', 
-      READY: 'Pronto/Aguardando', 
-      IN_TRANSIT: 'Em Rota', 
-      DELIVERED: 'Concluído', 
-      CANCELED: 'Cancelado' 
-    };
-    
-    const rows = cliente.orders.map(o => [
-       new Date(o.createdAt).toLocaleDateString('pt-BR'),
-       new Date(o.createdAt).toLocaleTimeString('pt-BR'),
-       `#${o.shortId || o.id.substring(0,6)}`,
-       statusMap[o.status] || o.status,
-       o.paymentMethod || 'Não Informado',
-       `R$ ${Number(o.total || 0).toFixed(2).replace('.', ',')}`
-    ]);
+    setExportingId(cliente.id); // Mostra o botão "Gerando..."
 
-    const csvContent = ["Data;Hora;Pedido;Status;Forma Pagamento;Total (R$)", ...rows.map(e => e.join(";"))].join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a"); 
-    link.href = URL.createObjectURL(blob); 
-    link.download = `Historico_Consumo_${cliente.name.replace(/\s/g,'_')}.csv`; 
-    document.body.appendChild(link); 
-    link.click(); 
-    document.body.removeChild(link);
+    try {
+      // 1. Busca os pedidos no backend para pegar as datas e totais completos
+      const res = await fetchWithStore(`${API_URL}/api/orders`);
+      if (!res.ok) throw new Error("Erro na requisição");
+      const allOrders = await res.json();
+
+      // 2. Filtra os pedidos específicos do cliente clicado
+      const fullClientOrders = allOrders.filter(o => o.clientId === cliente.id);
+
+      if (fullClientOrders.length === 0) {
+         setExportingId(null);
+         return alert("O detalhamento dos pedidos não foi encontrado. Podem ser muito antigos.");
+      }
+
+      const statusMap = { 
+        PENDING: 'Pendente', 
+        PREPARING: 'Preparando', 
+        READY: 'Pronto/Aguardando', 
+        IN_TRANSIT: 'Em Rota', 
+        DELIVERED: 'Concluído', 
+        CANCELED: 'Cancelado' 
+      };
+      
+      const rows = fullClientOrders.map(o => {
+         const dataObj = new Date(o.createdAt);
+         const dataStr = isNaN(dataObj.getTime()) ? 'Data Inválida' : dataObj.toLocaleDateString('pt-BR');
+         const timeStr = isNaN(dataObj.getTime()) ? '--:--' : dataObj.toLocaleTimeString('pt-BR');
+
+         const payMethod = o.paymentMethod === 'CREDIT_CARD_ONLINE' ? 'Cartão (Site)' :
+                           o.paymentMethod === 'PIX_ONLINE' ? 'Pix (Site)' :
+                           o.paymentMethod === 'CREDIT_CARD_DELIVERY' ? 'Cartão (Entrega)' :
+                           o.paymentMethod === 'CASH' ? 'Dinheiro' :
+                           o.paymentMethod === 'PAGAR_NO_CAIXA' ? 'Pagar no Caixa' :
+                           o.paymentMethod || 'Não Informado';
+
+         return [
+           dataStr,
+           timeStr,
+           `#${o.shortId || o.id.substring(0,6)}`,
+           statusMap[o.status] || o.status,
+           payMethod,
+           `R$ ${Number(o.total || 0).toFixed(2).replace('.', ',')}`
+         ];
+      });
+
+      const csvContent = ["Data;Hora;Pedido;Status;Forma Pagamento;Total (R$)", ...rows.map(e => e.join(";"))].join("\n");
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a"); 
+      link.href = URL.createObjectURL(blob); 
+      link.download = `Historico_Consumo_${cliente.name.replace(/\s/g,'_')}.csv`; 
+      document.body.appendChild(link); 
+      link.click(); 
+      document.body.removeChild(link);
+
+    } catch (error) {
+      alert("Falha ao extrair os dados do servidor. Verifique a conexão.");
+    }
+
+    setExportingId(null); // Esconde o botão "Gerando..."
   };
 
   // ============================================================================
@@ -290,7 +328,7 @@ export default function CrmTab({
         </div>
         
         {crmSubTab === 'clientes' && (
-           <button onClick={handleOpenNewCustomer} className="bg-blue-600 hover:bg-blue-700 text-white font-black px-4 py-2 rounded-xl text-sm transition-colors shadow-sm">
+           <button onClick={handleOpenNewCustomer} className="bg-blue-600 hover:bg-blue-700 text-white font-black px-4 py-2 rounded-xl text-sm transition-colors shadow-sm cursor-pointer">
              + Adicionar Cliente
            </button>
         )}
@@ -320,8 +358,8 @@ export default function CrmTab({
                     <td className="px-6 py-4 text-center"><span className="bg-slate-200 text-slate-800 px-3 py-1 rounded-full font-bold">{c.orders?.length || 0}</span></td>
                     <td className="px-6 py-4 text-right"><span className="font-bold text-emerald-600">R$ {Number(c.cashback?.balance || 0).toFixed(2)}</span></td>
                     <td className="px-6 py-4 text-center flex justify-center gap-2">
-                      <button onClick={() => exportCustomerOrdersToExcel(c)} title="Exportar Histórico Completo de Pedidos" className="text-emerald-600 hover:text-emerald-700 font-bold bg-emerald-100 hover:bg-emerald-200 px-3 py-1.5 rounded-lg transition-colors text-xs cursor-pointer">
-                        📊 Histórico
+                      <button disabled={exportingId === c.id} onClick={() => exportCustomerOrdersToExcel(c)} title="Exportar Histórico Completo de Pedidos" className="text-emerald-600 disabled:opacity-50 hover:text-emerald-700 font-bold bg-emerald-100 hover:bg-emerald-200 px-3 py-1.5 rounded-lg transition-colors text-xs cursor-pointer">
+                        {exportingId === c.id ? '⏳ Gerando...' : '📊 Histórico'}
                       </button>
                       <button onClick={() => handleOpenEditCustomer(c)} className="text-blue-600 hover:text-blue-700 font-bold bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-lg transition-colors text-xs cursor-pointer">Editar</button>
                       <button onClick={() => handleToggleBlock(c)} className={`font-bold px-3 py-1.5 rounded-lg transition-colors text-xs cursor-pointer ${c.isBlocked ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
@@ -374,7 +412,7 @@ export default function CrmTab({
           <div className="bg-white p-8 rounded-3xl w-full max-w-3xl shadow-2xl animate-fade-in-up max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center mb-6 shrink-0 border-b border-slate-100 pb-4">
               <h3 className="text-xl font-black text-slate-900">{customerForm.id ? '✏️ Editar Cliente' : '👥 Novo Cliente'}</h3>
-              <button onClick={() => setShowCustomerModal(false)} className="text-slate-400 hover:text-red-500 font-bold text-xl">✕</button>
+              <button onClick={() => setShowCustomerModal(false)} className="text-slate-400 hover:text-red-500 font-bold text-xl cursor-pointer">✕</button>
             </div>
             
             <div className="flex-1 overflow-y-auto pr-2 hide-scrollbar">
@@ -451,8 +489,8 @@ export default function CrmTab({
             </div>
             
             <div className="shrink-0 pt-4 mt-4 border-t border-slate-100 flex gap-4">
-              <button type="button" onClick={() => setShowCustomerModal(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-4 rounded-xl transition-colors">Cancelar</button>
-              <button type="submit" form="customerForm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg transition-all">Salvar Cliente</button>
+              <button type="button" onClick={() => setShowCustomerModal(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-4 rounded-xl transition-colors cursor-pointer">Cancelar</button>
+              <button type="submit" form="customerForm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg transition-all cursor-pointer">Salvar Cliente</button>
             </div>
 
           </div>
