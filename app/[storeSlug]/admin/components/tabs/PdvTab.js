@@ -8,6 +8,9 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   const [shiftId, setShiftId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [printerName, setPrinterName] = useState('');
+  
+  // NOVO: Estado para armazenar configurações gerais (Smart POS, etc)
+  const [fullSettings, setFullSettings] = useState(null);
 
   const [customers, setCustomers] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -108,7 +111,14 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   };
 
   const fetchSettings = async () => {
-    try { const res = await fetchWithStore(`${API_URL}/api/settings`); if (res.ok) { const data = await res.json(); setPrinterName(data.printerName || ''); } } catch(e){}
+    try { 
+        const res = await fetchWithStore(`${API_URL}/api/settings`); 
+        if (res.ok) { 
+            const data = await res.json(); 
+            setPrinterName(data.printerName || ''); 
+            setFullSettings(data); // Guarda configurações do Smart POS
+        } 
+    } catch(e){}
   }
 
   const checkRegisterStatus = async () => {
@@ -342,6 +352,74 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   };
 
   // ==============================================================
+  // INTEGRAÇÃO SMART POS PDV (APP-TO-APP)
+  // ==============================================================
+  const dispararPagamentoSmartPos = (provider, totalFinal, metodoPagamento, orderId) => {
+    const valorCentavos = Math.round(Number(totalFinal) * 100);
+    
+    let tipoTransacao = 'DEBIT'; 
+    if (metodoPagamento.includes('CREDIT')) tipoTransacao = 'CREDIT';
+    if (metodoPagamento.includes('PIX')) tipoTransacao = 'PIX';
+
+    // A URL de retorno no caixa fixo pode ser simplesmente a raiz do admin
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
+    const returnUrl = encodeURIComponent(`${window.location.origin}/${storeId}/pdv`);
+
+    let deepLink = '';
+    switch (provider) {
+      case 'stone':
+        deepLink = `stone://pay?amount=${valorCentavos}&editable_amount=0&transaction_type=${tipoTransacao}&return_scheme=${returnUrl}`;
+        break;
+      case 'pagseguro':
+        let pagTipo = 2; 
+        if (tipoTransacao === 'CREDIT') pagTipo = 1;
+        if (tipoTransacao === 'PIX') pagTipo = 4;
+        deepLink = `pagseguro://pay?amount=${valorCentavos}&type=${pagTipo}&return_scheme=${returnUrl}`;
+        break;
+      case 'mercado_pago':
+        deepLink = `mercadopago://pay?amount=${Number(totalFinal).toFixed(2)}&return_url=${returnUrl}`;
+        break;
+      default: return false;
+    }
+
+    console.log(`[Smart POS Caixa Fixo] Disparando: ${deepLink}`);
+    window.location.href = deepLink;
+    return true;
+  };
+
+  // ==============================================================
+  // MOTOR DE EMISSÃO FISCAL NATIVA E IMPRESSÃO LOCAL
+  // ==============================================================
+  const processFiscalAndPrint = async (orderId, currentCart, finalClientName, finalTotal, chosenPayment) => {
+      try {
+          // 1. Emissão Silenciosa na SEFAZ
+          const resFiscal = await fetchWithStore(`${API_URL}/api/fiscal/emitir/${orderId}`, { method: 'POST' });
+          const dataFiscal = await resFiscal.json();
+          
+          if (dataFiscal.success && dataFiscal.dados) {
+              // 2. Monta objeto legível para a impressora
+              const pedidoImpressao = {
+                  shortId: loadedTab ? loadedTab.number : orderId,
+                  createdAt: new Date().toISOString(),
+                  client: { name: finalClientName },
+                  items: currentCart,
+                  total: finalTotal,
+                  paymentMethod: chosenPayment
+              };
+
+              // 3. Imprime Localmente na porta 8080 do próprio PC!
+              fetch(`http://localhost:8080/imprimir-nfce`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ pedido: pedidoImpressao, dadosNota: dataFiscal.dados, printerName })
+              }).catch(e => console.warn("Impressora local inacessível no localhost:8080"));
+          }
+      } catch(err) {
+          console.error("Erro fiscal silencioso:", err);
+      }
+  };
+
+  // ==============================================================
   // FINALIZAÇÃO DE VENDA
   // ==============================================================
   const subtotal = (cart || []).reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
@@ -357,6 +435,25 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   const cartTotal = subtotalComDesconto / Math.max(1, splitCount);
 
   useEffect(() => { if (isEmployeePurchase) setPaymentMethod('EMPLOYEE_ACCOUNT'); else setPaymentMethod('CASH'); }, [isEmployeePurchase]);
+
+  const resetPdvState = () => {
+      setCart([]); setLoadedTab(null); setSearchTabNumber(''); setSearchCustomerText(''); setSelectedSeatFilter('TODOS'); 
+      setSelectedEmployeeBuyer(null); setSelectedCustomer(null); setIsEmployeePurchase(false); 
+      setShowLimitOverrideModal(false); setManagerAuthLimit({ email: '', password: '' }); fetchEmployees();
+  };
+
+  const executeSmartPosOrFinish = (orderId, totalPaid, method) => {
+      const provider = fullSettings?.smartPosProvider;
+      const metodosEletronicos = ['CREDIT_CARD_DELIVERY', 'DEBIT_CARD', 'PIX'];
+      
+      if (provider && provider !== 'none' && metodosEletronicos.includes(method)) {
+          alert("A enviar valor para a máquina de cartões...");
+          dispararPagamentoSmartPos(provider, totalPaid, method, orderId);
+      } else {
+          alert(`✅ Transação concluída com sucesso!`);
+      }
+      resetPdvState();
+  };
 
   const handleCheckoutPDV = async (overrideAuth = null) => {
     const currentCart = cart || [];
@@ -378,12 +475,14 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
         const data = await res.json();
         
         if (data.success) { 
-           alert(`✅ Conta paga com sucesso! R$ ${data.totalPaid.toFixed(2)}`); 
-           setCart([]); setLoadedTab(null); setSearchTabNumber(''); setSearchCustomerText(''); setSelectedSeatFilter('TODOS'); setSelectedEmployeeBuyer(null); setSelectedCustomer(null); setIsEmployeePurchase(false); setShowLimitOverrideModal(false); setManagerAuthLimit({ email: '', password: '' }); fetchEmployees();
+           const finalOrderId = data.orderId || loadedTab.id;
+           if (paymentMethod !== 'CUSTOMER_ACCOUNT' && paymentMethod !== 'EMPLOYEE_ACCOUNT') {
+               await processFiscalAndPrint(finalOrderId, currentCart, finalClientName, data.totalPaid, paymentMethod);
+           }
+           executeSmartPosOrFinish(finalOrderId, data.totalPaid, paymentMethod);
         } else {
            if (data.code === 'LIMIT_EXCEEDED') {
-              setLimitErrorMessage(data.error);
-              setShowLimitOverrideModal(true);
+              setLimitErrorMessage(data.error); setShowLimitOverrideModal(true);
            } else { alert(data.error); }
         }
       } catch (e) { alert('Erro ao processar pagamento do salão.'); }
@@ -416,11 +515,14 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       const data = await res.json();
       
       if (data.success) { 
-         alert("Venda registrada com sucesso!"); setCart([]); setDiscountValue(''); setSearchCustomerText(''); setSelectedCustomer(null); setSelectedEmployeeBuyer(null); setIsEmployeePurchase(false); setShowLimitOverrideModal(false); setManagerAuthLimit({ email: '', password: '' }); fetchEmployees();
+         const finalOrderId = data.order?.id || data.orderId;
+         if (paymentMethod !== 'CUSTOMER_ACCOUNT' && paymentMethod !== 'EMPLOYEE_ACCOUNT') {
+             await processFiscalAndPrint(finalOrderId, currentCart, finalClientName, cartTotal, paymentMethod);
+         }
+         executeSmartPosOrFinish(finalOrderId, cartTotal, paymentMethod);
       } else {
          if (data.code === 'LIMIT_EXCEEDED') {
-            setLimitErrorMessage(data.error);
-            setShowLimitOverrideModal(true);
+            setLimitErrorMessage(data.error); setShowLimitOverrideModal(true);
          } else { alert(data.error); }
       }
     } catch (e) { alert("Erro de conexão com o servidor."); }
@@ -443,7 +545,19 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       });
       const data = await res.json();
       if (data.success) {
+        
+        // Emite Fiscalmente a Venda do Totem Recebida no Caixa
+        await processFiscalAndPrint(selectedTotemOrder.id, selectedTotemOrder.items, selectedTotemOrder.customerName, selectedTotemOrder.total, totemPaymentMethod);
+        
         alert("Recebimento do Totem confirmado e pedido liberado para Cozinha!");
+        
+        // Verifica se envia para a Maquininha (Smart POS)
+        const provider = fullSettings?.smartPosProvider;
+        const metodosEletronicos = ['CREDIT_CARD_DELIVERY', 'DEBIT_CARD', 'PIX'];
+        if (provider && provider !== 'none' && metodosEletronicos.includes(totemPaymentMethod)) {
+            dispararPagamentoSmartPos(provider, selectedTotemOrder.total, totemPaymentMethod, selectedTotemOrder.id);
+        }
+
         setSelectedTotemOrder(null);
         fetchAwaitingTotemOrders();
       } else {
