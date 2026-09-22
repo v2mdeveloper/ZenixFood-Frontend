@@ -205,14 +205,14 @@ export default function TotemModerno() {
   // ============================================================================
   // INTEGRAÇÃO SMART POS TOTEM: DEEP LINK (APP-TO-APP)
   // ============================================================================
-  const dispararPagamentoSmartPos = (provider, totalFinal, metodoPagamento, orderId) => {
+ const dispararPagamentoSmartPos = (provider, totalFinal, metodoPagamento, orderId) => {
     const valorCentavos = Math.round(Number(totalFinal) * 100);
     
     let tipoTransacao = 'DEBIT'; 
     if (metodoPagamento.includes('CREDIT')) tipoTransacao = 'CREDIT';
     if (metodoPagamento.includes('PIX')) tipoTransacao = 'PIX';
 
-    // Para o Totem, a URL de retorno é o próprio Totem (que já estará na tela de descanso)
+    // Pega a URL exata em que você está agora para a máquina saber para onde voltar
     const returnUrl = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
 
     let deepLink = '';
@@ -222,23 +222,36 @@ export default function TotemModerno() {
         deepLink = `stone://pay?amount=${valorCentavos}&editable_amount=0&transaction_type=${tipoTransacao}&return_scheme=${returnUrl}`;
         break;
       case 'pagseguro':
-        let pagTipo = 2; 
-        if (tipoTransacao === 'CREDIT') pagTipo = 1;
-        if (tipoTransacao === 'PIX') pagTipo = 4;
+        let pagTipo = 2; if (tipoTransacao === 'CREDIT') pagTipo = 1; if (tipoTransacao === 'PIX') pagTipo = 4;
         deepLink = `pagseguro://pay?amount=${valorCentavos}&type=${pagTipo}&return_scheme=${returnUrl}`;
         break;
       case 'mercado_pago':
         deepLink = `mercadopago://pay?amount=${Number(totalFinal).toFixed(2)}&return_url=${returnUrl}`;
         break;
-      default:
-        return false;
+      
+      // 🔥 O NOSSO SIMULADOR DE MÁQUINA!
+      case 'simulador':
+        alert(`(SIMULADOR) O sistema chamou a máquina de cartões.\n\nValor: R$ ${Number(totalFinal).toFixed(2)}\nMétodo: ${tipoTransacao}\n\nAguardando cliente digitar a senha...`);
+        
+        // Finge que o cliente demorou 3 segundos a pagar e devolve para o sistema!
+        setTimeout(() => {
+            alert("(SIMULADOR) Pagamento Aprovado na Máquina! Imprimindo comprovante...");
+            // Como estamos num teste web, não precisamos redirecionar pois já estamos na tela, 
+            // basta deixar o fluxo do React continuar!
+        }, 3000);
+        return true;
+
+      default: return false;
     }
 
-    console.log(`[Smart POS Totem] Disparando: ${deepLink}`);
-    window.location.href = deepLink;
+    // Só tenta abrir o Deep Link se NÃO for o simulador (para evitar erros no PC)
+    if (provider !== 'simulador') {
+        console.log(`[Smart POS] Disparando: ${deepLink}`);
+        window.location.href = deepLink;
+    }
+    
     return true;
   };
-
   // ==========================================
   // FINALIZAÇÃO DE PEDIDO COM INTERCEPTAÇÃO SMART POS
   // ==========================================
