@@ -1,15 +1,45 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function AjudaTab({ isAdmin }) {
-  // Estado para controlar a aba selecionada na Central de Ajuda
+  const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
+    ? 'http://localhost:3333' 
+    : 'https://zenixfood-backend.onrender.com';
+
+  const fetchWithStore = async (url, options = {}) => {
+    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
+    const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-loja-slug': storeId }), ...options.headers };
+    return fetch(url, { ...options, headers });
+  };
+
   const [activeHelpTab, setActiveHelpTab] = useState('geral');
+  const [savedLinks, setSavedLinks] = useState({}); // Guarda os links vindos do banco de dados
+  const [editingId, setEditingId] = useState(null);
+  const [tempVideoUrl, setTempVideoUrl] = useState('');
+
+  // 1. CARREGA OS LINKS DO BANCO DE DADOS QUANDO ABRIR A PÁGINA
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await fetchWithStore(`${API_URL}/api/settings`);
+        if (res.ok) {
+          const data = await res.json();
+          // Se já existirem links salvos no banco, ele carrega para a tela
+          if (data.ajudaVideoLinks) {
+            setSavedLinks(JSON.parse(data.ajudaVideoLinks));
+          }
+        }
+      } catch (e) {
+        console.error("Erro ao carregar links de vídeos", e);
+      }
+    };
+    loadSettings();
+  }, []);
 
   const modulosGeral = [
     {
-      id: 'visao_geral',
-      icone: '🚀',
-      titulo: 'Visão Geral do ZenixFood',
+      id: 'visao_geral', icone: '🚀', titulo: 'Visão Geral do ZenixFood',
       descricao: 'Bem-vindo ao ZenixFood! Este módulo apresenta o poder do sistema.',
       topicos: [
         'Como o ZenixFood centraliza todos os setores do seu restaurante num único lugar.',
@@ -23,12 +53,10 @@ export default function AjudaTab({ isAdmin }) {
 
   const modulosOperacional = [
     {
-      id: 'pdv',
-      icone: '💻',
-      titulo: 'PDV Fixo (Caixa Principal)',
-      descricao: 'O coração financeiro do restaurante, desenhado para ser rápido e à prova de falhas[cite: 1].',
+      id: 'pdv', icone: '💻', titulo: 'PDV Fixo (Caixa Principal)',
+      descricao: 'O coração financeiro do restaurante, desenhado para ser rápido e à prova de falhas.',
       topicos: [
-        'Abertura e Fecho de Caixa com contagem cega para segurança total.',
+        'Abertura e Fechamento de Caixa com contagem cega para segurança total.',
         'Registo de Sangrias (Retiradas de dinheiro em excesso) e Suprimentos (Entrada de moedas para troco).',
         'Recebimento ágil de Comandas e Mesas vindas do salão e aplicação de descontos.',
         'Emissão de NFC-e nativa e impressão automática de recibos térmicos no balcão.'
@@ -36,10 +64,8 @@ export default function AjudaTab({ isAdmin }) {
       videoUrl: ''
     },
     {
-      id: 'salao',
-      icone: '🪑',
-      titulo: 'Salão & Mesas / Lançamentos',
-      descricao: 'O módulo para os garçons e operadores de salão controlarem o fluxo de clientes[cite: 1].',
+      id: 'salao', icone: '🪑', titulo: 'Salão & Mesas / Lançamentos',
+      descricao: 'O módulo para os garçons e operadores de salão controlarem o fluxo de clientes.',
       topicos: [
         'Abertura de Mesas e Comandas Individuais associando o nome do cliente.',
         'Lançamento rápido de pedidos, incluindo o Construtor de Pizzas (Meio a Meio) e combos.',
@@ -49,10 +75,8 @@ export default function AjudaTab({ isAdmin }) {
       videoUrl: ''
     },
     {
-      id: 'kds',
-      icone: '🖥️',
-      titulo: 'Telas KDS (Monitor de Produção)',
-      descricao: 'O fim dos papéis na cozinha! Organiza a produção de forma digital e inteligente[cite: 1].',
+      id: 'kds', icone: '🖥️', titulo: 'Telas KDS (Monitor de Produção)',
+      descricao: 'O fim dos papéis na cozinha! Organiza a produção de forma digital e inteligente.',
       topicos: [
         'Telas separadas para Cozinha Principal, Expedição (Delivery) e Bar de Bebidas.',
         'Visualização de pedidos com cronômetro de atraso (verde, amarelo e vermelho).',
@@ -62,10 +86,8 @@ export default function AjudaTab({ isAdmin }) {
       videoUrl: ''
     },
     {
-      id: 'expedicao',
-      icone: '🛵',
-      titulo: 'Expedição & Rotas (Delivery)',
-      descricao: 'Controlo total sobre as entregas e os motoboys[cite: 1].',
+      id: 'expedicao', icone: '🛵', titulo: 'Expedição & Rotas (Delivery)',
+      descricao: 'Controlo total sobre as entregas e os motoboys.',
       topicos: [
         'Recepção de pedidos de Delivery (telefone, iFood, etc).',
         'Atribuição de pedidos específicos para cada motoboy.',
@@ -75,9 +97,7 @@ export default function AjudaTab({ isAdmin }) {
       videoUrl: ''
     },
     {
-      id: 'totem',
-      icone: '🤖',
-      titulo: 'Totem de Autoatendimento',
+      id: 'totem', icone: '🤖', titulo: 'Totem de Autoatendimento',
       descricao: 'A experiência de auto-pedido para os clientes, reduzindo filas no caixa.',
       topicos: [
         'Tela de descanso com atração visual e suporte a múltiplos idiomas.',
@@ -91,10 +111,8 @@ export default function AjudaTab({ isAdmin }) {
 
   const modulosProdutosEstoque = [
     {
-      id: 'produtos',
-      icone: '🍟',
-      titulo: 'Gestão de Produtos e Categorias',
-      descricao: 'A base do sistema: Onde você cria o que vende[cite: 1].',
+      id: 'produtos', icone: '🍟', titulo: 'Gestão de Produtos e Categorias',
+      descricao: 'A base do sistema: Onde você cria o que vende.',
       topicos: [
         'Criação de Produtos Simples, configuração de Preços por tamanho (700g, 1kg).',
         'Criação de Pizzas (configurando limites de sabores) e Combos.',
@@ -104,10 +122,8 @@ export default function AjudaTab({ isAdmin }) {
       videoUrl: ''
     },
     {
-      id: 'estoque',
-      icone: '📦',
-      titulo: 'Estoque, Insumos e Fichas Técnicas',
-      descricao: 'Controle de custos e ingredientes[cite: 1].',
+      id: 'estoque', icone: '📦', titulo: 'Estoque, Insumos e Fichas Técnicas',
+      descricao: 'Controle de custos e ingredientes.',
       topicos: [
         'Cadastro de Insumos (ingredientes) e gestão manual de estoque.',
         'Importação de XML de Notas Fiscais de Compra para atualizar o estoque automaticamente.',
@@ -117,10 +133,8 @@ export default function AjudaTab({ isAdmin }) {
       videoUrl: ''
     },
     {
-      id: 'impressoes',
-      icone: '🖨️',
-      titulo: 'Grupos de Produção e Impressoras',
-      descricao: 'Roteamento inteligente de impressão[cite: 1].',
+      id: 'impressoes', icone: '🖨️', titulo: 'Grupos de Produção e Impressoras',
+      descricao: 'Roteamento inteligente de impressão.',
       topicos: [
         'Cadastro de Impressoras Físicas (IP ou USB) na rede local.',
         'Criação de Grupos de Produção (ex: "Grelha", "Copa").',
@@ -133,10 +147,8 @@ export default function AjudaTab({ isAdmin }) {
 
   const modulosGestaoRelatorios = [
     {
-      id: 'financeiro',
-      icone: '💸',
-      titulo: 'Contas, Turnos e Financeiro',
-      descricao: 'A saúde financeira do seu negócio ao seu alcance[cite: 1].',
+      id: 'financeiro', icone: '💸', titulo: 'Contas, Turnos e Financeiro',
+      descricao: 'A saúde financeira do seu negócio ao seu alcance.',
       topicos: [
         'Controle de Contas a Pagar e a Receber.',
         'Resumo de Turnos e Faturamento (fechamento cego dos caixas).',
@@ -146,10 +158,8 @@ export default function AjudaTab({ isAdmin }) {
       videoUrl: ''
     },
     {
-      id: 'historico_analytics',
-      icone: '📊',
-      titulo: 'Relatórios Analíticos e Histórico',
-      descricao: 'Entenda os números para tomar decisões[cite: 1].',
+      id: 'historico_analytics', icone: '📊', titulo: 'Relatórios Analíticos e Histórico',
+      descricao: 'Entenda os números para tomar decisões.',
       topicos: [
         'Histórico completo de pedidos, permitindo re-impressão e cancelamentos.',
         'Análise de Top Produtos vendidos.',
@@ -159,10 +169,8 @@ export default function AjudaTab({ isAdmin }) {
       videoUrl: ''
     },
     {
-      id: 'rh_crm',
-      icone: '👔',
-      titulo: 'Equipe (RH) e Clientes (CRM)',
-      descricao: 'Gerencie quem trabalha para si e quem compra de si[cite: 1].',
+      id: 'rh_crm', icone: '👔', titulo: 'Equipe (RH) e Clientes (CRM)',
+      descricao: 'Gerencie quem trabalha para si e quem compra de si.',
       topicos: [
         'Criação de Perfis de Acesso (definindo o que cada cargo pode ver).',
         'Cadastro de Funcionários, definição de senhas e limites de "Fiado".',
@@ -172,10 +180,8 @@ export default function AjudaTab({ isAdmin }) {
       videoUrl: ''
     },
     {
-      id: 'promocoes',
-      icone: '🎟️',
-      titulo: 'Promoções e Cupons',
-      descricao: 'Estratégias para impulsionar as vendas[cite: 1].',
+      id: 'promocoes', icone: '🎟️', titulo: 'Promoções e Cupons',
+      descricao: 'Estratégias para impulsionar as vendas.',
       topicos: [
         'Criação de Cupons de Desconto (Valor fixo ou Percentual).',
         'Definição de regras de uso (Valor mínimo de compra, limite de utilizações).',
@@ -187,10 +193,8 @@ export default function AjudaTab({ isAdmin }) {
 
   const modulosConfiguracoes = [
     {
-      id: 'fiscal',
-      icone: '🧾',
-      titulo: 'Emissão Fiscal (NFC-e)',
-      descricao: 'Sistema próprio para emissão de notas sem dependência de terceiros[cite: 1].',
+      id: 'fiscal', icone: '🧾', titulo: 'Emissão Fiscal (NFC-e)',
+      descricao: 'Sistema próprio para emissão de notas sem dependência de terceiros.',
       topicos: [
         'Upload seguro do Certificado Digital A1 (.pfx).',
         'Configuração de Credenciais SEFAZ (CSC) e ambiente (Produção/Homologação).',
@@ -200,10 +204,8 @@ export default function AjudaTab({ isAdmin }) {
       videoUrl: ''
     },
     {
-      id: 'integracoes',
-      icone: '🔌',
-      titulo: 'Hub de Integrações',
-      descricao: 'Conexões essenciais do seu negócio[cite: 2].',
+      id: 'integracoes', icone: '🔌', titulo: 'Hub de Integrações',
+      descricao: 'Conexões essenciais do seu negócio.',
       topicos: [
         'Conexão com plataformas de Delivery (iFood, 99Food, Keeta).',
         'Configuração do Mercado Pago para recebimentos online.',
@@ -212,10 +214,8 @@ export default function AjudaTab({ isAdmin }) {
       videoUrl: ''
     },
     {
-      id: 'config',
-      icone: '⚙️',
-      titulo: 'Configurações e Minha Empresa',
-      descricao: 'Ajustes globais do sistema[cite: 2].',
+      id: 'config', icone: '⚙️', titulo: 'Configurações e Minha Empresa',
+      descricao: 'Ajustes globais do sistema.',
       topicos: [
         'Ajuste do Horário de Funcionamento e abertura manual da loja.',
         'Configuração de logotipos, banners e taxas de entrega.',
@@ -225,23 +225,40 @@ export default function AjudaTab({ isAdmin }) {
     }
   ];
 
-  const [modulos, setModulos] = useState([...modulosGeral, ...modulosOperacional, ...modulosProdutosEstoque, ...modulosGestaoRelatorios, ...modulosConfiguracoes]);
-  const [editingId, setEditingId] = useState(null);
-  const [tempVideoUrl, setTempVideoUrl] = useState('');
+  const todosModulos = [...modulosGeral, ...modulosOperacional, ...modulosProdutosEstoque, ...modulosGestaoRelatorios, ...modulosConfiguracoes];
 
-  // Lógica para determinar quais módulos mostrar com base na aba selecionada
   let modulosExibidos = [];
-  if (activeHelpTab === 'geral') modulosExibidos = modulos.filter(m => modulosGeral.find(mg => mg.id === m.id));
-  if (activeHelpTab === 'operacional') modulosExibidos = modulos.filter(m => modulosOperacional.find(mo => mo.id === m.id));
-  if (activeHelpTab === 'produtos') modulosExibidos = modulos.filter(m => modulosProdutosEstoque.find(mp => mp.id === m.id));
-  if (activeHelpTab === 'gestao') modulosExibidos = modulos.filter(m => modulosGestaoRelatorios.find(mg => mg.id === m.id));
-  if (activeHelpTab === 'config') modulosExibidos = modulos.filter(m => modulosConfiguracoes.find(mc => mc.id === m.id));
+  if (activeHelpTab === 'geral') modulosExibidos = todosModulos.filter(m => modulosGeral.find(mg => mg.id === m.id));
+  if (activeHelpTab === 'operacional') modulosExibidos = todosModulos.filter(m => modulosOperacional.find(mo => mo.id === m.id));
+  if (activeHelpTab === 'produtos') modulosExibidos = todosModulos.filter(m => modulosProdutosEstoque.find(mp => mp.id === m.id));
+  if (activeHelpTab === 'gestao') modulosExibidos = todosModulos.filter(m => modulosGestaoRelatorios.find(mg => mg.id === m.id));
+  if (activeHelpTab === 'config') modulosExibidos = todosModulos.filter(m => modulosConfiguracoes.find(mc => mc.id === m.id));
 
-
-  const handleSaveVideo = (id) => {
-    setModulos(modulos.map(m => m.id === id ? { ...m, videoUrl: tempVideoUrl } : m));
+  // 2. FUNÇÃO QUE SALVA NO BANCO DE DADOS
+  const handleSaveVideo = async (id) => {
+    // Junta os links antigos com o novo que acabou de ser editado
+    const updatedLinks = { ...savedLinks, [id]: tempVideoUrl };
+    
+    // Atualiza a tela imediatamente
+    setSavedLinks(updatedLinks);
     setEditingId(null);
-    alert('Link do vídeo salvo com sucesso! Os seus funcionários já podem assistir.');
+
+    // Salva permanentemente no Backend
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ajudaVideoLinks: JSON.stringify(updatedLinks) })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Link do vídeo salvo com sucesso no banco de dados! Todos os funcionários já podem assistir.');
+      } else {
+        alert('Erro ao salvar no servidor.');
+      }
+    } catch (e) {
+      alert('Erro de conexão ao salvar vídeo.');
+    }
   };
 
   const getEmbedUrl = (url) => {
@@ -309,79 +326,84 @@ export default function AjudaTab({ isAdmin }) {
 
       {/* LISTA DE MÓDULOS DA ABA SELECIONADA */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in-up">
-        {modulosExibidos.map((modulo) => (
-          <div key={modulo.id} className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm flex flex-col h-full hover:border-blue-300 transition-colors group">
-            
-            <div className="flex items-start gap-4 mb-4 border-b border-slate-100 pb-4">
-              <div className="w-14 h-14 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center text-3xl shrink-0 group-hover:scale-110 transition-transform">
-                {modulo.icone}
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-800">{modulo.titulo}</h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed font-medium">{modulo.descricao}</p>
-              </div>
-            </div>
+        {modulosExibidos.map((modulo) => {
+          // Pega o vídeo salvo no banco, se não existir pega o vazio
+          const videoAtual = savedLinks[modulo.id] || modulo.videoUrl;
 
-            <div className="mb-6 flex-1">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">O que você vai aprender:</h4>
-              <ul className="space-y-2">
-                {modulo.topicos.map((topico, index) => (
-                  <li key={index} className="text-sm font-bold text-slate-700 flex items-start gap-2">
-                    <span className="text-emerald-500 mt-0.5">✓</span> {topico}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* ÁREA DO VÍDEO (PLAYER OU EDIÇÃO) */}
-            <div className="mt-auto bg-slate-900 rounded-2xl p-4 border border-slate-800">
-              {editingId === modulo.id ? (
-                <div className="animate-fade-in-up">
-                  <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest block mb-2">Colar Link do Vídeo (YouTube, Vimeo...)</label>
-                  <input 
-                    type="text" 
-                    value={tempVideoUrl} 
-                    onChange={(e) => setTempVideoUrl(e.target.value)} 
-                    placeholder="https://www.youtube.com/watch?v=..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-amber-500 mb-3"
-                  />
-                  <div className="flex gap-2">
-                    <button onClick={() => setEditingId(null)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold py-3 rounded-xl transition-colors cursor-pointer">Cancelar</button>
-                    <button onClick={() => handleSaveVideo(modulo.id)} className="flex-1 bg-amber-500 hover:bg-amber-600 text-black text-xs font-black py-3 rounded-xl transition-colors cursor-pointer">Salvar Link</button>
-                  </div>
+          return (
+            <div key={modulo.id} className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm flex flex-col h-full hover:border-blue-300 transition-colors group">
+              
+              <div className="flex items-start gap-4 mb-4 border-b border-slate-100 pb-4">
+                <div className="w-14 h-14 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center text-3xl shrink-0 group-hover:scale-110 transition-transform">
+                  {modulo.icone}
                 </div>
-              ) : (
-                <>
-                  {modulo.videoUrl ? (
-                    <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black mb-3">
-                      <iframe 
-                        src={getEmbedUrl(modulo.videoUrl)} 
-                        className="absolute top-0 left-0 w-full h-full" 
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                        allowFullScreen
-                      ></iframe>
-                    </div>
-                  ) : (
-                    <div className="w-full aspect-video rounded-xl bg-slate-800 flex flex-col items-center justify-center border border-dashed border-slate-700 mb-3 text-center p-4">
-                      <span className="text-3xl mb-2">🎥</span>
-                      <p className="text-xs font-bold text-slate-400">Nenhum vídeo de treinamento vinculado a este módulo.</p>
-                    </div>
-                  )}
+                <div>
+                  <h3 className="text-xl font-black text-slate-800">{modulo.titulo}</h3>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed font-medium">{modulo.descricao}</p>
+                </div>
+              </div>
 
-                  {isAdmin && (
-                    <button 
-                      onClick={() => { setEditingId(modulo.id); setTempVideoUrl(modulo.videoUrl); }} 
-                      className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-lg text-xs uppercase tracking-widest transition-colors cursor-pointer border border-slate-700 flex items-center justify-center gap-2"
-                    >
-                      ✏️ Editar Link do Vídeo
-                    </button>
-                  )}
-                </>
-              )}
+              <div className="mb-6 flex-1">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">O que você vai aprender:</h4>
+                <ul className="space-y-2">
+                  {modulo.topicos.map((topico, index) => (
+                    <li key={index} className="text-sm font-bold text-slate-700 flex items-start gap-2">
+                      <span className="text-emerald-500 mt-0.5">✓</span> {topico}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* ÁREA DO VÍDEO (PLAYER OU EDIÇÃO) */}
+              <div className="mt-auto bg-slate-900 rounded-2xl p-4 border border-slate-800">
+                {editingId === modulo.id ? (
+                  <div className="animate-fade-in-up">
+                    <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest block mb-2">Colar Link do Vídeo (YouTube, Vimeo...)</label>
+                    <input 
+                      type="text" 
+                      value={tempVideoUrl} 
+                      onChange={(e) => setTempVideoUrl(e.target.value)} 
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-amber-500 mb-3"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditingId(null)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold py-3 rounded-xl transition-colors cursor-pointer">Cancelar</button>
+                      <button onClick={() => handleSaveVideo(modulo.id)} className="flex-1 bg-amber-500 hover:bg-amber-600 text-black text-xs font-black py-3 rounded-xl transition-colors cursor-pointer">Salvar Link</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {videoAtual ? (
+                      <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black mb-3">
+                        <iframe 
+                          src={getEmbedUrl(videoAtual)} 
+                          className="absolute top-0 left-0 w-full h-full" 
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                          allowFullScreen
+                        ></iframe>
+                      </div>
+                    ) : (
+                      <div className="w-full aspect-video rounded-xl bg-slate-800 flex flex-col items-center justify-center border border-dashed border-slate-700 mb-3 text-center p-4">
+                        <span className="text-3xl mb-2">🎥</span>
+                        <p className="text-xs font-bold text-slate-400">Nenhum vídeo de treinamento vinculado a este módulo.</p>
+                      </div>
+                    )}
+
+                    {isAdmin && (
+                      <button 
+                        onClick={() => { setEditingId(modulo.id); setTempVideoUrl(videoAtual || ''); }} 
+                        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-lg text-xs uppercase tracking-widest transition-colors cursor-pointer border border-slate-700 flex items-center justify-center gap-2"
+                      >
+                        ✏️ Editar Link do Vídeo
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
             </div>
-
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
