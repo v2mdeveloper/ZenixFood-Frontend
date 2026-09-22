@@ -1,32 +1,76 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 export default function AjudaTab({ isAdmin }) {
-  // Dados base do manual. No mundo real, os links de vídeo vêm da API (settings da loja).
-  const modulosIniciais = [
+  // Estado para controlar a aba selecionada na Central de Ajuda
+  const [activeHelpTab, setActiveHelpTab] = useState('geral');
+
+  const modulosGeral = [
+    {
+      id: 'visao_geral',
+      icone: '🚀',
+      titulo: 'Visão Geral do ZenixFood',
+      descricao: 'Bem-vindo ao ZenixFood! Este módulo apresenta o poder do sistema.',
+      topicos: [
+        'Como o ZenixFood centraliza todos os setores do seu restaurante num único lugar.',
+        'A jornada do pedido: Desde o Garçom/Totem/Delivery até à Cozinha e ao Caixa.',
+        'Como a gestão em tempo real ajuda a evitar perdas e aumentar lucros.',
+        'O poder do ecossistema: PDV, KDS, Fiscal, Integrações e Gestão integrados.'
+      ],
+      videoUrl: ''
+    }
+  ];
+
+  const modulosOperacional = [
     {
       id: 'pdv',
       icone: '💻',
       titulo: 'PDV Fixo (Caixa Principal)',
-      descricao: 'O coração financeiro do restaurante. Onde se finalizam contas, se recebem valores, e se emitem os cupons fiscais.',
+      descricao: 'O coração financeiro do restaurante, desenhado para ser rápido e à prova de falhas[cite: 1].',
       topicos: [
-        'Abertura e Fecho de Caixa com contagem cega.',
-        'Registo de Sangrias (Retiradas) e Suprimentos (Entrada de Troco).',
-        'Recebimento de Comandas e Mesas vindas do salão.',
-        'Emissão de NFC-e nativa e impressão automática.'
+        'Abertura e Fecho de Caixa com contagem cega para segurança total.',
+        'Registo de Sangrias (Retiradas de dinheiro em excesso) e Suprimentos (Entrada de moedas para troco).',
+        'Recebimento ágil de Comandas e Mesas vindas do salão e aplicação de descontos.',
+        'Emissão de NFC-e nativa e impressão automática de recibos térmicos no balcão.'
       ],
       videoUrl: ''
     },
     {
-      id: 'lancamentos',
-      icone: '📱',
-      titulo: 'App Lançamentos (Garçom / Smart POS)',
-      descricao: 'O aplicativo móvel usado pela equipa de salão para registar pedidos diretamente na mesa e fazer cobranças nas maquininhas.',
+      id: 'salao',
+      icone: '🪑',
+      titulo: 'Salão & Mesas / Lançamentos',
+      descricao: 'O módulo para os garçons e operadores de salão controlarem o fluxo de clientes[cite: 1].',
       topicos: [
-        'Abertura de Mesas e Comandas Individuais.',
-        'Lançamento rápido e uso do Construtor de Pizzas (Meio a Meio).',
-        'Transferência de itens e união de mesas.',
-        'Cobrança direta na mesa via Deep Link (Stone, PagSeguro).'
+        'Abertura de Mesas e Comandas Individuais associando o nome do cliente.',
+        'Lançamento rápido de pedidos, incluindo o Construtor de Pizzas (Meio a Meio) e combos.',
+        'Transferência de itens entre comandas e união de mesas.',
+        'Cobrança direta na mesa via Deep Link (nas Smart POS da Stone, PagSeguro, Mercado Pago).'
+      ],
+      videoUrl: ''
+    },
+    {
+      id: 'kds',
+      icone: '🖥️',
+      titulo: 'Telas KDS (Monitor de Produção)',
+      descricao: 'O fim dos papéis na cozinha! Organiza a produção de forma digital e inteligente[cite: 1].',
+      topicos: [
+        'Telas separadas para Cozinha Principal, Expedição (Delivery) e Bar de Bebidas.',
+        'Visualização de pedidos com cronômetro de atraso (verde, amarelo e vermelho).',
+        'Destaque visual para observações (ex: "Sem Cebola") para evitar devoluções.',
+        'Painel do Cliente (TV) para chamar a senha quando o pedido está pronto.'
+      ],
+      videoUrl: ''
+    },
+    {
+      id: 'expedicao',
+      icone: '🛵',
+      titulo: 'Expedição & Rotas (Delivery)',
+      descricao: 'Controlo total sobre as entregas e os motoboys[cite: 1].',
+      topicos: [
+        'Recepção de pedidos de Delivery (telefone, iFood, etc).',
+        'Atribuição de pedidos específicos para cada motoboy.',
+        'Acompanhamento do status de saída e retorno.',
+        'Fecho do motoboy no fim do turno (acerto de contas).'
       ],
       videoUrl: ''
     },
@@ -34,51 +78,124 @@ export default function AjudaTab({ isAdmin }) {
       id: 'totem',
       icone: '🤖',
       titulo: 'Totem de Autoatendimento',
-      descricao: 'Sistema independente para o cliente fazer o próprio pedido, evitando filas e aumentando o ticket médio.',
+      descricao: 'A experiência de auto-pedido para os clientes, reduzindo filas no caixa.',
       topicos: [
-        'Tela de descanso multilíngue (PT, EN, ES).',
-        'Navegação intuitiva por categorias e sugestão de combos (Upsell).',
-        'Pagamento via PIX, Cartão na Máquina ou Pagamento no Caixa.',
-        'Emissão de senha para retirada.'
+        'Tela de descanso com atração visual e suporte a múltiplos idiomas.',
+        'Navegação intuitiva pelo catálogo com ofertas de combos automáticos (Upsell).',
+        'Pagamento direto no totem via PIX ou Cartão (Smart POS embutida).',
+        'Impressão ou exibição de senha para retirar o pedido no balcão.'
+      ],
+      videoUrl: ''
+    }
+  ];
+
+  const modulosProdutosEstoque = [
+    {
+      id: 'produtos',
+      icone: '🍟',
+      titulo: 'Gestão de Produtos e Categorias',
+      descricao: 'A base do sistema: Onde você cria o que vende[cite: 1].',
+      topicos: [
+        'Criação de Produtos Simples, configuração de Preços por tamanho (700g, 1kg).',
+        'Criação de Pizzas (configurando limites de sabores) e Combos.',
+        'Criação de Categorias organizando se o item vai para o "Bar" ou "Cozinha".',
+        'Organização da ordem de exibição no Totem, App Lançamentos e Cardápio Digital.'
       ],
       videoUrl: ''
     },
     {
-      id: 'kds',
-      icone: '👨‍🍳',
-      titulo: 'Monitor da Cozinha (KDS)',
-      descricao: 'Chega de papel! Tela que organiza os pedidos por ordem de chegada e tempo de preparo.',
+      id: 'estoque',
+      icone: '📦',
+      titulo: 'Estoque, Insumos e Fichas Técnicas',
+      descricao: 'Controle de custos e ingredientes[cite: 1].',
       topicos: [
-        'Visualização de pedidos com cronômetro de atraso.',
-        'Destaque para observações (ex: Sem Cebola).',
-        'Avisos sonoros para novos pedidos.',
-        'Integração com painel de chamadas de senha.'
+        'Cadastro de Insumos (ingredientes) e gestão manual de estoque.',
+        'Importação de XML de Notas Fiscais de Compra para atualizar o estoque automaticamente.',
+        'Criação da Ficha Técnica: ligando os insumos aos produtos finais para baixar o estoque na venda.',
+        'Análise de CMV (Custo da Mercadoria Vendida) para saber se a sua margem de lucro é saudável.'
       ],
       videoUrl: ''
     },
     {
-      id: 'cardapio',
-      icone: '🍔',
-      titulo: 'Gestão de Cardápio e Produtos',
-      descricao: 'Painel para criar, editar e organizar tudo o que o seu restaurante vende.',
+      id: 'impressoes',
+      icone: '🖨️',
+      titulo: 'Grupos de Produção e Impressoras',
+      descricao: 'Roteamento inteligente de impressão[cite: 1].',
       topicos: [
-        'Criação de Produtos Simples, Pizzas e Combos.',
-        'Configuração de Adicionais e Insumos.',
-        'Gestão de estoque e ocultar produtos esgotados.',
-        'Vinculação de Regras Fiscais (NCM, ICMS) aos produtos.'
+        'Cadastro de Impressoras Físicas (IP ou USB) na rede local.',
+        'Criação de Grupos de Produção (ex: "Grelha", "Copa").',
+        'Associação de produtos aos grupos para que cada item saia na impressora certa.',
+        'Amarração de Regras Fiscais padrão por grupo de produtos.'
+      ],
+      videoUrl: ''
+    }
+  ];
+
+  const modulosGestaoRelatorios = [
+    {
+      id: 'financeiro',
+      icone: '💸',
+      titulo: 'Contas, Turnos e Financeiro',
+      descricao: 'A saúde financeira do seu negócio ao seu alcance[cite: 1].',
+      topicos: [
+        'Controle de Contas a Pagar e a Receber.',
+        'Resumo de Turnos e Faturamento (fechamento cego dos caixas).',
+        'Relatório DRE (Demonstrativo de Resultado do Exercício) detalhado.',
+        'Acesso ao histórico completo de vendas realizadas.'
       ],
       videoUrl: ''
     },
+    {
+      id: 'historico_analytics',
+      icone: '📊',
+      titulo: 'Relatórios Analíticos e Histórico',
+      descricao: 'Entenda os números para tomar decisões[cite: 1].',
+      topicos: [
+        'Histórico completo de pedidos, permitindo re-impressão e cancelamentos.',
+        'Análise de Top Produtos vendidos.',
+        'Gráficos de acessos e visualizações do Cardápio Digital (Analytics).',
+        'Métricas de desempenho da loja.'
+      ],
+      videoUrl: ''
+    },
+    {
+      id: 'rh_crm',
+      icone: '👔',
+      titulo: 'Equipe (RH) e Clientes (CRM)',
+      descricao: 'Gerencie quem trabalha para si e quem compra de si[cite: 1].',
+      topicos: [
+        'Criação de Perfis de Acesso (definindo o que cada cargo pode ver).',
+        'Cadastro de Funcionários, definição de senhas e limites de "Fiado".',
+        'Gestão de Comissões e taxas de serviço da equipe de salão.',
+        'Cadastro de Clientes, histórico de consumos e clientes bloqueados.'
+      ],
+      videoUrl: ''
+    },
+    {
+      id: 'promocoes',
+      icone: '🎟️',
+      titulo: 'Promoções e Cupons',
+      descricao: 'Estratégias para impulsionar as vendas[cite: 1].',
+      topicos: [
+        'Criação de Cupons de Desconto (Valor fixo ou Percentual).',
+        'Definição de regras de uso (Valor mínimo de compra, limite de utilizações).',
+        'Gestão de produtos em destaque nas plataformas digitais.'
+      ],
+      videoUrl: ''
+    }
+  ];
+
+  const modulosConfiguracoes = [
     {
       id: 'fiscal',
       icone: '🧾',
-      titulo: 'Inteligência Fiscal (NFC-e)',
-      descricao: 'Onde se configura a burocracia para que o sistema emita notas fiscais automaticamente sem custos de terceiros.',
+      titulo: 'Emissão Fiscal (NFC-e)',
+      descricao: 'Sistema próprio para emissão de notas sem dependência de terceiros[cite: 1].',
       topicos: [
-        'Upload de Certificado Digital A1 (.pfx).',
-        'Configuração de Credenciais SEFAZ e Ambiente (Homologação/Produção).',
-        'Criação de regras dinâmicas de ICMS, PIS/COFINS e IBS/CBS.',
-        'Painel de contingência para re-emitir ou cancelar notas rejeitadas.'
+        'Upload seguro do Certificado Digital A1 (.pfx).',
+        'Configuração de Credenciais SEFAZ (CSC) e ambiente (Produção/Homologação).',
+        'Criação dinâmica de Regras de ICMS, PIS/COFINS e IBS/CBS.',
+        'Painel da Fila de Emissão para re-tentar ou cancelar cupons rejeitados.'
       ],
       videoUrl: ''
     },
@@ -86,24 +203,42 @@ export default function AjudaTab({ isAdmin }) {
       id: 'integracoes',
       icone: '🔌',
       titulo: 'Hub de Integrações',
-      descricao: 'Conexão do ZenixFood com o mundo exterior (Delivery e Bancos).',
+      descricao: 'Conexões essenciais do seu negócio[cite: 2].',
       topicos: [
-        'Credenciais iFood, 99Food e Keeta (Recebimento automático).',
-        'Ativação do Mercado Pago (Pix Online).',
-        'Configuração da marca da Smart POS (Stone, PagSeguro) para o App Lançamentos.'
+        'Conexão com plataformas de Delivery (iFood, 99Food, Keeta).',
+        'Configuração do Mercado Pago para recebimentos online.',
+        'Seleção da Adquirente da Smart POS (Stone, PagSeguro) para ativação do App-to-App.'
+      ],
+      videoUrl: ''
+    },
+    {
+      id: 'config',
+      icone: '⚙️',
+      titulo: 'Configurações e Minha Empresa',
+      descricao: 'Ajustes globais do sistema[cite: 2].',
+      topicos: [
+        'Ajuste do Horário de Funcionamento e abertura manual da loja.',
+        'Configuração de logotipos, banners e taxas de entrega.',
+        'Gerenciamento dos dados da empresa (CNPJ, Razão Social) e status da assinatura ZenixFood.'
       ],
       videoUrl: ''
     }
   ];
 
-  const [modulos, setModulos] = useState(modulosIniciais);
+  const [modulos, setModulos] = useState([...modulosGeral, ...modulosOperacional, ...modulosProdutosEstoque, ...modulosGestaoRelatorios, ...modulosConfiguracoes]);
   const [editingId, setEditingId] = useState(null);
   const [tempVideoUrl, setTempVideoUrl] = useState('');
 
-  // No mundo real, você carregaria os vídeos guardados no backend num useEffect aqui.
+  // Lógica para determinar quais módulos mostrar com base na aba selecionada
+  let modulosExibidos = [];
+  if (activeHelpTab === 'geral') modulosExibidos = modulos.filter(m => modulosGeral.find(mg => mg.id === m.id));
+  if (activeHelpTab === 'operacional') modulosExibidos = modulos.filter(m => modulosOperacional.find(mo => mo.id === m.id));
+  if (activeHelpTab === 'produtos') modulosExibidos = modulos.filter(m => modulosProdutosEstoque.find(mp => mp.id === m.id));
+  if (activeHelpTab === 'gestao') modulosExibidos = modulos.filter(m => modulosGestaoRelatorios.find(mg => mg.id === m.id));
+  if (activeHelpTab === 'config') modulosExibidos = modulos.filter(m => modulosConfiguracoes.find(mc => mc.id === m.id));
+
 
   const handleSaveVideo = (id) => {
-    // Atualiza o estado local (no mundo real, faria um fetch(PUT) para a API)
     setModulos(modulos.map(m => m.id === id ? { ...m, videoUrl: tempVideoUrl } : m));
     setEditingId(null);
     alert('Link do vídeo salvo com sucesso! Os seus funcionários já podem assistir.');
@@ -113,7 +248,7 @@ export default function AjudaTab({ isAdmin }) {
     if (!url) return '';
     if (url.includes('youtube.com/watch?v=')) return url.replace('watch?v=', 'embed/');
     if (url.includes('youtu.be/')) return url.replace('youtu.be/', 'youtube.com/embed/');
-    return url; // Retorna normal se for um link direto (Vimeo, Drive, etc)
+    return url; 
   };
 
   return (
@@ -127,20 +262,54 @@ export default function AjudaTab({ isAdmin }) {
             <span className="text-4xl">🎓</span> Universidade Zenix
           </h2>
           <p className="text-slate-500 mt-2 text-sm font-medium max-w-2xl">
-            Bem-vindo à Central de Ajuda! Selecione o módulo abaixo para entender como ele funciona no dia a dia da operação e assista aos vídeos de treinamento oficiais da sua gerência.
+            Bem-vindo à Central de Ajuda! Selecione a área desejada abaixo para entender os módulos em detalhes e assistir aos vídeos oficiais de treinamento da sua loja.
           </p>
         </div>
         {isAdmin && (
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl shrink-0 max-w-xs text-center">
             <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Modo Administrador</p>
-            <p className="text-xs text-amber-800 font-medium">Você tem permissão para editar os links de vídeo de cada módulo. Os seus funcionários verão apenas o player.</p>
+            <p className="text-xs text-amber-800 font-medium">Você tem permissão para editar os links de vídeo. Seus funcionários verão apenas o player.</p>
           </div>
         )}
       </div>
 
-      {/* LISTA DE MÓDULOS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {modulos.map((modulo) => (
+      {/* ABAS DE NAVEGAÇÃO */}
+      <div className="flex flex-wrap gap-4 border-b border-slate-200 pb-4">
+        <button 
+          onClick={() => setActiveHelpTab('geral')} 
+          className={`font-bold pb-2 transition-all cursor-pointer ${activeHelpTab === 'geral' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-slate-500 hover:text-blue-500'}`}
+        >
+          🚀 Visão Geral
+        </button>
+        <button 
+          onClick={() => setActiveHelpTab('operacional')} 
+          className={`font-bold pb-2 transition-all cursor-pointer ${activeHelpTab === 'operacional' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-slate-500 hover:text-blue-500'}`}
+        >
+          💻 Operacional & Vendas
+        </button>
+        <button 
+          onClick={() => setActiveHelpTab('produtos')} 
+          className={`font-bold pb-2 transition-all cursor-pointer ${activeHelpTab === 'produtos' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-slate-500 hover:text-blue-500'}`}
+        >
+          🍟 Produtos & Estoque
+        </button>
+        <button 
+          onClick={() => setActiveHelpTab('gestao')} 
+          className={`font-bold pb-2 transition-all cursor-pointer ${activeHelpTab === 'gestao' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-slate-500 hover:text-blue-500'}`}
+        >
+          📊 Gestão & Relatórios
+        </button>
+        <button 
+          onClick={() => setActiveHelpTab('config')} 
+          className={`font-bold pb-2 transition-all cursor-pointer ${activeHelpTab === 'config' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-slate-500 hover:text-blue-500'}`}
+        >
+          ⚙️ Config. & Integrações
+        </button>
+      </div>
+
+      {/* LISTA DE MÓDULOS DA ABA SELECIONADA */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in-up">
+        {modulosExibidos.map((modulo) => (
           <div key={modulo.id} className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm flex flex-col h-full hover:border-blue-300 transition-colors group">
             
             <div className="flex items-start gap-4 mb-4 border-b border-slate-100 pb-4">
@@ -168,7 +337,7 @@ export default function AjudaTab({ isAdmin }) {
             <div className="mt-auto bg-slate-900 rounded-2xl p-4 border border-slate-800">
               {editingId === modulo.id ? (
                 <div className="animate-fade-in-up">
-                  <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest block mb-2">Colar Link do YouTube</label>
+                  <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest block mb-2">Colar Link do Vídeo (YouTube, Vimeo...)</label>
                   <input 
                     type="text" 
                     value={tempVideoUrl} 
@@ -178,7 +347,7 @@ export default function AjudaTab({ isAdmin }) {
                   />
                   <div className="flex gap-2">
                     <button onClick={() => setEditingId(null)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold py-3 rounded-xl transition-colors cursor-pointer">Cancelar</button>
-                    <button onClick={() => handleSaveVideo(modulo.id)} className="flex-1 bg-amber-500 hover:bg-amber-600 text-black text-xs font-black py-3 rounded-xl transition-colors cursor-pointer">Salvar Vídeo</button>
+                    <button onClick={() => handleSaveVideo(modulo.id)} className="flex-1 bg-amber-500 hover:bg-amber-600 text-black text-xs font-black py-3 rounded-xl transition-colors cursor-pointer">Salvar Link</button>
                   </div>
                 </div>
               ) : (
@@ -195,7 +364,7 @@ export default function AjudaTab({ isAdmin }) {
                   ) : (
                     <div className="w-full aspect-video rounded-xl bg-slate-800 flex flex-col items-center justify-center border border-dashed border-slate-700 mb-3 text-center p-4">
                       <span className="text-3xl mb-2">🎥</span>
-                      <p className="text-xs font-bold text-slate-400">Nenhum vídeo de treino disponível ainda.</p>
+                      <p className="text-xs font-bold text-slate-400">Nenhum vídeo de treinamento vinculado a este módulo.</p>
                     </div>
                   )}
 
