@@ -18,6 +18,7 @@ export default function FiscalTab({
   const [certStatus, setCertStatus] = useState(null);
   const [isUploadingCert, setIsUploadingCert] = useState(false);
   const [cnpjInput, setCnpjInput] = useState('');
+  const [isCanceling, setIsCanceling] = useState(false);
 
   // Estados do CSC e Ambiente
   const [cscForm, setCscForm] = useState({ ambienteSefaz: '2', cscId: '', cscSecret: '' });
@@ -102,7 +103,6 @@ export default function FiscalTab({
     }
   };
 
-  // NOVA FUNÇÃO: SALVAR CSC
   const handleSaveCsc = async (e) => {
     e.preventDefault();
     try {
@@ -113,6 +113,58 @@ export default function FiscalTab({
         if (data.success) alert("Credenciais SEFAZ salvas com sucesso!");
         else alert(data.error || "Erro ao salvar.");
     } catch (err) { alert("Erro de comunicação ao salvar CSC."); }
+  };
+
+  // ============================================================================
+  // FUNÇÕES DE AÇÃO NA NOTA (CANCELAMENTO E DOWNLOAD XML LOCAL)
+  // ============================================================================
+  
+  const handleCancelNfce = async (orderId) => {
+    const justificativa = prompt("Digite o motivo do cancelamento (mínimo de 15 caracteres):");
+    if (!justificativa) return;
+    if (justificativa.length < 15) return alert("A justificativa deve ter pelo menos 15 caracteres para a SEFAZ aceitar.");
+
+    setIsCanceling(true);
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/fiscal/cancelar/${orderId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ justificativa })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("✅ NFC-e Cancelada com Sucesso na SEFAZ!");
+        window.location.reload(); 
+      } else {
+        alert(data.error || "Falha ao cancelar nota.");
+      }
+    } catch (err) {
+      alert("Erro de conexão ao tentar cancelar a NFC-e.");
+    }
+    setIsCanceling(false);
+  };
+
+  const handleSaveXmlLocal = async (notaData) => {
+    if (!notaData.xmlAutorizado) {
+      return alert("XML não encontrado no banco de dados para esta nota.");
+    }
+
+    try {
+      const res = await fetch('http://localhost:8080/salvar-xml', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chave: notaData.chave, xml: notaData.xmlAutorizado })
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        alert(`✅ XML salvo com sucesso no seu computador!\nPasta: ${data.caminho}`);
+      } else {
+        alert("Erro no servidor local de impressão: " + data.error);
+      }
+    } catch (err) {
+      alert("❌ O aplicativo do Servidor de Impressão (localhost:8080) não está rodando neste computador ou bloqueou a requisição.");
+    }
   };
 
   return (
@@ -208,14 +260,20 @@ export default function FiscalTab({
         </div>
       )}
 
-      {/* ABA: FILA DE EMISSÃO */}
+      {/* ABA: FILA DE EMISSÃO COM NOVOS BOTÕES E STATUS */}
       {fiscalSubTab === 'fila' && (
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm animate-fade-in-up">
            <h3 className="text-lg font-black text-slate-900 mb-4">Pedidos Recentes Prontos para Emissão</h3>
            <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-700">
                 <thead className="text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
-                   <tr><th className="px-4 py-3">Pedido</th><th className="px-4 py-3">Data/Hora</th><th className="px-4 py-3">Cliente</th><th className="px-4 py-3">Valor</th><th className="px-4 py-3 text-right">Ação Fiscal</th></tr>
+                   <tr>
+                     <th className="px-4 py-3">Pedido</th>
+                     <th className="px-4 py-3">Data/Hora</th>
+                     <th className="px-4 py-3">Cliente</th>
+                     <th className="px-4 py-3">Status Fiscal</th>
+                     <th className="px-4 py-3 text-right">Ações</th>
+                   </tr>
                 </thead>
                 <tbody>
                    {orders.filter(o => o.status === 'READY' || o.status === 'DELIVERED').map(pedido => {
@@ -225,6 +283,16 @@ export default function FiscalTab({
                       let memoryNfces = {};
                       try { memoryNfces = JSON.parse(localStorage.getItem('zenix_nfcesEmitidas') || '{}'); } catch(e){}
                       const notaData = memoryNfces[pedido.id] || nfcesEmitidas[pedido.id] || notaSalva;
+
+                      // Determina a aparência do Status Fiscal
+                      let badgeColor = "bg-slate-100 text-slate-600 border-slate-200";
+                      let statusText = "Pendente";
+
+                      if (notaData) {
+                        if (notaData.status === "AUTORIZADA") { badgeColor = "bg-emerald-100 text-emerald-700 border-emerald-200"; statusText = "Autorizada"; }
+                        if (notaData.status === "CANCELADA") { badgeColor = "bg-red-100 text-red-700 border-red-200"; statusText = "Cancelada"; }
+                        if (notaData.status === "ERRO_SEFAZ" || notaData.error) { badgeColor = "bg-amber-100 text-amber-700 border-amber-200"; statusText = "Rejeição Sefaz"; }
+                      }
 
                       return (
                        <tr key={pedido.id} className="border-b border-slate-100 hover:bg-slate-50">
@@ -236,16 +304,28 @@ export default function FiscalTab({
                                 <span className="block mt-1 w-max bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-blue-200 shadow-sm">🏷️ CPF na Nota: {pedido.client.cpf}</span>
                              )}
                           </td>
-                          <td className="px-4 py-3 text-emerald-600 font-bold">R$ {Number(pedido.total).toFixed(2)}</td>
-                          <td className="px-4 py-3 text-right flex justify-end gap-2">
-                             {notaData ? (
+                          <td className="px-4 py-3">
+                             <span className={`text-[10px] font-black px-2 py-1 rounded-md border uppercase tracking-wider ${badgeColor}`}>{statusText}</span>
+                             {notaData?.mensagem && <p className="text-[10px] text-amber-600 mt-1 max-w-xs">{notaData.mensagem}</p>}
+                          </td>
+                          <td className="px-4 py-3 text-right flex justify-end gap-2 flex-wrap">
+                             {/* SE AUTORIZADA */}
+                             {notaData && notaData.status === "AUTORIZADA" && (
                                 <>
-                                   <button onClick={() => emitirEImprimirNfceProp(pedido.id)} disabled={loadingNfceId === pedido.id} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded-lg transition-colors text-xs shadow-sm cursor-pointer">🖨️ Re-Imprimir</button>
-                                   {notaData.urlDanfe && ( <a href={notaData.urlDanfe} target="_blank" rel="noopener noreferrer" className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-3 rounded-lg transition-colors text-xs shadow-sm">📄 Web</a> )}
+                                   <button onClick={() => emitirEImprimirNfceProp(pedido.id)} disabled={loadingNfceId === pedido.id} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1.5 px-3 rounded-lg transition-colors text-[11px] shadow-sm cursor-pointer">🖨️ Re-Imprimir</button>
+                                   {notaData.xmlAutorizado && (
+                                      <button onClick={() => handleSaveXmlLocal(notaData)} className="bg-slate-700 hover:bg-slate-800 text-white font-bold py-1.5 px-3 rounded-lg transition-colors text-[11px] shadow-sm cursor-pointer">💾 XML</button>
+                                   )}
+                                   <button onClick={() => handleCancelNfce(pedido.id)} disabled={isCanceling} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-1.5 px-3 rounded-lg transition-colors text-[11px] shadow-sm cursor-pointer">❌ Cancelar</button>
                                 </>
-                             ) : (
+                             )}
+
+                             {/* SE PENDENTE OU SE DEU ERRO (Permite tentar emitir novamente) */}
+                             {(!notaData || notaData.status === "ERRO_SEFAZ" || notaData.error) && (
                                 <button onClick={() => emitirEImprimirNfceProp(pedido.id)} disabled={loadingNfceId === pedido.id} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 text-xs shadow-sm cursor-pointer">{loadingNfceId === pedido.id ? 'Emitindo...' : '🧾 Emitir NFC-e'}</button>
                              )}
+
+                             {/* SE CANCELADA, não mostra botões de ação */}
                           </td>
                        </tr>
                       )
