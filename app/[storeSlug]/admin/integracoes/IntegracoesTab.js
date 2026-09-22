@@ -4,14 +4,19 @@ import { useState, useEffect } from 'react';
 export default function IntegracoesTab() {
   const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
 
+  // Estados do Delivery (iFood, 99Food, Keeta)
   const [integrations, setIntegrations] = useState({
     ifood: { active: false, clientId: '', clientSecret: '', merchantId: '' },
     food99: { active: false, appId: '', appSecret: '', shopId: '' },
     keeta: { active: false, developerId: '', developerSecret: '', storeId: '' }
   });
+
+  // Estados Gerais (Mercado Pago, Focus NFe)
+  const [fullSettings, setFullSettings] = useState({});
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeModal, setActiveModal] = useState(null); // 'ifood', 'food99' ou 'keeta'
+  const [activeModal, setActiveModal] = useState(null); // 'ifood', 'food99', 'keeta', 'mercadopago', 'focus'
 
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
@@ -25,20 +30,29 @@ export default function IntegracoesTab() {
   };
 
   useEffect(() => {
-    const loadIntegrations = async () => {
+    const loadAllIntegrations = async () => {
       try {
-        const res = await fetchWithStore(`${API_URL}/api/integrations`);
-        if (res.ok) {
-          const data = await res.json();
-          setIntegrations(data);
+        // 1. Carrega Delivery
+        const resDel = await fetchWithStore(`${API_URL}/api/integrations`);
+        if (resDel.ok) {
+          const dataDel = await resDel.json();
+          setIntegrations(dataDel);
+        }
+
+        // 2. Carrega Configurações Gerais (Mercado Pago e Focus)
+        const resSet = await fetchWithStore(`${API_URL}/api/settings`);
+        if (resSet.ok) {
+          const dataSet = await resSet.json();
+          setFullSettings(dataSet);
         }
       } catch (e) { console.error("Erro ao carregar integrações"); }
       setLoading(false);
     };
-    loadIntegrations();
+    loadAllIntegrations();
   }, [API_URL]);
 
-  const handleSave = async (e) => {
+  // Salva Delivery (iFood, 99, Keeta)
+  const handleSaveDelivery = async (e) => {
     if (e) e.preventDefault();
     setSaving(true);
     try {
@@ -51,54 +65,97 @@ export default function IntegracoesTab() {
       if (data.success) {
         alert("Configurações salvas com sucesso!");
         setActiveModal(null);
-      } else {
-        alert(data.error || "Erro ao salvar.");
-      }
-    } catch (e) {
-      alert("Erro de conexão.");
-    }
+      } else { alert(data.error || "Erro ao salvar."); }
+    } catch (e) { alert("Erro de conexão."); }
     setSaving(false);
   };
 
-  const toggleStatus = async (platform) => {
+  // Salva Configurações Gerais (MP, Focus)
+  const handleSaveGeneralSettings = async (e) => {
+    if (e) e.preventDefault();
+    setSaving(true);
+    try {
+      const res = await fetchWithStore(`${API_URL}/api/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fullSettings)
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Integração salva com sucesso!");
+        setActiveModal(null);
+      } else { alert("Erro ao salvar."); }
+    } catch (e) { alert("Erro de conexão."); }
+    setSaving(false);
+  };
+
+  const toggleStatusDelivery = async (platform) => {
     const updated = {
       ...integrations,
       [platform]: { ...integrations[platform], active: !integrations[platform].active }
     };
     setIntegrations(updated);
-    
-    // Salva automaticamente ao ligar/desligar a chave
     try {
       await fetchWithStore(`${API_URL}/api/integrations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated)
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated)
       });
     } catch (e) {}
   };
 
   if (loading) return <div className="p-8 text-center text-slate-500 font-bold animate-pulse">Carregando integrações...</div>;
 
+  const isMpActive = !!fullSettings.mercadoPagoAccessToken;
+  const isFocusActive = !!fullSettings.focusToken;
+
   return (
     <>
-      {/* CORPO DA ABA COM ANIMAÇÃO */}
       <div className="space-y-6 animate-fade-in-up">
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-black text-slate-900">Hub de Integrações</h2>
-            <p className="text-sm text-slate-500 mt-1">Conecte sua loja aos maiores aplicativos de delivery do mercado e receba os pedidos diretamente no seu KDS e PDV.</p>
+            <h2 className="text-2xl font-black text-slate-900">Hub de Integrações Geral</h2>
+            <p className="text-sm text-slate-500 mt-1">Conecte sua loja aos aplicativos de delivery, meios de pagamento e emissão fiscal num único lugar.</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           
+          {/* CARD MERCADO PAGO */}
+          <div className={`bg-white border-2 rounded-3xl p-6 shadow-sm transition-all ${isMpActive ? 'border-blue-500 shadow-blue-100' : 'border-slate-200'}`}>
+            <div className="flex justify-between items-start mb-6">
+              <div className="w-16 h-16 bg-blue-500 text-white rounded-2xl flex items-center justify-center text-3xl font-black shadow-md">💳</div>
+              <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${isMpActive ? 'text-blue-600' : 'text-slate-400'}`}>{isMpActive ? 'Ativo' : 'Inativo'}</span>
+              </div>
+            </div>
+            <h3 className="font-black text-slate-800 text-lg mb-1">Mercado Pago</h3>
+            <p className="text-xs text-slate-500 mb-6 h-8">Recebimentos via Pix, Cartão de Crédito e Débito no Totem e Delivery.</p>
+            <button onClick={() => setActiveModal('mercadopago')} className={`w-full py-3 rounded-xl font-black text-sm transition-colors ${isMpActive ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+              ⚙️ Configurar Credenciais
+            </button>
+          </div>
+
+          {/* CARD FOCUS NFE */}
+          <div className={`bg-white border-2 rounded-3xl p-6 shadow-sm transition-all ${isFocusActive ? 'border-emerald-500 shadow-emerald-100' : 'border-slate-200'}`}>
+            <div className="flex justify-between items-start mb-6">
+              <div className="w-16 h-16 bg-emerald-500 text-white rounded-2xl flex items-center justify-center text-3xl font-black shadow-md">🧾</div>
+              <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${isFocusActive ? 'text-emerald-600' : 'text-slate-400'}`}>{isFocusActive ? 'Ativo' : 'Inativo'}</span>
+              </div>
+            </div>
+            <h3 className="font-black text-slate-800 text-lg mb-1">Focus NFC-e</h3>
+            <p className="text-xs text-slate-500 mb-6 h-8">Emissão automática de Cupons Fiscais Eletrônicos (NFC-e).</p>
+            <button onClick={() => setActiveModal('focus')} className={`w-full py-3 rounded-xl font-black text-sm transition-colors ${isFocusActive ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+              ⚙️ Configurar Credenciais
+            </button>
+          </div>
+
           {/* CARD IFOOD */}
           <div className={`bg-white border-2 rounded-3xl p-6 shadow-sm transition-all ${integrations.ifood.active ? 'border-red-500 shadow-red-100' : 'border-slate-200'}`}>
             <div className="flex justify-between items-start mb-6">
               <div className="w-16 h-16 bg-red-500 text-white rounded-2xl flex items-center justify-center text-xl font-black shadow-md">iFood</div>
               <div className="flex items-center gap-2">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{integrations.ifood.active ? 'Ativo' : 'Inativo'}</span>
-                  <button onClick={() => toggleStatus('ifood')} className={`w-12 h-6 rounded-full relative transition-colors ${integrations.ifood.active ? 'bg-red-500' : 'bg-slate-300'}`}>
+                  <button onClick={() => toggleStatusDelivery('ifood')} className={`w-12 h-6 rounded-full relative transition-colors ${integrations.ifood.active ? 'bg-red-500' : 'bg-slate-300'}`}>
                     <span className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${integrations.ifood.active ? 'translate-x-6' : ''}`}></span>
                   </button>
               </div>
@@ -116,7 +173,7 @@ export default function IntegracoesTab() {
               <div className="w-16 h-16 bg-amber-500 text-white rounded-2xl flex items-center justify-center text-xl font-black shadow-md">99Food</div>
               <div className="flex items-center gap-2">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{integrations.food99.active ? 'Ativo' : 'Inativo'}</span>
-                  <button onClick={() => toggleStatus('food99')} className={`w-12 h-6 rounded-full relative transition-colors ${integrations.food99.active ? 'bg-amber-500' : 'bg-slate-300'}`}>
+                  <button onClick={() => toggleStatusDelivery('food99')} className={`w-12 h-6 rounded-full relative transition-colors ${integrations.food99.active ? 'bg-amber-500' : 'bg-slate-300'}`}>
                     <span className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${integrations.food99.active ? 'translate-x-6' : ''}`}></span>
                   </button>
               </div>
@@ -134,7 +191,7 @@ export default function IntegracoesTab() {
               <div className="w-16 h-16 bg-yellow-400 text-black rounded-2xl flex items-center justify-center text-xl font-black shadow-md">Keeta</div>
               <div className="flex items-center gap-2">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{integrations.keeta.active ? 'Ativo' : 'Inativo'}</span>
-                  <button onClick={() => toggleStatus('keeta')} className={`w-12 h-6 rounded-full relative transition-colors ${integrations.keeta.active ? 'bg-yellow-400' : 'bg-slate-300'}`}>
+                  <button onClick={() => toggleStatusDelivery('keeta')} className={`w-12 h-6 rounded-full relative transition-colors ${integrations.keeta.active ? 'bg-yellow-400' : 'bg-slate-300'}`}>
                     <span className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${integrations.keeta.active ? 'translate-x-6' : ''}`}></span>
                   </button>
               </div>
@@ -150,24 +207,77 @@ export default function IntegracoesTab() {
       </div>
 
       {/* ============================================================== */}
-      {/* MODAIS (DO LADO DE FORA DA ANIMAÇÃO PARA O FIXED FUNCIONAR)  */}
+      {/* MODAIS */}
       {/* ============================================================== */}
+
+      {/* MODAL MERCADO PAGO */}
+      {activeModal === 'mercadopago' && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up border-t-8 border-blue-500">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-black text-blue-600">Mercado Pago</h3>
+                <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-800 font-bold text-xl">✕</button>
+            </div>
+            <form onSubmit={handleSaveGeneralSettings} className="space-y-4">
+                <div>
+                  <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Public Key (Frontend)</label>
+                  <input type="text" value={fullSettings.mercadoPagoPublicKey || ''} onChange={e => setFullSettings({...fullSettings, mercadoPagoPublicKey: e.target.value})} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm focus:outline-none focus:border-blue-500 font-mono" placeholder="APP_USR-..." />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Access Token (Backend)</label>
+                  <input type="password" value={fullSettings.mercadoPagoAccessToken || ''} onChange={e => setFullSettings({...fullSettings, mercadoPagoAccessToken: e.target.value})} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm focus:outline-none focus:border-blue-500 font-mono" placeholder="APP_USR-..." />
+                </div>
+                <button type="submit" disabled={saving} className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-md transition-all uppercase tracking-widest text-sm disabled:opacity-50">
+                  {saving ? 'Salvando...' : 'Salvar Credenciais'}
+                </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FOCUS NFE */}
+      {activeModal === 'focus' && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up border-t-8 border-emerald-500">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-black text-emerald-600">Focus NFC-e</h3>
+                <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-800 font-bold text-xl">✕</button>
+            </div>
+            <form onSubmit={handleSaveGeneralSettings} className="space-y-4">
+                <div>
+                  <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Ambiente</label>
+                  <select value={fullSettings.focusEnv || 'homologacao'} onChange={e => setFullSettings({...fullSettings, focusEnv: e.target.value})} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm font-bold focus:outline-none focus:border-emerald-500">
+                    <option value="homologacao">Homologação (Testes)</option>
+                    <option value="producao">Produção (Validade Fiscal)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Token de Integração</label>
+                  <input type="password" value={fullSettings.focusToken || ''} onChange={e => setFullSettings({...fullSettings, focusToken: e.target.value})} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm focus:outline-none focus:border-emerald-500 font-mono" placeholder="Código de autorização..." />
+                </div>
+                <button type="submit" disabled={saving} className="w-full mt-4 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-md transition-all uppercase tracking-widest text-sm disabled:opacity-50">
+                  {saving ? 'Salvando...' : 'Salvar Credenciais'}
+                </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* MODAL IFOOD */}
       {activeModal === 'ifood' && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up">
+          <div className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up border-t-8 border-red-500">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-black text-red-600">Configuração iFood</h3>
                 <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-800 font-bold text-xl">✕</button>
             </div>
-            <form onSubmit={handleSave} className="space-y-4">
+            <form onSubmit={handleSaveDelivery} className="space-y-4">
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">Merchant ID (ID da Loja)</label><input type="text" value={integrations.ifood.merchantId} onChange={(e) => setIntegrations({...integrations, ifood: {...integrations.ifood, merchantId: e.target.value}})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-red-500" placeholder="Ex: 12345678-abcd-1234..." /></div>
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">Client ID</label><input type="text" value={integrations.ifood.clientId} onChange={(e) => setIntegrations({...integrations, ifood: {...integrations.ifood, clientId: e.target.value}})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-red-500" /></div>
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">Client Secret</label><input type="password" value={integrations.ifood.clientSecret} onChange={(e) => setIntegrations({...integrations, ifood: {...integrations.ifood, clientSecret: e.target.value}})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-red-500" /></div>
                 
                 <div className="bg-red-50 p-4 rounded-xl border border-red-100 mt-4">
-                  <p className="text-[10px] font-black uppercase text-red-700 tracking-widest mb-1">URL de Webhook (Copie e cole no Portal do iFood):</p>
+                  <p className="text-[10px] font-black uppercase text-red-700 tracking-widest mb-1">URL de Webhook (Copie no Portal iFood):</p>
                   <code className="text-xs text-red-800 break-all bg-white px-2 py-1 rounded block border border-red-200">{API_URL}/api/webhooks/ifood</code>
                 </div>
 
@@ -182,12 +292,12 @@ export default function IntegracoesTab() {
       {/* MODAL 99FOOD */}
       {activeModal === 'food99' && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up">
+          <div className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up border-t-8 border-amber-500">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-black text-amber-500">Configuração 99Food</h3>
                 <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-800 font-bold text-xl">✕</button>
             </div>
-            <form onSubmit={handleSave} className="space-y-4">
+            <form onSubmit={handleSaveDelivery} className="space-y-4">
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">Shop ID (ID da Loja)</label><input type="text" value={integrations.food99.shopId} onChange={(e) => setIntegrations({...integrations, food99: {...integrations.food99, shopId: e.target.value}})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-amber-500" /></div>
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">App ID</label><input type="text" value={integrations.food99.appId} onChange={(e) => setIntegrations({...integrations, food99: {...integrations.food99, appId: e.target.value}})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-amber-500" /></div>
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">App Secret</label><input type="password" value={integrations.food99.appSecret} onChange={(e) => setIntegrations({...integrations, food99: {...integrations.food99, appSecret: e.target.value}})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-amber-500" /></div>
@@ -208,12 +318,12 @@ export default function IntegracoesTab() {
       {/* MODAL KEETA */}
       {activeModal === 'keeta' && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up">
+          <div className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in-up border-t-8 border-yellow-400">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-black text-yellow-500">Configuração Keeta</h3>
                 <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-800 font-bold text-xl">✕</button>
             </div>
-            <form onSubmit={handleSave} className="space-y-4">
+            <form onSubmit={handleSaveDelivery} className="space-y-4">
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">Store ID</label><input type="text" value={integrations.keeta.storeId} onChange={(e) => setIntegrations({...integrations, keeta: {...integrations.keeta, storeId: e.target.value}})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-yellow-400" /></div>
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">Developer ID</label><input type="text" value={integrations.keeta.developerId} onChange={(e) => setIntegrations({...integrations, keeta: {...integrations.keeta, developerId: e.target.value}})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-yellow-400" /></div>
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">Developer Secret</label><input type="password" value={integrations.keeta.developerSecret} onChange={(e) => setIntegrations({...integrations, keeta: {...integrations.keeta, developerSecret: e.target.value}})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-yellow-400" /></div>

@@ -247,7 +247,7 @@ export default function AdminDashboard() {
     { id: 'estoque', label: 'Estoque & Receitas', icon: '📦', perm: 'estoque' },
     { id: 'impressoes', label: 'Impressoras & Praças', icon: '🖨️', perm: 'impressoes' }, 
     { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: '🧾', perm: 'fiscal' },
-    { id: 'integracoes', label: 'Integrações Delivery', icon: '📱', perm: 'config' }, // 🔥 NOVO MENU ADDED HERE (Usando perm config por segurança)
+    { id: 'integracoes', label: 'Hub de Integrações', icon: '📱', perm: 'config' }, 
     { id: 'config', label: 'Configurações', icon: '⚙️', perm: 'config' }
   ];
 

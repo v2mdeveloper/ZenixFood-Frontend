@@ -38,31 +38,6 @@ export default function ConfigTab({ settingsForm, setSettingsForm, handleSaveSys
             </div>
           </div>
 
-          <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-6">
-            <h3 className="text-sm font-bold text-blue-700 mb-3 flex items-center gap-2">💳 Integração Mercado Pago</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Public Key (Frontend)</label>
-                <input type="text" value={settingsForm.mercadoPagoPublicKey || ''} onChange={e => setSettingsForm({...settingsForm, mercadoPagoPublicKey: e.target.value})} className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 font-mono" />
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Access Token (Backend)</label>
-                <input type="password" value={settingsForm.mercadoPagoAccessToken || ''} onChange={e => setSettingsForm({...settingsForm, mercadoPagoAccessToken: e.target.value})} className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 font-mono" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200 mb-6">
-            <h3 className="text-sm font-bold text-emerald-700 mb-3 flex items-center gap-2">🧾 Emissão de NFC-e (Focus)</h3>
-            <div className="space-y-3">
-              <select value={settingsForm.focusEnv || 'homologacao'} onChange={e => setSettingsForm({...settingsForm, focusEnv: e.target.value})} className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm font-bold focus:outline-none focus:border-emerald-500">
-                <option value="homologacao">Homologação (Testes)</option>
-                <option value="producao">Produção (Validade Fiscal)</option>
-              </select>
-              <input type="password" placeholder="Token de Integração Focus" value={settingsForm.focusToken || ''} onChange={e => setSettingsForm({...settingsForm, focusToken: e.target.value})} className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm font-mono focus:outline-none focus:border-emerald-500" />
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-xs text-slate-500 block mb-1">CNPJ</label>
@@ -148,7 +123,6 @@ export default function ConfigTab({ settingsForm, setSettingsForm, handleSaveSys
             Atualizar Dados
           </button>
         </form>
-        
       </section>
     </main>
   );

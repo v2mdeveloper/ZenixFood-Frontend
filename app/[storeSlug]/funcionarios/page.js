@@ -254,7 +254,7 @@ function FuncionariosPortal({ storeSlug }) {
     { id: 'impressoes', label: 'Impressoras & Praças', icon: '🖨️' },
     { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: '🧾' },
     { id: 'rh', label: 'RH & Funcionários', icon: '👔' }, 
-    { id: 'integracoes', label: 'Integrações Delivery', icon: '📱' }, // 🔥 Integrações ADDED
+    { id: 'integracoes', label: 'Hub de Integrações', icon: '📱' }, // 🔥 Integrações ADDED
     { id: 'config', label: 'Configurações', icon: '⚙️' }
   ];
 
