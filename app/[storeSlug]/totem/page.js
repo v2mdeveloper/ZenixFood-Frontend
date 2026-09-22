@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 
-// 🎯 FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
+//FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {
   const textToSearch = `${category.name || ''} ${category.description || ''}`.toLowerCase();
   
@@ -202,8 +202,45 @@ export default function TotemModerno() {
     setPizzaBuilderOpen(false);
   };
 
+  // ============================================================================
+  // INTEGRAÇÃO SMART POS TOTEM: DEEP LINK (APP-TO-APP)
+  // ============================================================================
+  const dispararPagamentoSmartPos = (provider, totalFinal, metodoPagamento, orderId) => {
+    const valorCentavos = Math.round(Number(totalFinal) * 100);
+    
+    let tipoTransacao = 'DEBIT'; 
+    if (metodoPagamento.includes('CREDIT')) tipoTransacao = 'CREDIT';
+    if (metodoPagamento.includes('PIX')) tipoTransacao = 'PIX';
+
+    // Para o Totem, a URL de retorno é o próprio Totem (que já estará na tela de descanso)
+    const returnUrl = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
+
+    let deepLink = '';
+
+    switch (provider) {
+      case 'stone':
+        deepLink = `stone://pay?amount=${valorCentavos}&editable_amount=0&transaction_type=${tipoTransacao}&return_scheme=${returnUrl}`;
+        break;
+      case 'pagseguro':
+        let pagTipo = 2; 
+        if (tipoTransacao === 'CREDIT') pagTipo = 1;
+        if (tipoTransacao === 'PIX') pagTipo = 4;
+        deepLink = `pagseguro://pay?amount=${valorCentavos}&type=${pagTipo}&return_scheme=${returnUrl}`;
+        break;
+      case 'mercado_pago':
+        deepLink = `mercadopago://pay?amount=${Number(totalFinal).toFixed(2)}&return_url=${returnUrl}`;
+        break;
+      default:
+        return false;
+    }
+
+    console.log(`[Smart POS Totem] Disparando: ${deepLink}`);
+    window.location.href = deepLink;
+    return true;
+  };
+
   // ==========================================
-  // FINALIZAÇÃO DE PEDIDO
+  // FINALIZAÇÃO DE PEDIDO COM INTERCEPTAÇÃO SMART POS
   // ==========================================
   const handleFinalizeOrder = async () => {
     if (!customerName.trim() || !paymentMethod) return alert(t.namePrompt);
@@ -237,8 +274,25 @@ export default function TotemModerno() {
       const data = await res.json();
       
       if (res.ok && data.success) {
+        const orderId = data.order.id;
+
+        // 1. Exibe a Tela de Sucesso Imediatamente para o Cliente
         setOrderSuccessData(data.order);
         setCart([]); setCustomerName(''); setPaymentMethod(''); setIsCheckoutOpen(false);
+
+        // 2. Lê se a Loja tem a Máquina Smart POS configurada
+        const provider = storeData?.smartPosProvider || storeData?.settings?.smartPosProvider;
+        const metodosEletronicos = ['CREDIT_CARD', 'PIX'];
+        
+        // 3. Se for Totem com POS nativa (Stone, PagSeguro) e o cliente escolheu Cartão/Pix
+        if (provider && provider !== 'none' && metodosEletronicos.includes(paymentMethod)) {
+            // Dá 1,5 segundos para o cliente ver o Ecrã Verde de Sucesso e a Senha
+            // E depois aciona o navegador para chamar a App de Pagamento
+            setTimeout(() => {
+                dispararPagamentoSmartPos(provider, totalCart, paymentMethod, orderId);
+            }, 1500);
+        }
+
       } else {
         alert(`Erro:\n\n${data.details || data.error}`);
       }
@@ -276,9 +330,19 @@ export default function TotemModerno() {
   // TELA DE SUCESSO
   // ==========================================
   if (orderSuccessData) {
-    const orientacao = orderSuccessData.paymentMethod === 'PAGAR_NO_CAIXA' 
-       ? (lang === 'pt' ? 'Vá até o Caixa para efetuar o pagamento.' : lang === 'en' ? 'Please proceed to the counter to pay.' : 'Vaya a la caja para pagar.')
-       : t.orderSuccessSub;
+    const isEletronico = ['CREDIT_CARD', 'PIX'].includes(orderSuccessData.paymentMethod);
+    const provider = storeData?.smartPosProvider || storeData?.settings?.smartPosProvider;
+    const hasSmartPos = provider && provider !== 'none';
+
+    // Se a máquina estiver ativa e for Cartão, avisa para olhar para o PIN Pad
+    let orientacao = '';
+    if (orderSuccessData.paymentMethod === 'PAGAR_NO_CAIXA') {
+        orientacao = lang === 'pt' ? 'Vá até o Caixa para efetuar o pagamento.' : lang === 'en' ? 'Please proceed to the counter to pay.' : 'Vaya a la caja para pagar.';
+    } else if (hasSmartPos && isEletronico) {
+        orientacao = lang === 'pt' ? 'Siga as instruções para pagamento na máquina...' : lang === 'en' ? 'Follow the payment instructions on the terminal...' : 'Siga las instrucciones de pago en la máquina...';
+    } else {
+        orientacao = t.orderSuccessSub;
+    }
 
     return (
       <div className="relative w-screen h-screen flex flex-col items-center justify-center bg-emerald-600 animate-fade-in-up">
@@ -290,7 +354,6 @@ export default function TotemModerno() {
           <div className="bg-slate-100 p-8 rounded-3xl border-2 border-slate-200 mb-8 inline-block w-full">
             <p className="text-lg text-slate-500 font-bold uppercase tracking-widest">{t.passwordIs}</p>
             <p className="text-[6rem] font-black text-emerald-600 leading-none">{orderSuccessData.shortId}</p>
-            {/* 🔥 CORREÇÃO AQUI: Usa a variável do estado direto para evitar o erro */}
             <p className="text-2xl text-slate-800 font-black mt-4">{orderSuccessData.customerName || customerName}</p>
           </div>
 
