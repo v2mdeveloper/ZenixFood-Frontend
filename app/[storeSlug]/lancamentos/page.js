@@ -87,6 +87,9 @@ export default function LancamentosPage() {
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [movementForm, setMovementForm] = useState({ type: 'OUT', amount: '', reason: '' });
 
+  // NOVO: Estado para armazenar as configurações gerais da loja (incluindo Smart POS)
+  const [fullSettings, setFullSettings] = useState(null);
+
   // Identifica e valida a loja pelo slug da URL
   useEffect(() => {
     if (!storeSlug) return;
@@ -94,7 +97,12 @@ export default function LancamentosPage() {
       try {
         const res = await fetch(`${API_URL || 'https://zenixfood-backend.onrender.com'}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
         const data = await res.json();
-        if (data.success) { localStorage.setItem('zenix_store_id', data.store.id); setStoreStatus('FOUND'); } 
+        if (data.success) { 
+            localStorage.setItem('zenix_store_id', data.store.id); 
+            setStoreStatus('FOUND'); 
+            // Salva as configurações para acessar o Smart POS provider
+            setFullSettings(data);
+        } 
         else setStoreStatus('NOT_FOUND');
       } catch (error) { setStoreStatus('NOT_FOUND'); }
     };
@@ -300,11 +308,61 @@ export default function LancamentosPage() {
   const handleAdicionarPagamento = () => {
     const val = Number(pagamentoAtual.valor);
     if (val <= 0) return alert("Digite um valor válido.");
-    setPagamentos([...pagamentos, { metodo: pagamentoAtual.metodo, valor: val }]);
+    
+    // Mapeamento visual para interno (para usar na integração Smart POS)
+    let internalMethod = pagamentoAtual.metodo;
+    if (pagamentoAtual.metodo === 'CREDITO') internalMethod = 'CREDIT_CARD';
+    if (pagamentoAtual.metodo === 'DEBITO') internalMethod = 'DEBIT_CARD';
+    if (pagamentoAtual.metodo === 'DINHEIRO') internalMethod = 'CASH';
+
+    setPagamentos([...pagamentos, { metodo: pagamentoAtual.metodo, internalMethod: internalMethod, valor: val }]);
     setPagamentoAtual({ metodo: 'PIX', valor: '' });
   };
 
   const handleRemoverPagamento = (index) => { setPagamentos(pagamentos.filter((_, i) => i !== index)); };
+
+  // ============================================================================
+  // INTEGRAÇÃO SMART POS: DEEP LINK (APP-TO-APP)
+  // ============================================================================
+  const dispararPagamentoSmartPos = (provider, totalFinal, metodoPagamento, orderId) => {
+    const valorCentavos = Math.round(Number(totalFinal) * 100);
+    
+    let tipoTransacao = 'DEBIT'; 
+    if (metodoPagamento.includes('CREDIT')) tipoTransacao = 'CREDIT';
+    if (metodoPagamento.includes('PIX')) tipoTransacao = 'PIX';
+    if (metodoPagamento.includes('VOUCHER')) tipoTransacao = 'VOUCHER';
+
+    const returnUrl = encodeURIComponent(`${window.location.origin}/${storeSlug}/lancamentos`);
+
+    let deepLink = '';
+
+    switch (provider) {
+      case 'stone':
+        deepLink = `stone://pay?amount=${valorCentavos}&editable_amount=0&transaction_type=${tipoTransacao}&return_scheme=${returnUrl}`;
+        break;
+
+      case 'pagseguro':
+        let pagTipo = 2; 
+        if (tipoTransacao === 'CREDIT') pagTipo = 1;
+        if (tipoTransacao === 'VOUCHER') pagTipo = 3;
+        if (tipoTransacao === 'PIX') pagTipo = 4;
+        
+        deepLink = `pagseguro://pay?amount=${valorCentavos}&type=${pagTipo}&return_scheme=${returnUrl}`;
+        break;
+
+      case 'mercado_pago':
+        deepLink = `mercadopago://pay?amount=${Number(totalFinal).toFixed(2)}&return_url=${returnUrl}`;
+        break;
+
+      default:
+        console.warn("Nenhuma Smart POS configurada ou provedor desconhecido.");
+        return false;
+    }
+
+    console.log(`[Smart POS] Disparando Deep Link: ${deepLink}`);
+    window.location.href = deepLink;
+    return true;
+  };
 
   const handleConfirmarPagamento = async () => {
     if (pagamentos.length === 0) return alert("Adicione pelo menos um método de pagamento.");
@@ -315,8 +373,22 @@ export default function LancamentosPage() {
         body: JSON.stringify({ tabId: selectedTab.id, pagamentos })
       });
       const data = await res.json();
+      
       if (res.ok && data.success) {
-         alert("Conta Paga e Encerrada com Sucesso!");
+         // Lógica Smart POS: Se tiver configurado e o pagamento for eletrônico
+         const provider = fullSettings?.smartPosProvider;
+         const metodosEletronicos = ['CREDIT_CARD', 'DEBIT_CARD', 'PIX'];
+         
+         // Pega o primeiro pagamento para enviar à maquininha (idealmente, Smart POS processa 1 por vez, mas vamos enviar o maior ou o eletrônico)
+         const pagamentoEletronico = pagamentos.find(p => metodosEletronicos.includes(p.internalMethod));
+
+         if (provider && provider !== 'none' && pagamentoEletronico) {
+             alert("A enviar para a máquina de cartões...");
+             dispararPagamentoSmartPos(provider, pagamentoEletronico.valor, pagamentoEletronico.internalMethod, data.orderId || '0');
+         } else {
+             alert("Conta Paga e Encerrada com Sucesso!");
+         }
+
          setShowCheckoutModal(false); setPagamentos([]); setSelectedTab(null);
          fetchTabs(); fetchMeuCaixa();
       } else alert(data.error);
