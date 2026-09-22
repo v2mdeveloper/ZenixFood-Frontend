@@ -21,10 +21,10 @@ export default function StockTab({
   const [isAnalyzingFinance, setIsAnalyzingFinance] = useState(false);
   const [financeAnalysis, setFinanceAnalysis] = useState(null);
 
-  // 🔥 NOVOS ESTADOS: RECEITAS E PREPAROS (SUB-RECEITAS)
+  // ESTADOS: RECEITAS E PREPAROS
   const [receitasDB, setReceitasDB] = useState([]);
   const [formReceita, setFormReceita] = useState({ id: null, nome: '', insumoSaidaId: '', rendimento: '', preparo: '', itens: [], isActive: true });
-  const [multiplicadores, setMultiplicadores] = useState({}); // Controla a quantidade a produzir de cada receita
+  const [multiplicadores, setMultiplicadores] = useState({});
 
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
@@ -48,7 +48,7 @@ export default function StockTab({
   };
 
   // ==========================================
-  // FUNÇÕES DE SUB-RECEITAS E PREPAROS (NOVO)
+  // FUNÇÕES DE SUB-RECEITAS E PREPAROS
   // ==========================================
   const fetchReceitasDB = useCallback(async () => {
     try {
@@ -95,7 +95,6 @@ export default function StockTab({
         alert(isEdit ? "Receita atualizada!" : "Receita salva com sucesso!");
         setFormReceita({ id: null, nome: '', insumoSaidaId: '', rendimento: '', preparo: '', itens: [], isActive: true });
         fetchReceitasDB();
-        // Recarrega insumos para atualizar o custo na tabela principal
         if (typeof handleMovimentacaoManual === 'function') fetchMovimentacoes(); 
       } else alert(data.error);
     } catch (error) { alert("Erro ao salvar a receita."); }
@@ -147,7 +146,7 @@ export default function StockTab({
       if (data.success) {
         alert("Produção concluída! Estoque atualizado.");
         setMultiplicadores(prev => ({ ...prev, [receitaId]: 1 }));
-        fetchMovimentacoes(); // Atualiza a aba de entradas e saídas
+        fetchMovimentacoes(); 
       } else {
         alert(data.error);
       }
@@ -453,12 +452,11 @@ export default function StockTab({
       )}
 
       {/* ============================================================== */}
-      {/* ABA: PREPAROS E SUB-RECEITAS (NOVO) */}
+      {/* ABA: PREPAROS E SUB-RECEITAS */}
       {/* ============================================================== */}
       {estoqueSubTab === 'receitas' && (
         <section className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-fade-in-up">
           
-          {/* LADO ESQUERDO: FORMULÁRIO DE RECEITA */}
           <div className="xl:col-span-1">
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm sticky top-4">
               <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
@@ -522,7 +520,6 @@ export default function StockTab({
             </div>
           </div>
 
-          {/* LADO DIREITO: LISTA DE RECEITAS SALVAS */}
           <div className="xl:col-span-2">
              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
                 <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
@@ -611,7 +608,7 @@ export default function StockTab({
       )}
 
       {/* ============================================================== */}
-      {/* ABA: CHEF IA (SEPARADA) */}
+      {/* ABA: CHEF IA (CORRIGIDA E BLINDADA) */}
       {/* ============================================================== */}
       {estoqueSubTab === 'chef-ia' && (
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in-up">
@@ -659,7 +656,23 @@ export default function StockTab({
                ) : (
                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                    {savedAiRecipes.map(receita => {
-                      const listIngredientes = JSON.parse(receita.ingredientes || '[]');
+                      
+                      // 🔥 BLINDAGEM APLICADA AQUI (Impede o "r.join is not a function")
+                      let listaFormatada = [];
+                      try {
+                         const dadosCnus = JSON.parse(receita.ingredientes || '[]');
+                         if (Array.isArray(dadosCnus)) {
+                             listaFormatada = dadosCnus;
+                         } else if (dadosCnus.itens) {
+                             listaFormatada = dadosCnus.itens.map(it => {
+                                 const ins = insumos.find(x => x.id === it.insumoId);
+                                 return ins ? `${it.quantity}x ${ins.name}` : 'Ingrediente';
+                             });
+                         }
+                      } catch (e) {
+                         listaFormatada = ["Erro ao carregar"];
+                      }
+
                       return (
                        <div key={receita.id} className="bg-slate-50 border border-slate-100 p-4 rounded-2xl hover:border-amber-200 transition-colors shadow-sm">
                           <h4 className="font-black text-amber-800 mb-1">{receita.nome}</h4>
@@ -667,7 +680,7 @@ export default function StockTab({
                           
                           <div className="bg-white p-3 rounded-xl border border-slate-100 mb-3">
                             <p className="text-xs font-black text-slate-700 mb-1">🛒 Ingredientes:</p>
-                            <p className="text-xs text-slate-500">{listIngredientes.join(', ')}</p>
+                            <p className="text-xs text-slate-500">{Array.isArray(listaFormatada) ? listaFormatada.join(', ') : 'Formato Indisponível'}</p>
                           </div>
                           
                           <div className="bg-white p-3 rounded-xl border border-slate-100">
