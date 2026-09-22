@@ -43,7 +43,7 @@ const fetchWithStore = async (url, options = {}) => {
     setLoadingId(orderId);
     try {
       // 1. Dispara a emissão na Focus NFe com suporte multi-tenant
-      const response = await fetchWithStore(`${API_URL}/api/admin/orders/${orderId}/fiscal`, {
+      const response = await fetchWithStore(`${API_URL}/api/fiscal/emitir/${orderId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });

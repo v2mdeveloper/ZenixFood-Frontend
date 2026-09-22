@@ -498,7 +498,7 @@ export default function AdminDashboard() {
     const pedidoAtual = orders.find(o => o.id === orderId);
     setLoadingNfceId(orderId);
     try {
-      const resBackend = await fetchWithStore(`${API_URL}/api/admin/orders/${orderId}/fiscal`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const resBackend = await fetchWithStore(`${API_URL}/api/fiscal/emitir/${orderId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
       const dataBackend = await resBackend.json();
       if (dataBackend.success) {
         setNfcesEmitidas(prev => { const newState = { ...prev, [orderId]: dataBackend.fiscalData }; localStorage.setItem('zenix_nfcesEmitidas', JSON.stringify(newState)); return newState; });
