@@ -19,6 +19,9 @@ export default function FiscalTab({
   const [isUploadingCert, setIsUploadingCert] = useState(false);
   const [cnpjInput, setCnpjInput] = useState('');
 
+  // Estados do CSC e Ambiente
+  const [cscForm, setCscForm] = useState({ ambienteSefaz: '2', cscId: '', cscSecret: '' });
+
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
@@ -41,8 +44,13 @@ export default function FiscalTab({
   };
 
   useEffect(() => {
-    if (fiscalData && fiscalData.cnpjLoja) {
-       setCnpjInput(fiscalData.cnpjLoja);
+    if (fiscalData) {
+       if (fiscalData.cnpjLoja) setCnpjInput(fiscalData.cnpjLoja);
+       setCscForm({
+         ambienteSefaz: fiscalData.ambienteSefaz || '2',
+         cscId: fiscalData.cscId || '',
+         cscSecret: fiscalData.cscSecret || ''
+       });
     }
   }, [fiscalData]);
 
@@ -76,7 +84,6 @@ export default function FiscalTab({
     setIsUploadingCert(false);
   };
 
-  // 🎯 NOVA FUNÇÃO PARA EXCLUIR O CERTIFICADO
   const handleDeleteCertificado = async () => {
     if (!confirm("Tem certeza que deseja excluir o certificado digital ativo? Você não poderá emitir notas até cadastrar um novo.")) return;
     
@@ -95,6 +102,19 @@ export default function FiscalTab({
     }
   };
 
+  // NOVA FUNÇÃO: SALVAR CSC
+  const handleSaveCsc = async (e) => {
+    e.preventDefault();
+    try {
+        const res = await fetchWithStore(`${API_URL}/api/fiscal/csc`, { 
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cscForm) 
+        });
+        const data = await res.json();
+        if (data.success) alert("Credenciais SEFAZ salvas com sucesso!");
+        else alert(data.error || "Erro ao salvar.");
+    } catch (err) { alert("Erro de comunicação ao salvar CSC."); }
+  };
+
   return (
     <main className="space-y-6">
       <div className="bg-white p-6 rounded-3xl border border-emerald-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -107,24 +127,24 @@ export default function FiscalTab({
       <div className="flex flex-wrap gap-4 border-b border-slate-200 pb-4">
         <button onClick={() => setFiscalSubTab('fila')} className={`font-bold pb-2 transition-all cursor-pointer ${fiscalSubTab === 'fila' ? 'text-emerald-600 border-b-2 border-emerald-500' : 'text-slate-500 hover:text-emerald-500'}`}>Fila de Emissão</button>
         <button onClick={() => setFiscalSubTab('config')} className={`font-bold pb-2 transition-all cursor-pointer ${fiscalSubTab === 'config' ? 'text-emerald-600 border-b-2 border-emerald-500' : 'text-slate-500 hover:text-emerald-500'}`}>Regras Tributárias</button>
-        <button onClick={() => setFiscalSubTab('certificado')} className={`font-bold pb-2 transition-all cursor-pointer ${fiscalSubTab === 'certificado' ? 'text-emerald-600 border-b-2 border-emerald-500' : 'text-slate-500 hover:text-emerald-500'}`}>🔐 Certificado A1 & Emitente</button>
+        <button onClick={() => setFiscalSubTab('certificado')} className={`font-bold pb-2 transition-all cursor-pointer ${fiscalSubTab === 'certificado' ? 'text-emerald-600 border-b-2 border-emerald-500' : 'text-slate-500 hover:text-emerald-500'}`}>🔐 Certificado A1 & Sefaz</button>
       </div>
 
-      {/* ABA: CERTIFICADO */}
+      {/* ABA: CERTIFICADO & SEFAZ */}
       {fiscalSubTab === 'certificado' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-up">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 animate-fade-in-up">
            <div className="space-y-6">
+              
               <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
-                 <h3 className="text-lg font-black text-slate-900 mb-2">Dados do Emitente (Obrigatório)</h3>
-                 <p className="text-sm text-slate-500 mb-4">Insira o CNPJ da sua empresa exatamente como cadastrado na SEFAZ e na Focus NFe.</p>
+                 <h3 className="text-lg font-black text-slate-900 mb-2">Dados do Emitente</h3>
+                 <p className="text-sm text-slate-500 mb-4">Insira o CNPJ exato vinculado ao certificado digital.</p>
                  <div className="flex gap-2">
-                    <input type="text" value={cnpjInput} onChange={(e) => setCnpjInput(e.target.value)} placeholder="Somente números..." className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm text-slate-900 font-bold tracking-widest focus:outline-none focus:border-emerald-500" />
+                    <input type="text" value={cnpjInput} onChange={(e) => setCnpjInput(e.target.value)} placeholder="Apenas números do CNPJ..." className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm text-slate-900 font-bold tracking-widest focus:outline-none focus:border-emerald-500" />
                     <button onClick={() => handleSaveCnpj(cnpjInput)} className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-6 rounded-xl shadow-md transition-all cursor-pointer">Salvar</button>
                  </div>
               </div>
               
-              {/* 🎯 BOX DE STATUS DO CERTIFICADO ATUALIZADO COM OS BOTÕES */}
-              <div className={`p-6 rounded-3xl border shadow-sm flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 ${certStatus?.cadastrado ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+              <div className={`p-6 rounded-3xl border shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${certStatus?.cadastrado ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
                  <div className="flex items-center gap-4">
                     <span className="text-4xl">{certStatus?.cadastrado ? '✅' : '❌'}</span>
                     <div>
@@ -133,27 +153,57 @@ export default function FiscalTab({
                     </div>
                  </div>
                  {certStatus?.cadastrado && (
-                    <div className="flex gap-2 w-full xl:w-auto mt-2 xl:mt-0">
-                       <button onClick={() => document.getElementById('certInput').click()} className="flex-1 xl:flex-none text-blue-600 font-bold text-xs bg-blue-100 hover:bg-blue-200 px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-sm">Editar</button>
-                       <button onClick={handleDeleteCertificado} className="flex-1 xl:flex-none text-red-500 font-bold text-xs bg-red-100 hover:bg-red-200 px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-sm">Excluir</button>
+                    <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                       <button onClick={() => document.getElementById('certInput').click()} className="flex-1 sm:flex-none text-blue-600 font-bold text-xs bg-blue-100 hover:bg-blue-200 px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-sm">Substituir</button>
+                       <button onClick={handleDeleteCertificado} className="flex-1 sm:flex-none text-red-500 font-bold text-xs bg-red-100 hover:bg-red-200 px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-sm">Excluir</button>
                     </div>
                  )}
               </div>
+              
+              <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
+                 <h3 className="text-lg font-black text-slate-900 mb-2">Upload de Certificado Digital (A1)</h3>
+                 <form onSubmit={handleUploadCertificado} className="space-y-4">
+                    <div>
+                       <label className="text-xs text-slate-500 block mb-1 font-bold uppercase">Arquivo (.pfx / .p12)</label>
+                       <input type="file" id="certInput" accept=".pfx,.p12" required onChange={(e) => setCertFile(e.target.files[0])} className="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-emerald-50 file:text-emerald-700 border border-slate-200 rounded-xl cursor-pointer" />
+                    </div>
+                    <div>
+                       <label className="text-xs text-slate-500 block mb-1 font-bold uppercase">Senha do Certificado</label>
+                       <input type="password" required value={certPassword} onChange={(e) => setCertPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-emerald-500" />
+                    </div>
+                    <button type="submit" disabled={isUploadingCert} className={`w-full font-black py-4 rounded-xl transition-all shadow-md mt-4 cursor-pointer ${isUploadingCert ? 'bg-emerald-300 text-white cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}>{isUploadingCert ? 'Salvando no Cofre...' : '💾 Salvar Certificado A1'}</button>
+                 </form>
+              </div>
            </div>
-           
-           <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
-              <h3 className="text-lg font-black text-slate-900 mb-2">Upload de Certificado Digital (A1)</h3>
-              <form onSubmit={handleUploadCertificado} className="space-y-4">
-                 <div>
-                    <label className="text-xs text-slate-500 block mb-1 font-bold uppercase">Arquivo (.pfx / .p12)</label>
-                    <input type="file" id="certInput" accept=".pfx,.p12" required onChange={(e) => setCertFile(e.target.files[0])} className="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-emerald-50 file:text-emerald-700 border border-slate-200 rounded-xl cursor-pointer" />
-                 </div>
-                 <div>
-                    <label className="text-xs text-slate-500 block mb-1 font-bold uppercase">Senha</label>
-                    <input type="password" required value={certPassword} onChange={(e) => setCertPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-emerald-500" />
-                 </div>
-                 <button type="submit" disabled={isUploadingCert} className={`w-full font-black py-4 rounded-xl transition-all shadow-md mt-4 cursor-pointer ${isUploadingCert ? 'bg-emerald-300 text-white cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}>{isUploadingCert ? 'Enviando...' : '💾 Salvar Certificado A1'}</button>
-              </form>
+
+           <div className="space-y-6">
+              <div className="bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-800 shadow-sm">
+                 <h3 className="text-lg font-black text-amber-500 mb-2">Credenciais SEFAZ (CSC)</h3>
+                 <p className="text-sm text-slate-400 mb-6">O Código de Segurança do Contribuinte (CSC) é obrigatório para gerar o QR Code da NFC-e. Obtenha no portal da SEFAZ do seu estado.</p>
+                 
+                 <form onSubmit={handleSaveCsc} className="space-y-4">
+                    <div>
+                       <label className="text-xs text-slate-400 block mb-1 font-bold uppercase">Ambiente de Emissão</label>
+                       <select value={cscForm.ambienteSefaz} onChange={(e) => setCscForm({...cscForm, ambienteSefaz: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-amber-500">
+                          <option value="2">Homologação (Testes / Sem validade fiscal)</option>
+                          <option value="1">Produção (Validade Fiscal Oficial)</option>
+                       </select>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                       <div className="md:col-span-1">
+                          <label className="text-xs text-slate-400 block mb-1 font-bold uppercase">ID do CSC</label>
+                          <input type="text" value={cscForm.cscId} onChange={(e) => setCscForm({...cscForm, cscId: e.target.value})} placeholder="Ex: 000001" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-amber-500 font-mono" />
+                       </div>
+                       <div className="md:col-span-2">
+                          <label className="text-xs text-slate-400 block mb-1 font-bold uppercase">Código CSC (Token/Secret)</label>
+                          <input type="text" value={cscForm.cscSecret} onChange={(e) => setCscForm({...cscForm, cscSecret: e.target.value})} placeholder="Token Alfanumérico" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-amber-500 font-mono" />
+                       </div>
+                    </div>
+                    <button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-black font-black py-4 rounded-xl shadow-md transition-all mt-4 cursor-pointer">
+                      Salvar Credenciais CSC
+                    </button>
+                 </form>
+              </div>
            </div>
         </div>
       )}
