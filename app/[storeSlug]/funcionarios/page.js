@@ -22,6 +22,7 @@ import RhTab from '../admin/components/tabs/RhTab';
 import ContasTab from '../admin/components/tabs/ContasTab'; 
 import RelatorioTab from '../admin/components/tabs/RelatorioTab'; 
 import IntegracoesTab from '../admin/integracoes/IntegracoesTab'; 
+import AjudaTab from '../admin/components/tabs/AjudaTab'; 
 
 function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups, fiscalData, API_URL, fetchWithStore }) {
   const [printerForm, setPrinterForm] = useState({ name: '', type: 'USB', address: '' });
@@ -254,7 +255,8 @@ function FuncionariosPortal({ storeSlug }) {
     { id: 'impressoes', label: 'Impressoras & Praças', icon: '🖨️' },
     { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: '🧾' },
     { id: 'rh', label: 'RH & Funcionários', icon: '👔' }, 
-    { id: 'integracoes', label: 'Hub de Integrações', icon: '📱' }, // 🔥 Integrações ADDED
+    { id: 'integracoes', label: 'Hub de Integrações', icon: '🔌' }, 
+    { id: 'ajuda', label: 'Sobre / Ajuda', icon: '🎓' }, 
     { id: 'config', label: 'Configurações', icon: '⚙️' }
   ];
 
@@ -282,7 +284,8 @@ function FuncionariosPortal({ storeSlug }) {
       case 'rh': return perms.includes('rh');
       case 'impressoes': return perms.includes('config') || perms.includes('impressoes');
       case 'fiscal': return perms.includes('fiscal');
-      case 'integracoes': return perms.includes('config'); // 🔥 Integrações ligadas ao acesso de configuração
+      case 'integracoes': return perms.includes('config') || perms.includes('integracoes'); // Lê a nova permissão
+      case 'ajuda': return perms.includes('ajuda'); // Lê a nova permissão
       case 'config': return perms.includes('config');
       default: return false; 
     }
@@ -497,7 +500,6 @@ function FuncionariosPortal({ storeSlug }) {
     e.preventDefault();
     if (!newProduct.categoryId) return alert("Crie uma categoria primeiro!");
     try {
-      // 🎯 PACOTE BLINDADO: Garante que os dados da Pizza e do Combo vão no formato exato que o Backend exige
       const payload = { 
         ...newProduct, 
         costPrice: newProduct.costPrice ? Number(newProduct.costPrice) : 0, 
@@ -514,7 +516,6 @@ function FuncionariosPortal({ storeSlug }) {
 
       const res = await fetchWithStore(`${API_URL}/api/products`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if ((await res.json()).success) {
-        // Zera o formulário incluindo as novas variáveis de Pizza e Combo
         setNewProduct({ 
           name: '', description: '', price: '', price700g: '', price1kg: '', costPrice: '', categoryId: menu[0]?.id || '', imageUrl: '', regraFiscalId: '', ncm: '', ean: '', groupId: '',
           isPizza: false, maxFlavors: 1, pricingStrategy: 'HIGHEST', sizeMultiplier: 1.0, isCombo: false, comboItems: []
@@ -528,7 +529,6 @@ function FuncionariosPortal({ storeSlug }) {
     e.preventDefault();
     if (!editingProduct) return;
     try {
-      //FORÇA A LEITURA DOS DADOS VINDO DO ESTADO DO MODAL DE EDIÇÃO
       const payload = { 
         name: editingProduct.name,
         description: editingProduct.description || '',
@@ -545,13 +545,11 @@ function FuncionariosPortal({ storeSlug }) {
         ean: editingProduct.ean || '',
         groupId: editingProduct.groupId || null,
 
-        // 🍕 Configurações de Pizza garantidas
         isPizza: Boolean(editingProduct.isPizza),
         maxFlavors: editingProduct.maxFlavors ? Number(editingProduct.maxFlavors) : 1,
         pricingStrategy: editingProduct.pricingStrategy || 'HIGHEST',
         sizeMultiplier: editingProduct.sizeMultiplier !== undefined ? Number(editingProduct.sizeMultiplier) : 1.0,
         
-        // 🍔 Configurações de Combo garantidas
         isCombo: Boolean(editingProduct.isCombo),
         comboItems: editingProduct.comboItems || editingProduct.comboItemsAsParent || []
       };
@@ -578,7 +576,6 @@ function FuncionariosPortal({ storeSlug }) {
 
   const toggleProductStatus = async (product) => {
     try {
-      // PREVINE APAGAR O COMBO AO ATIVAR/DESATIVAR PRODUTO
       const payload = { 
         ...product, 
         isActive: !product.isActive,
@@ -957,8 +954,9 @@ function FuncionariosPortal({ storeSlug }) {
            {activeTab === 'impressoes' && isPermitted('impressoes') && <ImpressorasTab printers={printers} setPrinters={setPrinters} productGroups={productGroups} setProductGroups={setProductGroups} fiscalData={fiscalData} API_URL={API_URL} fetchWithStore={fetchWithStore} />}
            {activeTab === 'fiscal' && isPermitted('fiscal') && <FiscalTab fiscalSubTab={fiscalSubTab} setFiscalSubTab={setFiscalSubTab} orders={orders} emitirEImprimirNfceProp={emitirEImprimirNfceLocal} loadingNfceId={loadingNfceId} formIcms={formIcms} setFormIcms={setFormIcms} handleAddIcms={handleAddIcms} fiscalData={fiscalData} handleDeleteIcms={handleDeleteIcms} formPis={formPis} setFormPis={setFormPis} handleAddPis={handleAddPis} handleDeletePis={handleDeletePis} formIbsCbs={formIbsCbs} setFormIbsCbs={setFormIbsCbs} handleAddIbsCbs={handleAddIbsCbs} handleDeleteIbsCbs={handleDeleteIbsCbs} formRegra={formRegra} setFormRegra={setFormRegra} handleAddRegra={handleAddRegra} handleDeleteRegra={handleDeleteRegra} handleSaveCnpj={handleSaveCnpj} nfcesEmitidas={nfcesEmitidas} />}
            
-           {/* 🔥 RENDERIZAÇÃO DA NOVA ABA DE INTEGRAÇÕES */}
-           {activeTab === 'integracoes' && isPermitted('config') && <IntegracoesTab />}
+           {/* 🔥 TABS NOVAS: INTEGRAÇÕES E AJUDA */}
+           {activeTab === 'integracoes' && isPermitted('integracoes') && <IntegracoesTab />}
+           {activeTab === 'ajuda' && isPermitted('ajuda') && <AjudaTab isAdmin={false} />}
            
            {activeTab === 'config' && isPermitted('config') && <ConfigTab settingsForm={settingsForm} setSettingsForm={setSettingsForm} handleSaveSystemSettings={handleSaveSystemSettings} daysOfWeek={["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]} adminConfig={adminConfig} setAdminConfig={setAdminConfig} handleUpdateAdminConfig={handleUpdateAdminConfig} />}
            {activeTab === 'rh' && isPermitted('rh') && <RhTab />}

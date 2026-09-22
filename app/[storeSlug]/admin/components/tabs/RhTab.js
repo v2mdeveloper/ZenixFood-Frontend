@@ -259,6 +259,8 @@ const AVAILABLE_PERMISSIONS = [
     { id: 'estoque', label: '📦 Estoque & Fichas', desc: 'Insumos, notas XML, Chef IA e análise de CMV.' },
     { id: 'impressoes', label: '🖨️ Impressoras & Praças', desc: 'Configurar hardware de impressão e grupos de produção.' },
     { id: 'fiscal', label: '🧾 Fiscal (NFC-e)', desc: 'Configuração e emissão de notas fiscais.' },
+    { id: 'integracoes', label: '🔌 Hub de Integrações', desc: 'Acesso ao iFood, Smart POS, Mercado Pago, etc.' },
+    { id: 'ajuda', label: '🎓 Central de Ajuda / Manuais', desc: 'Pode visualizar os vídeos e manuais do sistema.' },
     { id: 'config', label: '⚙️ Configurações', desc: 'Ajustar horários, informações da loja e integrações.' },
     { id: 'minha_empresa', label: '🏢 Minha Empresa', desc: 'Visualizar dados do CNPJ, assinatura e faturas do sistema.' },
     { id: 'gestao', label: '🔒 Gerência Suprema', desc: 'Autorizar sangrias, estornos e acessos irrestritos.' }
