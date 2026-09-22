@@ -367,7 +367,9 @@ export default function LancamentosPage() {
   const handleConfirmarPagamento = async () => {
     if (pagamentos.length === 0) return alert("Adicione pelo menos um método de pagamento.");
     setCaixaLoading(true);
+    
     try {
+      // 1. Regista o pagamento e fecha a conta no Backend
       const res = await fetchWithStore(`${API_URL}/api/mobile-pos/pagar-conta`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-employee-name': employeeUser.name },
         body: JSON.stringify({ tabId: selectedTab.id, pagamentos })
@@ -375,24 +377,78 @@ export default function LancamentosPage() {
       const data = await res.json();
       
       if (res.ok && data.success) {
-         // Lógica Smart POS: Se tiver configurado e o pagamento for eletrônico
+         
+         const orderId = data.orderId; // O ID do pedido gerado
+         
+         // =================================================================
+         // 🚨 INTEGRAÇÃO FISCAL E IMPRESSÃO REMOTA (WI-FI)
+         // =================================================================
+         if (orderId) {
+             try {
+                 // Dispara a emissão da NFC-e na SEFAZ
+                 const resFiscal = await fetchWithStore(`${API_URL}/api/fiscal/emitir/${orderId}`, { method: 'POST' });
+                 const dataFiscal = await resFiscal.json();
+                 
+                 if (dataFiscal.success && dataFiscal.dados) {
+                     // Verifica qual o IP do computador do Caixa na rede local
+                     let printIp = localStorage.getItem('zenix_print_ip');
+                     if (!printIp) {
+                         printIp = prompt("Primeira Venda! Digite o IP do computador do Caixa Principal para imprimir os Cupons (ex: 192.168.1.15):");
+                         if (printIp) localStorage.setItem('zenix_print_ip', printIp);
+                     }
+
+                     if (printIp) {
+                         // Reconstrói os dados do pedido para a impressora entender
+                         const pedidoParaImpressao = {
+                             shortId: selectedTab.number,
+                             createdAt: new Date().toISOString(),
+                             client: { name: selectedTab.customerName || 'Consumidor', cpf: selectedTab.customerCpf || '' },
+                             items: selectedTab.items.map(i => ({ name: i.name, quantity: i.quantity, price: i.price, product: { name: i.name } })),
+                             total: totalDevido,
+                             paymentMethod: pagamentos.map(p => p.metodo).join(', ')
+                         };
+
+                         // Dispara o comando para o Servidor Node Local do Caixa Principal!
+                         fetch(`http://${printIp}:8080/imprimir-nfce`, {
+                             method: 'POST',
+                             headers: { 'Content-Type': 'application/json' },
+                             body: JSON.stringify({ pedido: pedidoParaImpressao, dadosNota: dataFiscal.dados })
+                         }).catch(e => console.warn("Impressora local inacessível no IP:", printIp));
+                     }
+                 }
+             } catch (err) {
+                 console.error("Erro na emissão fiscal silenciosa:", err);
+             }
+         }
+         // =================================================================
+
+         // 2. INTEGRAÇÃO SMART POS (DEEP LINK)
          const provider = fullSettings?.smartPosProvider;
          const metodosEletronicos = ['CREDIT_CARD', 'DEBIT_CARD', 'PIX'];
-         
-         // Pega o primeiro pagamento para enviar à maquininha (idealmente, Smart POS processa 1 por vez, mas vamos enviar o maior ou o eletrônico)
          const pagamentoEletronico = pagamentos.find(p => metodosEletronicos.includes(p.internalMethod));
 
          if (provider && provider !== 'none' && pagamentoEletronico) {
-             alert("A enviar para a máquina de cartões...");
-             dispararPagamentoSmartPos(provider, pagamentoEletronico.valor, pagamentoEletronico.internalMethod, data.orderId || '0');
+             alert("Enviando valor para a máquina de cartões...");
+             dispararPagamentoSmartPos(provider, pagamentoEletronico.valor, pagamentoEletronico.internalMethod, orderId);
          } else {
              alert("Conta Paga e Encerrada com Sucesso!");
          }
 
-         setShowCheckoutModal(false); setPagamentos([]); setSelectedTab(null);
-         fetchTabs(); fetchMeuCaixa();
-      } else alert(data.error);
-    } catch (e) { alert("Erro ao processar pagamento."); } finally { setCaixaLoading(false); }
+         // Limpa os estados e volta para a tela inicial
+         setShowCheckoutModal(false); 
+         setPagamentos([]); 
+         setSelectedTab(null);
+         fetchTabs(); 
+         fetchMeuCaixa();
+
+      } else {
+          alert(data.error || "Falha ao registrar pagamento.");
+      }
+    } catch (e) { 
+        alert("Erro ao processar pagamento."); 
+    } finally { 
+        setCaixaLoading(false); 
+    }
   };
 
   const handleCpfChange = (e) => {
@@ -741,6 +797,17 @@ export default function LancamentosPage() {
                        <button onClick={() => setShowCloseCaixaModal(true)} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-4 rounded-2xl shadow-lg cursor-pointer transition-colors flex items-center justify-center gap-2 mt-4">
                           🔒 Encerrar Turno (Fechar Caixa)
                        </button>
+                       <button onClick={() => {
+                               const atual = localStorage.getItem('zenix_print_ip') || '';
+                               const novo = prompt("Qual o IP local (Wi-Fi) do Computador do Caixa?", atual);
+                                    if (novo !== null) {
+          localStorage.setItem('zenix_print_ip', novo);
+          alert("IP da Impressora Remota atualizado para: " + novo);
+      }
+   }} 
+   className="w-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold py-3 rounded-2xl transition-colors mt-2 text-xs uppercase tracking-widest cursor-pointer border border-slate-200">
+   ⚙️ Configurar IP da Impressora (Caixa)
+</button>
                     </div>
                  )}
               </div>
