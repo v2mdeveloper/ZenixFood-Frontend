@@ -124,6 +124,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
   const [kdsData, setKdsData] = useState({ appOrders: [], totemOrders: [], salaoItems: [] });
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
+  const [clearedTime, setClearedTime] = useState(0); // 🔥 Estado para o botão de limpar concluídos
   
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
 
@@ -305,7 +306,6 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
   const deliveryPreparing = appOrders.filter(o => o.status === 'PREPARING' && !deliveryScheduled.includes(o));
   const deliveryReadyRoute = appOrders.filter(o => o.status === 'READY');
   const deliveryInTransit = appOrders.filter(o => o.status === 'IN_TRANSIT');
-  const deliveryCompleted = appOrders.filter(o => o.status === 'DELIVERED').reverse(); 
 
   const isItemDrink = (item) => item.product?.category?.isDrink === true;
 
@@ -326,14 +326,28 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
 
   const salaoPreparing = filteredSalaoItems.filter(i => i.status === 'PREPARING' || i.status === 'PENDING');
   const salaoReady = filteredSalaoItems.filter(i => i.status === 'READY');
-  const salaoCompleted = filteredSalaoItems.filter(i => i.status === 'SERVED').reverse();
-
   const totemPreparing = filteredTotemOrders.filter(o => o.status === 'PREPARING');
   const totemReady = filteredTotemOrders.filter(o => o.status === 'READY');
-  const totemCompleted = filteredTotemOrders.filter(o => o.status === 'DELIVERED').reverse();
   
-  // 🔥 NOVO: Pedidos do Totem aguardando pagamento
   const totemAwaitingPayment = filteredTotemOrders.filter(o => o.status === 'PENDING' && o.paymentMethod === 'PAGAR_NO_CAIXA');
+
+  // 🔥 LÓGICA DE LIMPEZA DE CONCLUÍDOS (12 HORAS E LIMITE DE 20 ITENS)
+  const shiftCutoff = now - (12 * 60 * 60 * 1000); 
+
+  const deliveryCompleted = appOrders
+    .filter(o => o.status === 'DELIVERED' && new Date(o.createdAt).getTime() > shiftCutoff && new Date(o.createdAt).getTime() > clearedTime)
+    .reverse()
+    .slice(0, 20); 
+
+  const salaoCompleted = filteredSalaoItems
+    .filter(i => i.status === 'SERVED' && new Date(i.createdAt).getTime() > shiftCutoff && new Date(i.createdAt).getTime() > clearedTime)
+    .reverse()
+    .slice(0, 20);
+
+  const totemCompleted = filteredTotemOrders
+    .filter(o => o.status === 'DELIVERED' && new Date(o.createdAt).getTime() > shiftCutoff && new Date(o.createdAt).getTime() > clearedTime)
+    .reverse()
+    .slice(0, 20);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans p-4 flex flex-col overflow-hidden">
@@ -357,7 +371,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
 
       <div className="flex gap-4 flex-1 items-start overflow-x-auto hide-scrollbar w-full pb-4">
         
-        {/* COLUNA 1: AGENDADOS / PENDENTES (INCLUI TOTEM AGUARDANDO CAIXA) */}
+        {/* COLUNA 1: AGENDADOS / PENDENTES */}
         <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-shrink-0 max-h-[85vh] ${mode === 'DELIVERY' ? 'w-80' : 'w-[320px]'}`}>
           <div className="p-3 bg-purple-50 border-b border-purple-100 rounded-t-2xl flex justify-between items-center shrink-0">
             <h3 className="font-black text-purple-700 text-xs uppercase tracking-widest">
@@ -392,7 +406,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
                 </div>
                 
                 <p className="text-[10px] text-red-600 font-bold text-center mt-2 opacity-70">
-                    *Não inicie o preparo até o caixa aprovar.
+                   *Não inicie o preparo até o caixa aprovar.
                 </p>
               </div>
             ))}
@@ -660,10 +674,16 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
         {/* COLUNA 6: CONCLUÍDOS */}
         <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-shrink-0 max-h-[85vh] ${mode === 'DELIVERY' ? 'w-80' : 'w-[300px]'}`}>
           <div className="p-3 bg-slate-100 border-b border-slate-200 rounded-t-2xl flex justify-between items-center shrink-0">
-            <h3 className="font-black text-slate-700 text-xs uppercase tracking-widest">Concluídos (Turno)</h3>
-            <span className="bg-slate-200 text-slate-800 text-xs font-black px-2 py-0.5 rounded-lg">
-              {mode === 'DELIVERY' ? deliveryCompleted.length : (totemCompleted.length + salaoCompleted.length)}
-            </span>
+            <h3 className="font-black text-slate-700 text-xs uppercase tracking-widest">Concluídos</h3>
+            <div className="flex gap-2 items-center">
+              {/* Botão de Limpeza Manual Adicionado */}
+              <button onClick={() => setClearedTime(Date.now())} className="bg-slate-300 hover:bg-red-400 hover:text-white text-slate-600 text-[9px] font-black uppercase px-2 py-0.5 rounded cursor-pointer transition-colors">
+                Limpar
+              </button>
+              <span className="bg-slate-200 text-slate-800 text-xs font-black px-2 py-0.5 rounded-lg">
+                {mode === 'DELIVERY' ? deliveryCompleted.length : (totemCompleted.length + salaoCompleted.length)}
+              </span>
+            </div>
           </div>
           <div className="p-3 overflow-y-auto space-y-3 flex-1 hide-scrollbar">
             {mode === 'DELIVERY' && deliveryCompleted.map(order => (
