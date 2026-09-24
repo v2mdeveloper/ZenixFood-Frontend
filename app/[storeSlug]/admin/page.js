@@ -145,11 +145,12 @@ export default function AdminDashboard() {
   const [visitsData, setVisitsData] = useState({ visits: [], totalVisits: 0 });
   const [adminConfig, setAdminConfig] = useState({ name: '', email: '', password: '' });
   
-  // 🔥 ESTADO DE CONFIGURAÇÕES LIMPO (Evita que dados falsos sobrescrevam a base de dados antes do GET terminar)
+  // 🔥 ESTADO INICIAL BLINDADO E ATUALIZADO COM OS NOVOS CAMPOS DO FOOTER
   const [settingsForm, setSettingsForm] = useState({
     logoUrl: '', coverImageUrl: '', totemCoverImageUrl: '', ifoodLink: '', ninetyNineFoodLink: '',
     isManualFechado: false, deliveryFee: 0, cashbackPercent: 0, promoBannerUrl: '', promoBannerLink: '', youtubeLiveId: '', printerName: '', aboutUsText: '', 
-    schedule: {}
+    schedule: {},
+    supportPhone: '', promoTitle1: '', promoText1: '', promoTitle2: '', promoText2: '', promoWarningText: ''
   });
 
   const [fiscalData, setFiscalData] = useState({ icms: [], pisCofins: [], ibsCbs: [], regras: [], cnpjLoja: '' });
@@ -190,7 +191,7 @@ export default function AdminDashboard() {
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
     const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-loja-slug': storeId }), ...options.headers };
     
-    // Forçar ausência de cache no fetch de dados administrativos vitais
+    // Forçar ausência de cache no fetch de dados administrativos
     const finalOptions = {
         ...options,
         headers,
@@ -452,7 +453,7 @@ export default function AdminDashboard() {
     try { const res = await fetchWithStore(`${API_URL}/api/customers?_=${Date.now()}`); if (res.ok) setCustomers(await res.json()); } catch (error) {}
   };
 
-  // 🔥 FETCH SYSTEM SETTINGS BLINDADO (Com bloqueio de Cache da Vercel)
+  // 🔥 FETCH SYSTEM SETTINGS BLINDADO COM OS NOVOS CAMPOS
   const fetchSystemSettings = async () => {
     try {
       const res = await fetchWithStore(`${API_URL}/api/settings?_=${Date.now()}`);
@@ -473,7 +474,14 @@ export default function AdminDashboard() {
           coverImageUrl: data.coverImageUrl || '', 
           totemCoverImageUrl: data.totemCoverImageUrl || '',
           ifoodLink: data.ifoodLink || '', 
-          ninetyNineFoodLink: data.ninetyNineFoodLink || ''
+          ninetyNineFoodLink: data.ninetyNineFoodLink || '',
+          // Novos campos
+          supportPhone: data.supportPhone || '',
+          promoTitle1: data.promoTitle1 || '',
+          promoText1: data.promoText1 || '',
+          promoTitle2: data.promoTitle2 || '',
+          promoText2: data.promoText2 || '',
+          promoWarningText: data.promoWarningText || ''
         });
       }
     } catch (e) {}
@@ -733,7 +741,7 @@ export default function AdminDashboard() {
     } catch (error) {}
   };
 
-const handleAddProduct = async (e) => {
+  const handleAddProduct = async (e) => {
     e.preventDefault();
     if (!newProduct.categoryId) return alert("Crie uma categoria primeiro!");
     try {
@@ -771,7 +779,7 @@ const handleAddProduct = async (e) => {
     }
   };
 
- const handleEditProduct = async (e) => {
+  const handleEditProduct = async (e) => {
     e.preventDefault();
     if (!editingProduct) return;
     try {
@@ -872,7 +880,7 @@ const handleAddProduct = async (e) => {
       const res = await fetchWithStore(`${API_URL}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsForm) });
       if ((await res.json()).success) {
           alert('Configurações salvas!');
-          fetchSystemSettings(); // Atualiza a tela imediatamente após salvar
+          fetchSystemSettings(); 
       } else alert('Erro.');
     } catch (error) {}
   };

@@ -30,9 +30,9 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
 
   const fetchPrintersAndGroups = async () => {
     try {
-      const pRes = await fetchWithStore(`${API_URL}/api/printers`);
+      const pRes = await fetchWithStore(`${API_URL}/api/printers?_=${Date.now()}`);
       if (pRes.ok) setPrinters(await pRes.json());
-      const gRes = await fetchWithStore(`${API_URL}/api/product-groups`);
+      const gRes = await fetchWithStore(`${API_URL}/api/product-groups?_=${Date.now()}`);
       if (gRes.ok) setProductGroups(await gRes.json());
     } catch (e) {}
   };
@@ -153,10 +153,12 @@ function FuncionariosPortal({ storeSlug }) {
   const [visitsData, setVisitsData] = useState({ visits: [], totalVisits: 0 });
   const [adminConfig, setAdminConfig] = useState({ name: '', email: '', password: '' });
   
+  // 🔥 ESTADO DE CONFIGURAÇÕES BLINDADO CONTRA GHOSTING
   const [settingsForm, setSettingsForm] = useState({
     logoUrl: '', coverImageUrl: '', totemCoverImageUrl: '', ifoodLink: '', ninetyNineFoodLink: '',
-    isManualFechado: false, deliveryFee: 5.00, cashbackPercent: 5, promoBannerUrl: '', promoBannerLink: '', youtubeLiveId: '', printerName: '', aboutUsText: '', 
-    schedule: { "0": { isOpen: true, open: "18:00", close: "23:30" }, "1": { isOpen: false, open: "18:00", close: "23:30" }, "2": { isOpen: true, open: "18:00", close: "23:30" }, "3": { isOpen: true, open: "18:00", close: "23:30" }, "4": { isOpen: true, open: "18:00", close: "23:30" }, "5": { isOpen: true, open: "18:00", close: "23:30" }, "6": { isOpen: true, open: "18:00", close: "23:30" } }
+    isManualFechado: false, deliveryFee: 0, cashbackPercent: 0, promoBannerUrl: '', promoBannerLink: '', youtubeLiveId: '', printerName: '', aboutUsText: '', 
+    schedule: {},
+    supportPhone: '', promoTitle1: '', promoText1: '', promoTitle2: '', promoText2: '', promoWarningText: ''
   });
 
   const [fiscalData, setFiscalData] = useState({ icms: [], pisCofins: [], ibsCbs: [], regras: [], cnpjLoja: '' });
@@ -190,11 +192,19 @@ function FuncionariosPortal({ storeSlug }) {
   const [couponForm, setCouponForm] = useState({ code: '', type: 'FIXED', value: '', minOrderValue: '0', maxUses: '0' });
   const [nfcesEmitidas, setNfcesEmitidas] = useState({}); 
 
+  // 🔥 FETCH GENÉRICO ANTI-CACHE
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
     const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-loja-slug': storeId }), ...options.headers };
-    const response = await fetch(url, { ...options, headers });
+    
+    const finalOptions = {
+        ...options,
+        headers,
+        cache: 'no-store'
+    };
+
+    const response = await fetch(url, finalOptions);
     if (response.status === 402 && typeof window !== 'undefined') window.location.href = `/${storeSlug}/bloqueado`; 
     return response;
   };
@@ -284,8 +294,8 @@ function FuncionariosPortal({ storeSlug }) {
       case 'rh': return perms.includes('rh');
       case 'impressoes': return perms.includes('config') || perms.includes('impressoes');
       case 'fiscal': return perms.includes('fiscal');
-      case 'integracoes': return perms.includes('config') || perms.includes('integracoes'); // Lê a nova permissão
-      case 'ajuda': return perms.includes('ajuda'); // Lê a nova permissão
+      case 'integracoes': return perms.includes('config') || perms.includes('integracoes');
+      case 'ajuda': return perms.includes('ajuda');
       case 'config': return perms.includes('config');
       default: return false; 
     }
@@ -357,7 +367,7 @@ function FuncionariosPortal({ storeSlug }) {
   const fetchAdminProfile = async () => {
     if (employeeUser && employeeUser.id && employeeUser.id !== 'ADMIN_MASTER') {
       try {
-        const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile/${employeeUser.id}`);
+        const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile/${employeeUser.id}?_=${Date.now()}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success) setAdminConfig({ name: data.profile.name || '', email: data.profile.email || '', password: '' });
@@ -375,8 +385,8 @@ function FuncionariosPortal({ storeSlug }) {
     setIsDataLoaded(true); setLoading(false);
   };
 
-  const fetchDeliveryPersons = async () => { try { const res = await fetchWithStore(`${API_URL}/api/rh/delivery-persons`); if (res.ok) setDeliveryPersons(await res.json()); } catch (e) {} };
-  const fetchPrintersAndGroups = async () => { try { const pRes = await fetchWithStore(`${API_URL}/api/printers`); if (pRes.ok) setPrinters(await pRes.json()); const gRes = await fetchWithStore(`${API_URL}/api/product-groups`); if (gRes.ok) setProductGroups(await gRes.json()); } catch (e) {} };
+  const fetchDeliveryPersons = async () => { try { const res = await fetchWithStore(`${API_URL}/api/rh/delivery-persons?_=${Date.now()}`); if (res.ok) setDeliveryPersons(await res.json()); } catch (e) {} };
+  const fetchPrintersAndGroups = async () => { try { const pRes = await fetchWithStore(`${API_URL}/api/printers?_=${Date.now()}`); if (pRes.ok) setPrinters(await pRes.json()); const gRes = await fetchWithStore(`${API_URL}/api/product-groups?_=${Date.now()}`); if (gRes.ok) setProductGroups(await gRes.json()); } catch (e) {} };
   const fetchVisits = async () => { try { const res = await fetchWithStore(`${API_URL}/api/admin/analytics?_=${Date.now()}`); if (res.ok) setVisitsData(await res.json()); } catch (e) {} };
   const fetchCoupons = async () => { try { const res = await fetchWithStore(`${API_URL}/api/admin/coupons?_=${Date.now()}`); if (res.ok) setCoupons(await res.json()); } catch (e) {} };
   const fetchMenu = async () => { try { const res = await fetchWithStore(`${API_URL}/api/menu?_=${Date.now()}`); if (res.ok) { const data = await res.json(); setMenu(data); if (data.length > 0 && !newProduct.categoryId) setNewProduct(prev => ({ ...prev, categoryId: data[0].id })); } } catch (e) {} };
@@ -385,20 +395,34 @@ function FuncionariosPortal({ storeSlug }) {
   const fetchInsumos = async () => { try { const res = await fetchWithStore(`${API_URL}/api/insumos?_=${Date.now()}`); if (res.ok) setInsumos(await res.json()); } catch (e) {} };
   const fetchMovimentacoes = async () => { try { const res = await fetchWithStore(`${API_URL}/api/estoque/movimentacoes?_=${Date.now()}`); if (res.ok) setMovimentacoes(await res.json()); } catch (e) {} };
   
+  // 🔥 FETCH SYSTEM SETTINGS BLINDADO (Igual ao Admin)
   const fetchSystemSettings = async () => {
     try {
       const res = await fetchWithStore(`${API_URL}/api/settings?_=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setSettingsForm({
-          isManualFechado: data.isManualFechado, deliveryFee: Number(data.deliveryFee), cashbackPercent: Number(data.cashbackPercent),
-          promoBannerUrl: data.promoBannerUrl || '', promoBannerLink: data.promoBannerLink || '', youtubeLiveId: data.youtubeLiveId || '',
-          printerName: data.printerName || '', aboutUsText: data.aboutUsText || '', schedule: data.schedule || settingsForm.schedule, 
+          isManualFechado: data.isManualFechado || false, 
+          deliveryFee: Number(data.deliveryFee) || 0, 
+          cashbackPercent: Number(data.cashbackPercent) || 0,
+          promoBannerUrl: data.promoBannerUrl || '', 
+          promoBannerLink: data.promoBannerLink || '', 
+          youtubeLiveId: data.youtubeLiveId || '',
+          printerName: data.printerName || '', 
+          aboutUsText: data.aboutUsText || '', 
+          schedule: data.schedule || { "0": { isOpen: true, open: "18:00", close: "23:30" }, "1": { isOpen: false, open: "18:00", close: "23:30" }, "2": { isOpen: true, open: "18:00", close: "23:30" }, "3": { isOpen: true, open: "18:00", close: "23:30" }, "4": { isOpen: true, open: "18:00", close: "23:30" }, "5": { isOpen: true, open: "18:00", close: "23:30" }, "6": { isOpen: true, open: "18:00", close: "23:30" } }, 
           storeCnpj: data.storeCnpj || data.store?.cnpj || '',
           logoUrl: data.logoUrl || data.store?.logoUrl || '', 
           coverImageUrl: data.coverImageUrl || '', 
           totemCoverImageUrl: data.totemCoverImageUrl || '',
-          ifoodLink: data.ifoodLink || '', ninetyNineFoodLink: data.ninetyNineFoodLink || ''
+          ifoodLink: data.ifoodLink || '', 
+          ninetyNineFoodLink: data.ninetyNineFoodLink || '',
+          supportPhone: data.supportPhone || '',
+          promoTitle1: data.promoTitle1 || '',
+          promoText1: data.promoText1 || '',
+          promoTitle2: data.promoTitle2 || '',
+          promoText2: data.promoText2 || '',
+          promoWarningText: data.promoWarningText || ''
         });
       }
     } catch (e) {}
@@ -492,7 +516,11 @@ function FuncionariosPortal({ storeSlug }) {
     e.preventDefault();
     try {
       const res = await fetchWithStore(`${API_URL}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsForm) });
-      if ((await res.json()).success) { alert('Configurações salvas!'); logEmployeeAction(`Modificou configurações gerais`); } else alert('Erro.');
+      if ((await res.json()).success) { 
+        alert('Configurações salvas!'); 
+        logEmployeeAction(`Modificou configurações gerais`); 
+        fetchSystemSettings(); // Atualiza os dados imediatamente após salvar
+      } else alert('Erro.');
     } catch (error) {}
   };
 

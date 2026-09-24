@@ -178,6 +178,39 @@ export default function ConfigTab({
         </div>
       </div>
 
+      {/* 📱 RODAPÉ E PROMOÇÕES (FOOTER) */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
+        <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><span>📱</span> Contato e Textos Promocionais</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 md:col-span-2">
+            <label className="text-[10px] font-black text-emerald-700 uppercase tracking-widest block mb-2">WhatsApp de Suporte</label>
+            <input type="text" value={settingsForm.supportPhone || ''} onChange={e => setSettingsForm({...settingsForm, supportPhone: e.target.value})} placeholder="Ex: (11) 98484-0258" className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-emerald-500" />
+            <p className="text-[10px] text-emerald-600 font-bold mt-1">Este número receberá as mensagens do botão "Chamar no WhatsApp" no final do Cardápio.</p>
+          </div>
+
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Título do Bloco 1</label>
+            <input type="text" value={settingsForm.promoTitle1 || ''} onChange={e => setSettingsForm({...settingsForm, promoTitle1: e.target.value})} placeholder="Ex: 💰 Cashback Automático" className="w-full bg-white border border-slate-200 rounded-lg p-3 text-xs font-bold mb-3 focus:outline-none focus:border-amber-500" />
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Texto do Bloco 1</label>
+            <textarea value={settingsForm.promoText1 || ''} onChange={e => setSettingsForm({...settingsForm, promoText1: e.target.value})} rows="3" className="w-full bg-white border border-slate-200 rounded-lg p-3 text-xs focus:outline-none focus:border-amber-500"></textarea>
+          </div>
+
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Título do Bloco 2</label>
+            <input type="text" value={settingsForm.promoTitle2 || ''} onChange={e => setSettingsForm({...settingsForm, promoTitle2: e.target.value})} placeholder="Ex: 🎟️ Cupons Raspadinha" className="w-full bg-white border border-slate-200 rounded-lg p-3 text-xs font-bold mb-3 focus:outline-none focus:border-amber-500" />
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Texto do Bloco 2</label>
+            <textarea value={settingsForm.promoText2 || ''} onChange={e => setSettingsForm({...settingsForm, promoText2: e.target.value})} rows="3" className="w-full bg-white border border-slate-200 rounded-lg p-3 text-xs focus:outline-none focus:border-amber-500"></textarea>
+          </div>
+
+          <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 md:col-span-2">
+            <label className="text-[10px] font-black text-amber-700 uppercase tracking-widest block mb-2">Texto de Regras / Avisos (Bloco Amarelo)</label>
+            <textarea value={settingsForm.promoWarningText || ''} onChange={e => setSettingsForm({...settingsForm, promoWarningText: e.target.value})} rows="2" placeholder="Ex: As promoções não são cumulativas..." className="w-full bg-white border border-amber-200 rounded-lg p-3 text-xs focus:outline-none focus:border-amber-500"></textarea>
+            <p className="text-[10px] text-amber-600 font-bold mt-1">Apague todos os textos se quiser esconder esta secção de promoções do cliente.</p>
+          </div>
+        </div>
+      </div>
+
       {/* ⚙️ OPERACIONAL */}
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
         <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><span>🛵</span> Operacional e Delivery</h3>
