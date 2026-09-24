@@ -84,7 +84,6 @@ function HomeContent({ storeSlug }) {
   const [isTotemMode, setIsTotemMode] = useState(false);
   const [totemName, setTotemName] = useState('');
 
-  // 🍕 ESTADOS DO CONSTRUTOR DE PIZZAS (CARDÁPIO DIGITAL)
   const [showPizzaModal, setShowPizzaModal] = useState(false);
   const [pizzaBase, setPizzaBase] = useState(null);
   const [pizzaFlavorCount, setPizzaFlavorCount] = useState(1);
@@ -93,7 +92,7 @@ function HomeContent({ storeSlug }) {
   const API_URL = 'https://zenixfood-backend.onrender.com';
   const searchParams = useSearchParams();
 
-  // Helper local atualizado com rota dinâmica de bloqueio
+  // Helper local que intercepta o cache nativo
   const fetchWithStore = async (url, options = {}) => {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
@@ -104,14 +103,20 @@ function HomeContent({ storeSlug }) {
       ...options.headers,
     };
 
-    const response = await fetch(url, { ...options, headers });
+    // Força o navegador e a Vercel a ignorarem o cache
+    const finalOptions = {
+      ...options,
+      headers,
+      cache: 'no-store' 
+    };
+
+    const response = await fetch(url, finalOptions);
 
     if (response.status === 402) {
       if (typeof window !== 'undefined') {
-        window.location.href = `/${storeSlug}/bloqueado`; // Redireciona com o slug atual
+        window.location.href = `/${storeSlug}/bloqueado`; 
       }
     }
-
     return response;
   };
 
@@ -202,18 +207,24 @@ function HomeContent({ storeSlug }) {
     }
   }, [isTotemMode]);
 
+  // 🚀 FETCH SETTINGS COM QUEBRADOR DE CACHE FORÇADO
   const fetchSystemSettings = () => {
-    fetchWithStore(`${API_URL}/api/settings`)
+    const timestamp = Date.now(); // Quebra o cache da Vercel
+    fetchWithStore(`${API_URL}/api/settings?_=${timestamp}`)
       .then((res) => res.json())
       .then((data) => {
-        // 🔥 LÓGICA VITAL: O Backend decide se a loja está aberta e o frontend aceita.
-        setIsStoreOpen(data.isOpen === true);
+        // Resolve o bug do "Sempre Fechado": O backend tem que enviar isOpen: true/false.
+        // Se o backend ainda for antigo, assumimos aberto até atualizar
+        const openStatus = data.isOpen !== undefined ? data.isOpen : true; 
+        
+        // Garante que respeita o fechamento manual também
+        setIsStoreOpen(openStatus && !data.isManualFechado);
         
         setDeliveryFee(Number(data.deliveryFee) || 0);
         setCashbackPercent(Number(data.cashbackPercent) || 0);
         setStoreSettings(data);
       })
-      .catch((err) => console.error("Erro ao buscar configurações da loja:", err));
+      .catch((err) => console.error(err));
   };
 
   useEffect(() => {
@@ -247,7 +258,7 @@ function HomeContent({ storeSlug }) {
     if (view === 'payment_pix' && pixInfo && pixInfo.orderId) {
       intervalId = setInterval(async () => {
         try {
-          const res = await fetchWithStore(`${API_URL}/api/orders/${pixInfo.orderId}/status`);
+          const res = await fetchWithStore(`${API_URL}/api/orders/${pixInfo.orderId}/status?_=${Date.now()}`);
           if (res.ok) {
             const data = await res.json();
             if (data.status === 'PREPARING' || data.status === 'PAID') {
@@ -267,12 +278,14 @@ function HomeContent({ storeSlug }) {
     return () => clearInterval(intervalId);
   }, [view, pixInfo, isTotemMode, API_URL]);
 
+  // 🚀 BUSCA O CARDÁPIO COMPLETO IGNORANDO CACHES DA VERCEL
   useEffect(() => {
+    const timestamp = Date.now();
     Promise.all([
-      fetchWithStore(`${API_URL}/api/menu`).then((res) => res.json()),
-      fetchWithStore(`${API_URL}/api/products/highlights`).then((res) => res.json()),
-      fetchWithStore(`${API_URL}/api/suppliers`).then((res) => res.ok ? res.json() : []).catch(() => []),
-      fetchWithStore(`${API_URL}/api/upsells`).then((res) => res.ok ? res.json() : []).catch(() => []) 
+      fetchWithStore(`${API_URL}/api/menu?_=${timestamp}`).then((res) => res.json()),
+      fetchWithStore(`${API_URL}/api/products/highlights?_=${timestamp}`).then((res) => res.json()),
+      fetchWithStore(`${API_URL}/api/suppliers?_=${timestamp}`).then((res) => res.ok ? res.json() : []).catch(() => []),
+      fetchWithStore(`${API_URL}/api/upsells?_=${timestamp}`).then((res) => res.ok ? res.json() : []).catch(() => []) 
     ]).then(([menuData, highlightsData, suppliersData, upsellsData]) => {
       setMenu(menuData); 
       setHighlights(highlightsData); 
@@ -308,7 +321,7 @@ function HomeContent({ storeSlug }) {
 
   const fetchClientOrders = async () => {
     try {
-      const res = await fetchWithStore(`${API_URL}/api/orders/client/${user.id}`);
+      const res = await fetchWithStore(`${API_URL}/api/orders/client/${user.id}?_=${Date.now()}`);
       if (res.ok) setClientOrders(await res.json());
     } catch (error) {}
   };
@@ -321,7 +334,6 @@ function HomeContent({ storeSlug }) {
     setSelectedProductModal(null);
   };
 
-  // 🍕 LÓGICA DE ABERTURA DOS PRODUTOS
   const handleOpenProductModal = (product) => { 
     if (product.isPizza && product.maxFlavors > 1) {
       setPizzaBase(product);
@@ -333,7 +345,6 @@ function HomeContent({ storeSlug }) {
     }
   };
 
-  // 🍕 LÓGICA DE MONTAGEM DE PIZZA
   const togglePizzaFlavor = (flavorProd) => {
     if (pizzaSelectedFlavors.find(f => f.id === flavorProd.id)) {
       setPizzaSelectedFlavors(prev => prev.filter(f => f.id !== flavorProd.id));
@@ -576,7 +587,6 @@ function HomeContent({ storeSlug }) {
     } catch (error) {}
   };
 
-  // 🎯 PREPARADOR DE CARRINHO PARA O BACKEND
   const buildItemsPayload = () => cart.map(item => ({
       productId: item.productId,
       quantity: item.quantity,
@@ -685,7 +695,6 @@ function HomeContent({ storeSlug }) {
     return mapping[status] || { label: status, color: 'text-slate-800 dark:text-white' };
   };
 
-  // 🎯 ETIQUETAS DO CARDÁPIO (Aprimoradas para receber o objeto todo ou só o nome)
   const renderProductBadges = (productOrName) => {
     const badges = [];
     const name = typeof productOrName === 'string' ? productOrName : productOrName?.name || '';
@@ -707,19 +716,28 @@ function HomeContent({ storeSlug }) {
     <div className={isDarkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 font-sans pb-28 selection:bg-amber-500 selection:text-zinc-950 transition-colors duration-500 flex flex-col justify-between">
         
-        {/* 🎯 HEADER AGORA RECEBE storeSettings */}
+        {/* 🎯 HEADER A RECEBER AS IMAGENS DO BANCO DE DADOS */}
         {!isTotemMode && <Header view={view} setView={setView} isScrolled={isScrolled} user={user} availableCashback={availableCashback} setAuthMode={setAuthMode} isDarkMode={isDarkMode} toggleTheme={toggleTheme} storeSettings={storeSettings} />}
         
         {isTotemMode && (
-          <div className="bg-white dark:bg-gradient-to-b dark:from-black dark:to-[#0a0a0a] border-b border-slate-200 dark:border-white/5 p-6 md:p-8 flex justify-between items-center sticky top-0 z-40 shadow-xl cursor-pointer transition-colors" onClick={handleFullscreen}>
-              <div className="flex items-center gap-4">
+          <div className="relative bg-white dark:bg-gradient-to-b dark:from-black dark:to-[#0a0a0a] border-b border-slate-200 dark:border-white/5 p-6 md:p-8 flex justify-between items-center sticky top-0 z-40 shadow-xl cursor-pointer transition-colors overflow-hidden" onClick={handleFullscreen}>
+              
+              {/* 🔥 IMAGEM DE CAPA DO TOTEM */}
+              {storeSettings?.totemCoverImageUrl && (
+                <div 
+                  className="absolute inset-0 z-0 opacity-40 pointer-events-none" 
+                  style={{ backgroundImage: `url('${storeSettings.totemCoverImageUrl}')`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+                />
+              )}
+
+              <div className="flex items-center gap-4 relative z-10">
                   <span className="text-4xl animate-bounce">⚡</span>
                   <div>
                     <h1 className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tight">{storeSettings?.store?.name || 'Zenix'}</h1>
                     <span className="text-amber-600 dark:text-amber-500 font-bold text-sm tracking-widest uppercase">Autoatendimento</span>
                   </div>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 relative z-10">
                 <button onClick={(e) => { e.stopPropagation(); toggleTheme(); }} className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/10 text-xl flex items-center justify-center z-50 transition-colors cursor-pointer">
                   {isDarkMode ? '☀️' : '🌙'}
                 </button>

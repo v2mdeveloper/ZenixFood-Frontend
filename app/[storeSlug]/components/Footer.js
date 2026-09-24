@@ -1,3 +1,5 @@
+'use client';
+
 export default function Footer({ view, getTodayScheduleText, storeSettings }) {
   if (view === 'payment_card' || view === 'payment_pix' || view === 'live_cam') return null;
 
@@ -66,19 +68,30 @@ export default function Footer({ view, getTodayScheduleText, storeSettings }) {
         </div>
       </div>
 
-      <div className="mt-10 pt-8 border-t border-white/5">
-        <p className="mb-5 text-zinc-400 font-bold uppercase tracking-widest">Também estamos no aplicativo:</p>
-        <div className="flex flex-wrap justify-center gap-4">
-          <a href="" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 bg-[#EA1D2C] hover:bg-[#EA1D2C]/80 text-white px-6 py-3.5 rounded-2xl font-black text-sm transition-all hover:-translate-y-1 shadow-[0_10px_20px_rgba(234,29,44,0.2)]">
-            <img src="/ifood.png" alt="iFood" className="w-6 h-6 object-contain" onError={(e) => e.target.style.display = 'none'} />
-            Pedir no iFood
-          </a>
-         {<a href="" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 bg-[#FFCC00] hover:bg-[#FFCC00]/80 text-black px-6 py-3.5 rounded-2xl font-black text-sm transition-all hover:-translate-y-1 shadow-[0_10px_20px_rgba(255,204,0,0.2)]">
-            <img src="/99food.png" alt="99Food" className="w-6 h-6 object-contain" onError={(e) => e.target.style.display = 'none'} />
-            Pedir no 99Food
-          </a>}
+      {/* 🛵 BOTÕES DINÂMICOS DE APLICATIVOS DE DELIVERY */}
+      {(storeSettings?.ifoodLink || storeSettings?.ninetyNineFoodLink) && (
+        <div className="mt-10 pt-8 border-t border-slate-200 dark:border-white/5 transition-colors duration-300">
+          <p className="mb-5 text-slate-400 dark:text-zinc-400 font-bold uppercase tracking-widest">Também estamos no aplicativo:</p>
+          <div className="flex flex-wrap justify-center gap-4">
+            
+            {storeSettings?.ifoodLink && (
+              <a href={storeSettings.ifoodLink} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 bg-[#EA1D2C] hover:bg-[#EA1D2C]/80 text-white px-6 py-3.5 rounded-2xl font-black text-sm transition-all hover:-translate-y-1 shadow-[0_10px_20px_rgba(234,29,44,0.2)]">
+                <img src="/ifood.png" alt="iFood" className="w-6 h-6 object-contain" onError={(e) => e.target.style.display = 'none'} />
+                Pedir no iFood
+              </a>
+            )}
+
+            {storeSettings?.ninetyNineFoodLink && (
+              <a href={storeSettings.ninetyNineFoodLink} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 bg-[#FFCC00] hover:bg-[#FFCC00]/80 text-black px-6 py-3.5 rounded-2xl font-black text-sm transition-all hover:-translate-y-1 shadow-[0_10px_20px_rgba(255,204,0,0.2)]">
+                <img src="/99food.png" alt="99Food" className="w-6 h-6 object-contain" onError={(e) => e.target.style.display = 'none'} />
+                Pedir no 99Food
+              </a>
+            )}
+
+          </div>
         </div>
-      </div>
+      )}
+
       <div className="mt-12 pt-8 border-t border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center transition-colors duration-300">
         <p className="text-slate-500 dark:text-zinc-600 text-[10px] font-bold uppercase tracking-widest mb-1 transition-colors duration-300">
           Desenvolvido e Licenciado por
