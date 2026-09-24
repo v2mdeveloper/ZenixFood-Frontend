@@ -322,54 +322,137 @@ export default function ZenixLandingPage() {
           </div>
         </section>
 
-        {/* 5. SEÇÃO RELATÓRIOS ANALÍTICOS B.I */}
-        <section id="bi" className="py-24 bg-white border-t border-slate-200/60">
-          <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <div className="space-y-6">
-              <span className="text-xs font-black uppercase tracking-widest text-[#f58220]">
-                Business Intelligence
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-black text-[#0e4a56] leading-tight">
-                Relatórios analíticos para decisões baseadas em dados
-              </h2>
-              <p className="text-slate-600 leading-relaxed">
-                Acompanhe o desempenho do seu negócio em tempo real com relatórios visuais inteligentes e fáceis de interpretar.
-              </p>
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="border border-slate-100 bg-slate-50 p-4 rounded-2xl">
-                  <span className="text-xs text-slate-500 font-bold">Mais Vendidos</span>
-                  <p className="text-sm font-bold text-[#0e4a56] mt-1">Ranking de Produtos</p>
+        {/* 5. SEÇÃO RELATÓRIOS ANALÍTICOS B.I (REFORMULADA - MODERNA & TECNOLÓGICA) */}
+        <section id="bi" className="relative py-24 bg-white border-y border-slate-200/60 overflow-hidden">
+          {/* Efeitos de Fundo Tecnológicos */}
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#0e4a56]/5 rounded-full blur-[100px] pointer-events-none transform translate-x-1/2 -translate-y-1/2"></div>
+          <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#f58220]/5 rounded-full blur-[80px] pointer-events-none transform -translate-x-1/2 translate-y-1/2"></div>
+          
+          <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center relative z-10">
+            
+            {/* Texto e Funcionalidades (Lado Esquerdo) */}
+            <div className="space-y-8">
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-2 bg-[#f58220]/10 border border-[#f58220]/20 px-3 py-1 rounded-full text-[#f58220] text-xs font-bold uppercase tracking-wider">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f58220] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#f58220]"></span>
+                  </span>
+                  Business Intelligence Em Tempo Real
                 </div>
-                <div className="border border-slate-100 bg-slate-50 p-4 rounded-2xl">
-                  <span className="text-xs text-slate-500 font-bold">Horários de Pico</span>
-                  <p className="text-sm font-bold text-[#0e4a56] mt-1">Mapa de Calor de Vendas</p>
+                
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-[#0e4a56] leading-[1.15] tracking-tight">
+                  Decisões baseadas em dados, não em intuição.
+                </h2>
+                <p className="text-slate-600 leading-relaxed text-lg">
+                  Transforme os números do seu restaurante em insights visuais preditivos. Identifique gargalos, preveja demandas e escale seu lucro.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                <div className="group bg-white border border-slate-200 p-5 rounded-2xl hover:border-[#f58220]/40 hover:shadow-lg hover:shadow-[#f58220]/5 transition-all cursor-default">
+                  <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-[#f58220] mb-3 group-hover:scale-110 transition-transform">
+                    📊
+                  </div>
+                  <h4 className="font-bold text-[#0e4a56]">Ranking de Produtos</h4>
+                  <p className="text-xs text-slate-500 mt-1">Descubra o que mais vende e onde focar suas compras.</p>
+                </div>
+                
+                <div className="group bg-white border border-slate-200 p-5 rounded-2xl hover:border-[#0e4a56]/40 hover:shadow-lg hover:shadow-[#0e4a56]/5 transition-all cursor-default">
+                  <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-[#0e4a56] mb-3 group-hover:scale-110 transition-transform">
+                    🔥
+                  </div>
+                  <h4 className="font-bold text-[#0e4a56]">Mapa de Calor</h4>
+                  <p className="text-xs text-slate-500 mt-1">Identifique os horários e dias de maior pico no salão.</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-[#0e4a56] text-white p-8 rounded-3xl shadow-2xl space-y-6">
-              <h3 className="text-lg font-bold">Métricas do Mês</h3>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>Faturamento Geral</span>
-                    <span className="font-bold text-[#f58220]">112% da Meta</span>
+            {/* Dashboard Mockup (Lado Direito) - Visual Tecnológico */}
+            <div className="relative perspective-1000">
+              {/* Moldura do Dashboard Estilo MacOS / Dark Mode */}
+              <div className="bg-[#041a1f] border border-[#0e4a56]/40 p-6 sm:p-8 rounded-3xl shadow-2xl shadow-[#0e4a56]/30 transform transition-transform hover:-translate-y-1 hover:shadow-[#0e4a56]/40 duration-500">
+                
+                {/* Header do Mockup */}
+                <div className="flex items-center justify-between border-b border-white/10 pb-5 mb-6">
+                  <div className="flex gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-amber-500/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-emerald-500/80"></div>
                   </div>
-                  <div className="w-full bg-white/10 h-3 rounded-full overflow-hidden">
-                    <div className="bg-[#f58220] h-full w-[85%] rounded-full"></div>
+                  <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">Zenix Analytics</span>
+                </div>
+
+                {/* KPIs */}
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                  <div className="bg-white/5 border border-white/5 p-4 rounded-2xl backdrop-blur-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:bg-emerald-500/20"></div>
+                    <span className="text-xs text-slate-400 font-medium">Receita Bruta</span>
+                    <div className="flex items-end gap-2 mt-1">
+                      <p className="text-2xl font-black text-white">R$ 124.5K</p>
+                      <span className="text-xs font-bold text-emerald-400 mb-1">+14.2%</span>
+                    </div>
+                  </div>
+                  <div className="bg-white/5 border border-white/5 p-4 rounded-2xl backdrop-blur-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-[#f58220]/10 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:bg-[#f58220]/20"></div>
+                    <span className="text-xs text-slate-400 font-medium">Pedidos (Mês)</span>
+                    <div className="flex items-end gap-2 mt-1">
+                      <p className="text-2xl font-black text-white">3.492</p>
+                      <span className="text-xs font-bold text-[#f58220] mb-1">+5.8%</span>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>Vendas por Autoatendimento (Totem)</span>
-                    <span className="font-bold text-emerald-400">64% do Total</span>
+
+                {/* Gráfico de Barras Falso (CSS Puro) */}
+                <div className="mb-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="text-sm font-bold text-white">Volume de Vendas (Últimos 7 dias)</h4>
+                    <span className="text-[10px] bg-white/10 text-slate-300 px-2 py-1 rounded-md">Ver Detalhes</span>
                   </div>
-                  <div className="w-full bg-white/10 h-3 rounded-full overflow-hidden">
-                    <div className="bg-emerald-400 h-full w-[64%] rounded-full"></div>
+                  <div className="h-32 flex items-end justify-between gap-2 sm:gap-3 bg-white/5 p-4 rounded-2xl border border-white/5">
+                    {[35, 50, 40, 70, 85, 100, 60].map((height, i) => (
+                      <div key={i} className="w-full flex justify-center group relative">
+                        {/* Tooltip Hover */}
+                        <div className="opacity-0 group-hover:opacity-100 absolute -top-8 bg-white text-[#041a1f] text-[10px] font-bold px-2 py-1 rounded transition-opacity pointer-events-none">
+                          {height}%
+                        </div>
+                        {/* Barra */}
+                        <div 
+                          className={`w-full rounded-t-md transition-all duration-500 ease-out group-hover:brightness-125 ${height === 100 ? 'bg-[#f58220]' : 'bg-[#0e4a56] border-t border-[#135f6e]'}`}
+                          style={{ height: `${height}%` }}
+                        ></div>
+                      </div>
+                    ))}
                   </div>
                 </div>
+
+                {/* Metas / Barras de Progresso */}
+                <div className="space-y-5 bg-white/5 border border-white/5 p-5 rounded-2xl">
+                  <div>
+                    <div className="flex justify-between text-xs mb-2">
+                      <span className="text-slate-300">Atingimento de Meta Mensal</span>
+                      <span className="font-bold text-[#f58220]">112%</span>
+                    </div>
+                    <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden shadow-inner">
+                      <div className="bg-gradient-to-r from-[#e07318] to-[#f58220] h-full w-[100%] rounded-full relative">
+                        <div className="absolute top-0 right-0 bottom-0 w-20 bg-white/20 animate-pulse"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs mb-2">
+                      <span className="text-slate-300">Adesão Autoatendimento (Totem)</span>
+                      <span className="font-bold text-emerald-400">64%</span>
+                    </div>
+                    <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden shadow-inner">
+                      <div className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full w-[64%] rounded-full"></div>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
+
           </div>
         </section>
 
