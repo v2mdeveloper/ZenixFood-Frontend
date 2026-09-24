@@ -377,7 +377,7 @@ export default function ZenixLandingPage() {
         <section id="buscar-loja" className="bg-slate-900 text-white py-20 border-t border-slate-800">
           <div className="max-w-xl mx-auto px-6 text-center space-y-8">
             <div className="w-16 h-16 bg-[#f58220]/20 text-[#f58220] rounded-3xl flex items-center justify-center text-3xl mx-auto">
-              🍔
+              🍽️ 🥂
             </div>
             <h2 className="text-3xl font-black">Quer fazer um pedido?</h2>
             <p className="text-slate-400 text-sm">
