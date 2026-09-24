@@ -15,14 +15,13 @@ export default function HomePage() {
       <span className="font-black text-2xl text-[#0e4a56] tracking-tight">
         ZENIX<span className="text-[#f58220]">FOOD</span>
       </span>
-      
     </a>
           <nav className="hidden lg:flex items-center gap-7 text-xs font-bold uppercase tracking-wider text-slate-600">
             <a href="/solucoes" className="hover:text-[#0e4a56] transition-colors">Soluções</a>
             <a href="/autoatendimento" className="hover:text-[#0e4a56] transition-colors">Autoatendimento</a>
             <a href="/kds" className="hover:text-[#0e4a56] transition-colors">KDS Cozinha & Bar</a>
             <a href="/integracoes" className="hover:text-[#0e4a56] transition-colors">Integrações</a>
-            <a href="/bi" className="hover:text-[#0e4a56] transition-colors">Painel B.I</a>
+            <a href="/bi" className="hover:text-[#0e4a56] transition-colors">B.I Analytics</a>
             <a href="/buscar-cardapio" className="text-[#f58220] hover:text-[#e07318] font-black">Buscar Cardápio</a>
           </nav>
 
@@ -175,7 +174,9 @@ export default function HomePage() {
           <p className="font-bold text-[#0e4a56]">© 2026 ZenixFood. Todos os direitos reservados.</p>
           <div className="flex gap-6">
             <a href="/solucoes" className="hover:text-[#0e4a56]">Soluções</a>
-            <a href="/kds" className="hover:text-[#0e4a56]">KDS</a>
+            <a href="/autoatendimento" className="hover:text-[#0e4a56]">Autoatendimento</a>
+            <a href="/kds" className="hover:text-[#0e4a56]">KDS Cozinha & Bar</a>
+            <a href="/integracoes" className="hover:text-[#0e4a56]">Integrações</a>
             <a href="/bi" className="hover:text-[#0e4a56]">B.I Analytics</a>
             <a href="/buscar-cardapio" className="hover:text-[#0e4a56]">Buscar Cardápio</a>
           </div>
