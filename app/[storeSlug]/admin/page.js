@@ -30,9 +30,9 @@ function ImpressorasTab({ printers, setPrinters, productGroups, setProductGroups
 
   const fetchPrintersAndGroups = async () => {
     try {
-      const pRes = await fetchWithStore(`${API_URL}/api/printers`);
+      const pRes = await fetchWithStore(`${API_URL}/api/printers?_=${Date.now()}`);
       if (pRes.ok) setPrinters(await pRes.json());
-      const gRes = await fetchWithStore(`${API_URL}/api/product-groups`);
+      const gRes = await fetchWithStore(`${API_URL}/api/product-groups?_=${Date.now()}`);
       if (gRes.ok) setProductGroups(await gRes.json());
     } catch (e) {}
   };
@@ -144,11 +144,14 @@ export default function AdminDashboard() {
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
   const [visitsData, setVisitsData] = useState({ visits: [], totalVisits: 0 });
   const [adminConfig, setAdminConfig] = useState({ name: '', email: '', password: '' });
+  
+  // 🔥 ESTADO DE CONFIGURAÇÕES LIMPO (Evita que dados falsos sobrescrevam a base de dados antes do GET terminar)
   const [settingsForm, setSettingsForm] = useState({
     logoUrl: '', coverImageUrl: '', totemCoverImageUrl: '', ifoodLink: '', ninetyNineFoodLink: '',
-    isManualFechado: false, deliveryFee: 5.00, cashbackPercent: 5, promoBannerUrl: '', promoBannerLink: '', youtubeLiveId: '', printerName: '', aboutUsText: '', 
-    schedule: { "0": { isOpen: true, open: "18:00", close: "23:30" }, "1": { isOpen: false, open: "18:00", close: "23:30" }, "2": { isOpen: true, open: "18:00", close: "23:30" }, "3": { isOpen: true, open: "18:00", close: "23:30" }, "4": { isOpen: true, open: "18:00", close: "23:30" }, "5": { isOpen: true, open: "18:00", close: "23:30" }, "6": { isOpen: true, open: "18:00", close: "23:30" } }
+    isManualFechado: false, deliveryFee: 0, cashbackPercent: 0, promoBannerUrl: '', promoBannerLink: '', youtubeLiveId: '', printerName: '', aboutUsText: '', 
+    schedule: {}
   });
+
   const [fiscalData, setFiscalData] = useState({ icms: [], pisCofins: [], ibsCbs: [], regras: [], cnpjLoja: '' });
   const [formIcms, setFormIcms] = useState({ id: '', descricao: '', regime: 'Simples Nacional', cfop: '', cst: '', aliquota: '' });
   const [formPis, setFormPis] = useState({ id: '', descricao: '', cstPis: '', aliqPis: '', cstCofins: '', aliqCofins: '' });
@@ -186,7 +189,15 @@ export default function AdminDashboard() {
     const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
     const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-loja-slug': storeId }), ...options.headers };
-    const response = await fetch(url, { ...options, headers });
+    
+    // Forçar ausência de cache no fetch de dados administrativos vitais
+    const finalOptions = {
+        ...options,
+        headers,
+        cache: 'no-store'
+    };
+
+    const response = await fetch(url, finalOptions);
     if (response.status === 402 && typeof window !== 'undefined') window.location.href = `/${storeSlug}/bloqueado`;
     return response;
   };
@@ -222,7 +233,6 @@ export default function AdminDashboard() {
     }
   }, [isAdminAuthenticated, loggedEmployee]);
 
-  // SISTEMA DE PERMISSÕES 
   const isAdmin = loggedEmployee?.role === 'ADMIN' || loggedEmployee?.role === 'Administrador' || loggedEmployee?.role === 'Gerente Master' || loggedEmployee?.id === 'ADMIN_MASTER';
   const hasPermission = (permId) => {
     if (isAdmin) return true;
@@ -329,7 +339,7 @@ export default function AdminDashboard() {
   const fetchAdminProfile = async () => {
     if (loggedEmployee && loggedEmployee.id && loggedEmployee.id !== 'ADMIN_MASTER') {
       try {
-        const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile/${loggedEmployee.id}`);
+        const res = await fetchWithStore(`${API_URL}/api/auth/admin/profile/${loggedEmployee.id}?_=${Date.now()}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success) setAdminConfig({ name: data.profile.name || '', email: data.profile.email || '', password: '' });
@@ -352,7 +362,7 @@ export default function AdminDashboard() {
   };
 
   const fetchDeliveryPersons = async () => {
-    try { const res = await fetchWithStore(`${API_URL}/api/rh/delivery-persons`); if (res.ok) setDeliveryPersons(await res.json()); } catch (e) {}
+    try { const res = await fetchWithStore(`${API_URL}/api/rh/delivery-persons?_=${Date.now()}`); if (res.ok) setDeliveryPersons(await res.json()); } catch (e) {}
   };
 
   const assignDelivery = async (orderIds, deliveryPersonId) => {
@@ -442,20 +452,28 @@ export default function AdminDashboard() {
     try { const res = await fetchWithStore(`${API_URL}/api/customers?_=${Date.now()}`); if (res.ok) setCustomers(await res.json()); } catch (error) {}
   };
 
+  // 🔥 FETCH SYSTEM SETTINGS BLINDADO (Com bloqueio de Cache da Vercel)
   const fetchSystemSettings = async () => {
     try {
       const res = await fetchWithStore(`${API_URL}/api/settings?_=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setSettingsForm({
-          isManualFechado: data.isManualFechado, deliveryFee: Number(data.deliveryFee), cashbackPercent: Number(data.cashbackPercent),
-          promoBannerUrl: data.promoBannerUrl || '', promoBannerLink: data.promoBannerLink || '', youtubeLiveId: data.youtubeLiveId || '',
-          printerName: data.printerName || '', aboutUsText: data.aboutUsText || '', schedule: data.schedule || settingsForm.schedule, 
+          isManualFechado: data.isManualFechado || false, 
+          deliveryFee: Number(data.deliveryFee) || 0, 
+          cashbackPercent: Number(data.cashbackPercent) || 0,
+          promoBannerUrl: data.promoBannerUrl || '', 
+          promoBannerLink: data.promoBannerLink || '', 
+          youtubeLiveId: data.youtubeLiveId || '',
+          printerName: data.printerName || '', 
+          aboutUsText: data.aboutUsText || '', 
+          schedule: data.schedule || { "0": { isOpen: true, open: "18:00", close: "23:30" }, "1": { isOpen: false, open: "18:00", close: "23:30" }, "2": { isOpen: true, open: "18:00", close: "23:30" }, "3": { isOpen: true, open: "18:00", close: "23:30" }, "4": { isOpen: true, open: "18:00", close: "23:30" }, "5": { isOpen: true, open: "18:00", close: "23:30" }, "6": { isOpen: true, open: "18:00", close: "23:30" } }, 
           storeCnpj: data.storeCnpj || data.store?.cnpj || '',
           logoUrl: data.logoUrl || data.store?.logoUrl || '', 
           coverImageUrl: data.coverImageUrl || '', 
           totemCoverImageUrl: data.totemCoverImageUrl || '',
-          ifoodLink: data.ifoodLink || '', ninetyNineFoodLink: data.ninetyNineFoodLink || ''
+          ifoodLink: data.ifoodLink || '', 
+          ninetyNineFoodLink: data.ninetyNineFoodLink || ''
         });
       }
     } catch (e) {}
@@ -512,7 +530,7 @@ export default function AdminDashboard() {
   };
 
   const carregarFicha = async (productId) => {
-    try { const res = await fetchWithStore(`${API_URL}/api/products/${productId}/fichas`); if (res.ok) { const data = await res.json(); setFichasVisiveis(prev => ({ ...prev, [productId]: data })); } } catch (e) {}
+    try { const res = await fetchWithStore(`${API_URL}/api/products/${productId}/fichas?_=${Date.now()}`); if (res.ok) { const data = await res.json(); setFichasVisiveis(prev => ({ ...prev, [productId]: data })); } } catch (e) {}
   };
 
   const handleUploadXMLPreview = async (e) => {
@@ -719,7 +737,6 @@ const handleAddProduct = async (e) => {
     e.preventDefault();
     if (!newProduct.categoryId) return alert("Crie uma categoria primeiro!");
     try {
-      // 🎯 PACOTE BLINDADO DE CRIAÇÃO (Inclui suporte completo a Pizzas e Combos)
       const payload = { 
         ...newProduct, 
         costPrice: newProduct.costPrice ? Number(newProduct.costPrice) : 0, 
@@ -738,7 +755,6 @@ const handleAddProduct = async (e) => {
       const data = await res.json();
 
       if (data.success) {
-        // Reseta o formulário limpando também as opções de pizza e combo
         setNewProduct({ 
           name: '', description: '', price: '', price700g: '', price1kg: '', costPrice: '', categoryId: menu[0]?.id || '', imageUrl: '', regraFiscalId: '', ncm: '', ean: '', groupId: '',
           isPizza: false, maxFlavors: 1, pricingStrategy: 'HIGHEST', sizeMultiplier: 1.0, isCombo: false, comboItems: [] 
@@ -759,7 +775,6 @@ const handleAddProduct = async (e) => {
     e.preventDefault();
     if (!editingProduct) return;
     try {
-      //FORÇA A LEITURA DOS DADOS VINDO DO ESTADO DO MODAL DE EDIÇÃO
       const payload = { 
         name: editingProduct.name,
         description: editingProduct.description || '',
@@ -776,13 +791,11 @@ const handleAddProduct = async (e) => {
         ean: editingProduct.ean || '',
         groupId: editingProduct.groupId || null,
 
-        // 🍕 Configurações de Pizza garantidas
         isPizza: Boolean(editingProduct.isPizza),
         maxFlavors: editingProduct.maxFlavors ? Number(editingProduct.maxFlavors) : 1,
         pricingStrategy: editingProduct.pricingStrategy || 'HIGHEST',
         sizeMultiplier: editingProduct.sizeMultiplier !== undefined ? Number(editingProduct.sizeMultiplier) : 1.0,
         
-        // 🍔 Configurações de Combo garantidas
         isCombo: Boolean(editingProduct.isCombo),
         comboItems: editingProduct.comboItems || editingProduct.comboItemsAsParent || []
       };
@@ -857,7 +870,10 @@ const handleAddProduct = async (e) => {
     e.preventDefault();
     try {
       const res = await fetchWithStore(`${API_URL}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsForm) });
-      if ((await res.json()).success) alert('Configurações salvas!'); else alert('Erro.');
+      if ((await res.json()).success) {
+          alert('Configurações salvas!');
+          fetchSystemSettings(); // Atualiza a tela imediatamente após salvar
+      } else alert('Erro.');
     } catch (error) {}
   };
 
