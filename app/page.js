@@ -26,8 +26,9 @@ export default function HomePage() {
             <a href="/buscar-cardapio" className="text-[#f58220] hover:text-[#e07318] font-black">Buscar Cardápio</a>
           </nav>
 
+          {/* BOTÃO CORRIGIDO */}
           <button 
-            onClick={() => router.push('/bi')}
+            onClick={() => router.push('/login')} // <-- Altere '/login' para a rota desejada (ex: '/sistema' ou '/dashboard')
             className="bg-[#0e4a56] hover:bg-[#0a3842] text-white px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-[#0e4a56]/10"
           >
             Acessar Sistema
