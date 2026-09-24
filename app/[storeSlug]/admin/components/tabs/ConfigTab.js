@@ -37,7 +37,7 @@ export default function ConfigTab({
       <div className="flex justify-between items-center bg-slate-900 p-6 rounded-3xl shadow-lg border border-slate-800">
         <div>
            <h2 className="text-2xl font-black text-white">Configurações Gerais</h2>
-           <p className="text-slate-400 text-sm mt-1">Ajuste os horários, taxas e imagens do seu cardápio digital.</p>
+           <p className="text-slate-400 text-sm mt-1">Ajuste os horários, taxas, integrações e imagens do seu sistema.</p>
         </div>
         <button 
           onClick={onSaveConfig} 
@@ -54,7 +54,6 @@ export default function ConfigTab({
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           
-          {/* CAPA DO CARDÁPIO DIGITAL (HEAD) */}
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Capa do Cardápio Digital (Head)</label>
             {settingsForm.coverImageUrl ? (
@@ -76,7 +75,6 @@ export default function ConfigTab({
             />
           </div>
 
-          {/* LOGO DA EMPRESA */}
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Logotipo (Perfil)</label>
             {settingsForm.logoUrl ? (
@@ -98,12 +96,11 @@ export default function ConfigTab({
             />
           </div>
 
-          {/* CAPA DO TOTEM DE AUTOATENDIMENTO */}
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 md:col-span-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Capa de Descanso do Totem (Opcional)</label>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Capa de Descanso do Totem (Vertical)</label>
             {settingsForm.totemCoverImageUrl ? (
                <div className="relative w-full h-40 rounded-xl overflow-hidden border border-slate-300 shadow-inner mb-3">
-                  <img src={settingsForm.totemCoverImageUrl} className="w-full h-full object-cover" alt="Capa Totem" />
+                  <img src={settingsForm.totemCoverImageUrl} className="w-full h-full object-cover object-top" alt="Capa Totem" />
                   <button type="button" onClick={() => setSettingsForm({...settingsForm, totemCoverImageUrl: ''})} className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white w-8 h-8 rounded-full font-black text-xs transition-colors shadow-md">✕</button>
                </div>
             ) : (
@@ -119,7 +116,65 @@ export default function ConfigTab({
               className="w-full bg-white border border-slate-300 rounded-lg p-3 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500"
             />
           </div>
+        </div>
+      </div>
 
+      {/* 📹 YOUTUBE & BANNERS */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
+        <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><span>📺</span> Transmissão e Banners</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-red-50 p-4 rounded-2xl border border-red-200">
+            <label className="text-[10px] font-black text-red-600 uppercase tracking-widest block mb-3">YouTube Live ID (Cozinha ao Vivo)</label>
+            <input 
+              type="text" 
+              value={settingsForm.youtubeLiveId || ''} 
+              onChange={e => setSettingsForm({...settingsForm, youtubeLiveId: e.target.value})} 
+              placeholder="Ex: dQw4w9WgXcQ" 
+              className="w-full bg-white border border-red-200 rounded-lg p-3 text-sm font-black text-slate-800 focus:outline-none focus:border-red-500" 
+            />
+            <p className="text-[9px] text-red-500 font-bold mt-2">Cole apenas o ID do vídeo (o código depois de v= no YouTube).</p>
+          </div>
+
+          <div className="bg-blue-50 p-4 rounded-2xl border border-blue-200">
+            <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest block mb-3">Link dos Aplicativos Delivery</label>
+            <div className="space-y-2">
+              <input 
+                type="text" 
+                value={settingsForm.ifoodLink || ''} 
+                onChange={e => setSettingsForm({...settingsForm, ifoodLink: e.target.value})} 
+                placeholder="URL da sua loja no iFood" 
+                className="w-full bg-white border border-blue-200 rounded-lg p-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500" 
+              />
+              <input 
+                type="text" 
+                value={settingsForm.ninetyNineFoodLink || ''} 
+                onChange={e => setSettingsForm({...settingsForm, ninetyNineFoodLink: e.target.value})} 
+                placeholder="URL da sua loja no 99Food / Rappi" 
+                className="w-full bg-white border border-blue-200 rounded-lg p-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500" 
+              />
+            </div>
+          </div>
+
+          <div className="md:col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Banner Promocional (Aparece no Cardápio)</label>
+            <div className="flex flex-col md:flex-row gap-4">
+              <input 
+                type="text" 
+                value={settingsForm.promoBannerUrl || ''} 
+                onChange={e => setSettingsForm({...settingsForm, promoBannerUrl: e.target.value})} 
+                placeholder="URL da Imagem do Banner..." 
+                className="flex-1 bg-white border border-slate-300 rounded-lg p-3 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500" 
+              />
+              <input 
+                type="text" 
+                value={settingsForm.promoBannerLink || ''} 
+                onChange={e => setSettingsForm({...settingsForm, promoBannerLink: e.target.value})} 
+                placeholder="Link para onde o banner direciona (Opcional)..." 
+                className="flex-1 bg-white border border-slate-300 rounded-lg p-3 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500" 
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -137,7 +192,7 @@ export default function ConfigTab({
            </div>
            
            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Taxa de Entrega (R$)</label>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Taxa de Entrega Padrão (R$)</label>
               <input type="number" step="0.01" value={settingsForm.deliveryFee} onChange={e => setSettingsForm({...settingsForm, deliveryFee: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xl font-black text-slate-800 focus:outline-none focus:border-blue-500 text-center shadow-inner" />
            </div>
            
@@ -222,7 +277,7 @@ export default function ConfigTab({
          <button 
            onClick={onSaveConfig} 
            disabled={isSaving}
-           className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-700 disabled:text-slate-400 text-white font-black text-lg py-5 rounded-2xl shadow-2xl transition-transform active:scale-95 cursor-pointer border-t-4 border-amber-500"
+           className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-700 disabled:text-slate-400 text-white font-black text-lg py-5 rounded-2xl shadow-2xl transition-transform active:scale-95 cursor-pointer border-t-4 border-amber-500 flex justify-center items-center gap-2"
          >
            {isSaving ? 'A Guardar as suas configurações...' : '💾 Confirmar e Salvar Todas as Configurações'}
          </button>
