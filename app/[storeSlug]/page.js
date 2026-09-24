@@ -206,12 +206,14 @@ function HomeContent({ storeSlug }) {
     fetchWithStore(`${API_URL}/api/settings`)
       .then((res) => res.json())
       .then((data) => {
-        setDeliveryFee(Number(data.deliveryFee));
-        setCashbackPercent(Number(data.cashbackPercent));
-        setIsStoreOpen(data.isOpen);
+        // 🔥 LÓGICA VITAL: O Backend decide se a loja está aberta e o frontend aceita.
+        setIsStoreOpen(data.isOpen === true);
+        
+        setDeliveryFee(Number(data.deliveryFee) || 0);
+        setCashbackPercent(Number(data.cashbackPercent) || 0);
         setStoreSettings(data);
       })
-      .catch((err) => console.error(err));
+      .catch((err) => console.error("Erro ao buscar configurações da loja:", err));
   };
 
   useEffect(() => {
@@ -705,14 +707,15 @@ function HomeContent({ storeSlug }) {
     <div className={isDarkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 font-sans pb-28 selection:bg-amber-500 selection:text-zinc-950 transition-colors duration-500 flex flex-col justify-between">
         
-        {!isTotemMode && <Header view={view} setView={setView} isScrolled={isScrolled} user={user} availableCashback={availableCashback} setAuthMode={setAuthMode} isDarkMode={isDarkMode} toggleTheme={toggleTheme} />}
+        {/* 🎯 HEADER AGORA RECEBE storeSettings */}
+        {!isTotemMode && <Header view={view} setView={setView} isScrolled={isScrolled} user={user} availableCashback={availableCashback} setAuthMode={setAuthMode} isDarkMode={isDarkMode} toggleTheme={toggleTheme} storeSettings={storeSettings} />}
         
         {isTotemMode && (
           <div className="bg-white dark:bg-gradient-to-b dark:from-black dark:to-[#0a0a0a] border-b border-slate-200 dark:border-white/5 p-6 md:p-8 flex justify-between items-center sticky top-0 z-40 shadow-xl cursor-pointer transition-colors" onClick={handleFullscreen}>
               <div className="flex items-center gap-4">
                   <span className="text-4xl animate-bounce">⚡</span>
                   <div>
-                    <h1 className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tight">Zenix</h1>
+                    <h1 className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tight">{storeSettings?.store?.name || 'Zenix'}</h1>
                     <span className="text-amber-600 dark:text-amber-500 font-bold text-sm tracking-widest uppercase">Autoatendimento</span>
                   </div>
               </div>
@@ -983,7 +986,7 @@ export default function StorePage() {
 
         const res = await fetch(`${API_URL}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
         
-        //E A LOJA ESTIVER BLOQUEADA, REDIRECIONA IMEDIATAMENTE!
+        //SE A LOJA ESTIVER BLOQUEADA, REDIRECIONA IMEDIATAMENTE!
         if (res.status === 402) {
            window.location.href = `/${storeSlug}/bloqueado`;
            return;

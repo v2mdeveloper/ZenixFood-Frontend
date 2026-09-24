@@ -1,25 +1,38 @@
 'use client';
 
-export default function Header({ view, setView, isScrolled, user, availableCashback, setAuthMode, isDarkMode, toggleTheme }) {
+export default function Header({ view, setView, isScrolled, user, availableCashback, setAuthMode, isDarkMode, toggleTheme, storeSettings }) {
   if (view === 'payment_card' || view === 'payment_pix' || view === 'live_cam') return null;
+
+  // 🎯 LÓGICA DINÂMICA: Lê a base de dados ou usa o padrão se estiver vazio
+  const bgImage = storeSettings?.coverImageUrl ? `url('${storeSettings.coverImageUrl}')` : "url('/textura-header.png')";
+  const logoImage = storeSettings?.logoUrl || "/logo.png";
+  const storeName = storeSettings?.store?.name || "Cânone Burger";
+
+  // 🎯 AJUSTE VISUAL: Se for uma foto real, tira um pouco da transparência para ela aparecer melhor
+  const bgOpacityClass = storeSettings?.coverImageUrl 
+    ? "opacity-60 dark:opacity-40" // Ajuste para fotos reais aparecerem por trás do vidro
+    : "opacity-10 dark:opacity-30"; // Ajuste antigo para a textura padrão
 
   return (
     <header className={`fixed top-0 w-full z-40 bg-white/90 dark:bg-[#121212]/90 backdrop-blur-xl border-b border-slate-200 dark:border-white/5 transition-all duration-500 ${isScrolled ? 'py-3 h-16 shadow-sm' : 'py-5 h-auto'} overflow-hidden`}>
+      
+      {/* IMAGEM DE CAPA / TEXTURA */}
       <div
-        className="absolute inset-0 z-[-1] opacity-10 dark:opacity-30 pointer-events-none transition-opacity duration-500"
-        style={{ backgroundImage: "url('/textura-header.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}
+        className={`absolute inset-0 z-[-1] pointer-events-none transition-opacity duration-500 ${bgOpacityClass}`}
+        style={{ backgroundImage: bgImage, backgroundSize: 'cover', backgroundPosition: 'center' }}
       />
 
       <div className="max-w-4xl mx-auto flex items-center justify-between px-4 h-full relative z-10">
         
+        {/* LOGO E NOME DA LOJA */}
         <button onClick={() => setView('menu')} className="transition-all duration-300 flex items-center gap-3 cursor-pointer">
           <img 
-            src="/logo.png" 
-            alt="Cânone Burger" 
+            src={logoImage} 
+            alt={storeName} 
             className={`object-contain transition-all duration-500 drop-shadow-md ${isScrolled ? 'h-10' : 'h-20 md:h-24'}`} 
             onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} 
           />
-          <h1 className="text-xl font-black tracking-tighter text-slate-900 dark:text-white uppercase hidden">Cânone Burger</h1>
+          <h1 className="text-xl font-black tracking-tighter text-slate-900 dark:text-white uppercase hidden">{storeName}</h1>
         </button>
         
         <div className="flex items-center gap-3 md:gap-5">
