@@ -11,11 +11,12 @@ export default function HomePage() {
       <header className="border-b border-slate-200 bg-white/95 backdrop-blur-md sticky top-0 z-50">
   <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
     <a href="/" className="flex items-center gap-2">
-      <img src="/logo.png" alt="ZenixFood Logo" className="h-10 w-auto" />
-      <span className="font-black text-2xl text-[#0e4a56] tracking-tight">
-        ZENIX<span className="text-[#f58220]">FOOD</span>
-      </span>
-    </a>
+            <img 
+              src="/logo.png" 
+              alt="ZenixFood Logo" 
+              className="h-16 md:h-20 w-auto object-contain transition-transform hover:scale-105" 
+            />
+          </a>
           <nav className="hidden lg:flex items-center gap-7 text-xs font-bold uppercase tracking-wider text-slate-600">
             <a href="/solucoes" className="hover:text-[#0e4a56] transition-colors">Soluções</a>
             <a href="/autoatendimento" className="hover:text-[#0e4a56] transition-colors">Autoatendimento</a>
