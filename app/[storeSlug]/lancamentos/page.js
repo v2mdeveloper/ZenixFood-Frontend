@@ -1063,7 +1063,7 @@ export default function LancamentosPage() {
                                     </div>
                                     <div className="text-right flex flex-col items-end gap-1.5 shrink-0">
                                        <span className={`font-black text-[11px] mb-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>R$ {(item.price * item.quantity).toFixed(2)}</span>
-                                       {canUndo && (<button onClick={() => handleUndoItem(item.id)} className="text-[8px] bg-red-500 text-white font-black px-2 py-0.5 rounded animate-pulse cursor-pointer shadow-sm">Desfazer ({Math.max(0, 30 - Math.floor(ageSeconds))}s)</button>)}
+                                       {canUndo && (<button onClick={() => handleUndoItem(item.id)} className="text-[8px] bg-red-500 text-white font-black px-2 py-0.5 rounded animate-pulse cursor-pointer shadow-sm">Desfazer ({Math.max(0, 15 - Math.floor(ageSeconds))}s)</button>)}
                                        {item.status === 'READY' && (<button onClick={() => updateTabItemStatus(item.id, 'SERVED')} className="text-[9px] bg-emerald-500 text-white font-black px-2 py-1 rounded shadow-md cursor-pointer animate-bounce">Retirar 🏃</button>)}
                                     </div>
                                  </div>
