@@ -17,14 +17,13 @@ export default function MasterUsersTab({ API_URL }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   
-  // 🔥 NOVO: Controle de Arquivo do Contrato
   const [contractFile, setContractFile] = useState(null);
   
   const [formData, setFormData] = useState({
-    name: '', cpf: '', email: '', password: '',
+    name: '', cpf: '', email: '', password: '', // O campo 'cpf' agora guarda o CNPJ para o backend
     cep: '', address: '', neighborhood: '', city: '', uf: '',
     role: 'MASTER',
-    contratoAssinado: false, // Status do contrato
+    contratoAssinado: false,
     managedStoreIds: [] 
   });
 
@@ -55,7 +54,7 @@ export default function MasterUsersTab({ API_URL }) {
   };
 
   const openModal = (user = null) => {
-    setContractFile(null); // Limpa o arquivo ao abrir
+    setContractFile(null); 
     
     if (user) {
       setEditingUser(user);
@@ -76,13 +75,15 @@ export default function MasterUsersTab({ API_URL }) {
     setIsModalOpen(true);
   };
 
-  const handleCpfChange = (e) => {
+  // 🔥 MÁSCARA ATUALIZADA PARA CNPJ (Mantendo a chave 'cpf' para o backend)
+  const handleCnpjChange = (e) => {
     let val = e.target.value.replace(/\D/g, '');
-    if (val.length > 11) val = val.slice(0, 11);
-    val = val.replace(/(\d{3})(\d)/, '$1.$2');
-    val = val.replace(/(\d{3})(\d)/, '$1.$2');
-    val = val.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-    setFormData(prev => ({ ...prev, cpf: val }));
+    if (val.length > 14) val = val.slice(0, 14);
+    val = val.replace(/^(\d{2})(\d)/, '$1.$2');
+    val = val.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+    val = val.replace(/\.(\d{3})(\d)/, '.$1/$2');
+    val = val.replace(/(\d{4})(\d)/, '$1-$2');
+    setFormData(prev => ({ ...prev, cpf: val })); 
   };
 
   const handleCepSearch = async (e) => {
@@ -110,15 +111,15 @@ export default function MasterUsersTab({ API_URL }) {
 
   const handleSaveUser = async (e) => {
     e.preventDefault();
-    if (formData.cpf && formData.cpf.length > 0 && formData.cpf.length < 14) {
-      return alert('Por favor, preencha o CPF completo.');
+    // 🔥 Validação atualizada para 18 caracteres (tamanho do CNPJ formatado)
+    if (formData.cpf && formData.cpf.length > 0 && formData.cpf.length < 18) {
+      return alert('Por favor, preencha o CNPJ completo.');
     }
 
     const url = editingUser ? `${API_URL}/api/super/users/${editingUser.id}` : `${API_URL}/api/super/users`;
     const method = editingUser ? 'PUT' : 'POST';
 
     try {
-      // 1. Salva os dados normais do Usuário
       const res = await fetchWithToken(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -130,14 +131,13 @@ export default function MasterUsersTab({ API_URL }) {
       if (res.ok) {
         const userId = editingUser ? editingUser.id : data.user?.id;
         
-        // 2. Se houver um PDF anexado, faz o Upload na rota separada
         if (contractFile && userId) {
             const fileData = new FormData();
             fileData.append('contrato_pdf', contractFile);
             
             const uploadRes = await fetchWithToken(`${API_URL}/api/super/users/${userId}/contrato`, {
                 method: 'POST',
-                body: fileData // O fetch define automaticamente o multipart/form-data
+                body: fileData
             });
             
             if (!uploadRes.ok) {
@@ -187,7 +187,7 @@ export default function MasterUsersTab({ API_URL }) {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
       (u.name && u.name.toLowerCase().includes(searchLower)) ||
-      (u.cpf && u.cpf.toLowerCase().includes(searchLower)) ||
+      (u.cpf && u.cpf.toLowerCase().includes(searchLower)) || // u.cpf guarda o CNPJ na DB
       (u.email && u.email.toLowerCase().includes(searchLower)) ||
       (u.managedStores && u.managedStores.some(st => (st.razaoSocial || st.name || '').toLowerCase().includes(searchLower)));
 
@@ -203,7 +203,7 @@ export default function MasterUsersTab({ API_URL }) {
   });
 
   const handleExportCSV = () => {
-    const headers = ['Nome Completo', 'CPF', 'E-mail', 'Nível de Acesso', 'Status', 'Contrato', 'Data de Cadastro', 'Lojas Vinculadas'];
+    const headers = ['Nome Completo', 'CNPJ', 'E-mail', 'Nível de Acesso', 'Status', 'Contrato', 'Data de Cadastro', 'Lojas Vinculadas'];
     const csvRows = [headers.join(',')];
 
     filteredUsers.forEach(u => {
@@ -255,7 +255,7 @@ export default function MasterUsersTab({ API_URL }) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
                   type="text" 
-                  placeholder="Buscar por nome, CPF, e-mail ou loja..." 
+                  placeholder="Buscar por nome, CNPJ, e-mail ou loja..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0e4a56] font-medium"
@@ -318,7 +318,8 @@ export default function MasterUsersTab({ API_URL }) {
                       <td className="px-6 py-5">
                         <p className="font-black text-slate-900 text-base">{u.name}</p>
                         <p className="text-xs font-bold text-slate-500 mt-1">{u.email}</p>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">CPF: {u.cpf || 'Não informado'}</p>
+                        {/* 🔥 Exibição alterada para CNPJ */}
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">CNPJ: {u.cpf || 'Não informado'}</p>
                       </td>
                       
                       <td className="px-6 py-5">
@@ -345,7 +346,6 @@ export default function MasterUsersTab({ API_URL }) {
                         )}
                       </td>
 
-                      {/* 🔥 NOVO: Coluna de Contrato */}
                       <td className="px-6 py-5">
                         {u.contratoAssinado ? (
                           <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center w-fit gap-1.5">
@@ -403,15 +403,15 @@ export default function MasterUsersTab({ API_URL }) {
             <form onSubmit={handleSaveUser} className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 bg-slate-50/30 hide-scrollbar">
               
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><span>👤</span> Dados Pessoais e Acesso</h4>
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><span>👤</span> Dados da Empresa (Franquia) e Acesso</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Nome Completo</label>
-                    <input type="text" required value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0e4a56] font-bold" placeholder="Nome completo" />
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Razão Social / Nome</label>
+                    <input type="text" required value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0e4a56] font-bold" placeholder="Nome da empresa" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CPF</label>
-                    <input type="text" value={formData.cpf} onChange={handleCpfChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0e4a56] font-mono" placeholder="Apenas números" />
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CNPJ</label>
+                    <input type="text" value={formData.cpf} onChange={handleCnpjChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0e4a56] font-mono" placeholder="00.000.000/0000-00" />
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">E-mail (Usado para Login)</label>
@@ -431,7 +431,6 @@ export default function MasterUsersTab({ API_URL }) {
                 </div>
               </div>
 
-              {/* 🔥 NOVO: BLOCO JURÍDICO */}
               <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 shadow-sm space-y-4">
                  <h4 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><span>📄</span> Documentação Jurídica</h4>
                  <div className="flex flex-col gap-4">
