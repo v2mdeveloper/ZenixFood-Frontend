@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { CheckCircle, XCircle } from 'lucide-react'; 
 
 export default function MasterDashboard() {
   const router = useRouter();
@@ -19,7 +20,9 @@ export default function MasterDashboard() {
   const [stores, setStores] = useState([]);
   const [planos, setPlanos] = useState([]);
   const [loading, setLoading] = useState(true);
+  
   const [editingStore, setEditingStore] = useState(null);
+  const [contractFile, setContractFile] = useState(null); // 🔥 Estado para o PDF
   
   const [viewingInvoicesStore, setViewingInvoicesStore] = useState(null);
   const [invoices, setInvoices] = useState([]);
@@ -147,6 +150,8 @@ export default function MasterDashboard() {
   };
 
   const handleEditClick = (store) => {
+    setContractFile(null); // Reseta o arquivo ao abrir o modal
+    
     let parsedStreet = store.street || '';
     let parsedNumber = store.number || '';
     let parsedComp = store.complement || '';
@@ -195,7 +200,8 @@ export default function MasterDashboard() {
       planoSaaSId: store.planoSaaSId || '',
       temSuporte: store.temSuporte || false,
       valorSuporte: store.valorSuporte || '',
-      adminUserId: store.adminUserId || ''
+      adminUserId: store.adminUserId || '',
+      contratoAssinado: store.contratoAssinado || false // 🔥 Carrega o status do contrato
     });
   };
 
@@ -262,21 +268,40 @@ export default function MasterDashboard() {
         emailResponsavel: editingStore.emailResponsavel, endereco: fullAddress,
         planoSaaSId: editingStore.planoSaaSId, temSuporte: editingStore.temSuporte,
         valorSuporte: valorSup, monthlyFee: totalFatura, 
-        adminUserId: editingStore.adminUserId === '' || editingStore.adminUserId === 'null' ? null : editingStore.adminUserId 
+        adminUserId: editingStore.adminUserId === '' || editingStore.adminUserId === 'null' ? null : editingStore.adminUserId,
+        contratoAssinado: editingStore.contratoAssinado // 🔥 Atualiza o status do contrato
       };
 
       if (editingStore.senhaResponsavel && editingStore.senhaResponsavel.trim() !== '') {
         payload.senhaResponsavel = editingStore.senhaResponsavel;
       }
 
+      // 1. Atualiza os dados da loja
       const res = await fetch(`${API_URL}/api/master/lojas/${editingStore.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload)
       });
       const data = await res.json();
       
       if (res.ok && data.success) { 
-        alert('Loja atualizada com sucesso!'); setEditingStore(null); fetchStores(); 
-      } else { alert(`Erro ao editar: ${data.error || 'Erro desconhecido'}`); }
+        
+        // 2. Faz o Upload do PDF se tiver sido selecionado
+        if (editingStore.contratoAssinado && contractFile) {
+            const fileData = new FormData();
+            fileData.append('contrato_pdf', contractFile);
+            
+            await fetch(`${API_URL}/api/master/lojas/${editingStore.id}/contrato`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: fileData
+            });
+        }
+
+        alert('Loja atualizada com sucesso!'); 
+        setEditingStore(null); 
+        fetchStores(); 
+      } else { 
+        alert(`Erro ao editar: ${data.error || 'Erro desconhecido'}`); 
+      }
     } catch (error) { alert('Erro de conexão com o servidor.'); }
   };
 
@@ -363,7 +388,8 @@ export default function MasterDashboard() {
                 <th className="px-6 py-5">Loja / Slug</th>
                 <th className="px-6 py-5">Responsável / Franqueado</th>
                 <th className="px-6 py-5">Plano / Mensal</th>
-                <th className="px-6 py-5">Acesso Sistema</th>
+                <th className="px-6 py-5">Situação Legal</th>
+                <th className="px-6 py-5">Status</th>
                 <th className="px-6 py-5 text-right">Ações</th>
               </tr>
             </thead>
@@ -392,6 +418,20 @@ export default function MasterDashboard() {
                        <p className="text-slate-800 font-black mt-2">R$ {parseFloat(store.monthlyFee || 0).toFixed(2)}</p>
                        {store.temSuporte && <p className="text-[10px] text-emerald-600 font-bold mt-0.5">+ Suporte Técnico</p>}
                     </td>
+
+                    {/* 🔥 NOVO: Coluna Situação Legal */}
+                    <td className="px-6 py-5">
+                      {store.contratoAssinado ? (
+                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center w-fit gap-1.5">
+                           <CheckCircle className="w-3.5 h-3.5"/> Contrato OK
+                        </span>
+                      ) : (
+                        <span className="bg-red-50 text-red-700 border border-red-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center w-fit gap-1.5" title="Loja bloqueada juridicamente">
+                           <XCircle className="w-3.5 h-3.5"/> Pendente
+                        </span>
+                      )}
+                    </td>
+
                     <td className="px-6 py-5">
                       <button onClick={() => toggleStoreStatus(store)} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest border cursor-pointer ${store.status === 'ACTIVE' || store.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
                         {store.status === 'ACTIVE' || store.isActive ? 'SISTEMA LIBERADO' : 'BLOQUEADO'}
@@ -404,13 +444,13 @@ export default function MasterDashboard() {
                   </tr>
                 )
               })}
-              {stores.length === 0 && <tr><td colSpan="5" className="text-center py-12 text-slate-400">Nenhuma loja para exibir.</td></tr>}
+              {stores.length === 0 && <tr><td colSpan="6" className="text-center py-12 text-slate-400">Nenhuma loja para exibir.</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* MODAIS (EDITAR LOJA E GERAR COBRANÇA) - Adaptados para o Tema Claro */}
+      {/* MODAL DE EDIÇÃO DE LOJA */}
       {editingStore && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-6 md:p-10 rounded-[2.5rem] w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[92vh] animate-fade-in-up">
@@ -498,10 +538,37 @@ export default function MasterDashboard() {
                 </div>
               </div>
 
+              {/* 🔥 NOVO: BLOCO JURÍDICO (DOCUMENTAÇÃO NA EDIÇÃO) */}
+              <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 shadow-sm space-y-4">
+                 <h4 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><span>📄</span> Documentação Jurídica</h4>
+                 <div className="flex flex-col gap-4">
+                   <label className="flex items-center gap-3 cursor-pointer bg-white p-4 rounded-xl border border-emerald-200 hover:border-emerald-300 transition-colors shadow-sm">
+                     <input type="checkbox" checked={editingStore.contratoAssinado} onChange={e => setEditingStore({...editingStore, contratoAssinado: e.target.checked})} className="w-5 h-5 accent-emerald-600" />
+                     <div>
+                       <span className="text-sm font-black text-slate-800 block">Contrato de Licenciamento Assinado</span>
+                       <span className="text-[10px] text-slate-500 font-bold">A loja só será liberada para uso caso esta opção esteja marcada.</span>
+                     </div>
+                   </label>
+
+                   <div className="bg-white p-4 rounded-xl border border-emerald-200 shadow-sm">
+                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Anexar PDF do Contrato</label>
+                     <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={e => setContractFile(e.target.files[0])}
+                        className="w-full bg-slate-50 border border-emerald-200 rounded-xl p-2 text-sm font-bold text-slate-700 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-black file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 cursor-pointer focus:outline-none"
+                     />
+                     {editingStore.contratoAssinado && !contractFile && (
+                       <p className="text-[10px] text-emerald-600 font-black mt-2 flex items-center gap-1">✅ Um contrato já consta como validado na base de dados.</p>
+                     )}
+                   </div>
+                 </div>
+              </div>
+
               {isSuperMaster && (
-                <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100 space-y-2">
-                  <h3 className="text-xs font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2"><span>👥</span> Vínculo de Gestão (Franqueado)</h3>
-                  <select value={editingStore.adminUserId || ''} onChange={e => setEditingStore({...editingStore, adminUserId: e.target.value})} className="w-full bg-white border border-emerald-300 rounded-xl p-3.5 text-sm text-slate-900 font-bold shadow-sm cursor-pointer mt-2 focus:border-emerald-500 outline-none">
+                <div className="bg-amber-50 p-6 rounded-3xl border border-amber-100 space-y-2">
+                  <h3 className="text-xs font-black text-amber-600 uppercase tracking-widest flex items-center gap-2"><span>👥</span> Vínculo de Gestão (Franqueado)</h3>
+                  <select value={editingStore.adminUserId || ''} onChange={e => setEditingStore({...editingStore, adminUserId: e.target.value})} className="w-full bg-white border border-amber-300 rounded-xl p-3.5 text-sm text-slate-900 font-bold shadow-sm cursor-pointer mt-2 focus:border-amber-500 outline-none">
                     <option value="">-- Sem Vínculo (Pertence à Matriz) --</option>
                     {adminUsers.map(user => (
                       <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
@@ -537,6 +604,7 @@ export default function MasterDashboard() {
         </div>
       )}
 
+      {/* MODAL COBRANÇA */}
       {viewingInvoicesStore && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-8 rounded-[2rem] w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh] animate-fade-in-up">
