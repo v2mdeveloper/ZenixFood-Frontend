@@ -1,0 +1,56 @@
+/* 1. IMPORTAÇÃO PRINCIPAL DO TAILWIND V4 */
+@import "tailwindcss";
+
+/* 2. DESBLOQUEIO DO MODO ESCURO MANUAL (O botão Sol/Lua precisa disto para funcionar) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 3. AS SUAS ANIMAÇÕES E KEYFRAMES (Migradas do tailwind.config.ts para o padrão v4) */
+@theme {
+  --animate-fade-in: fadeIn 0.4s ease-out forwards;
+  --animate-fade-in-up: fadeInUp 0.5s ease-out forwards;
+
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeInUp {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* 4. CLASSES UTILITÁRIAS GERAIS E GLOBAIS */
+@layer utilities {
+  /* Oculta a barra de rolagem mas permite o scroll (usado nos menus e carrosséis) */
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .hide-scrollbar {
+    -ms-overflow-style: none; /* IE e Edge */
+    scrollbar-width: none;    /* Firefox */
+  }
+}
+
+/* 5. CONFIGURAÇÕES BASE DE COMPORTAMENTO DO HTML */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* Garante que o fundo da página preenche sempre a tela toda, mesmo no scroll */
+  body {
+    @apply min-h-screen flex flex-col;
+  }
+}
