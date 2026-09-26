@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle, XCircle } from 'lucide-react'; 
+import { CheckCircle, XCircle, Search, Filter } from 'lucide-react'; // Novos ícones adicionados
 
 export default function MasterDashboard() {
   const router = useRouter();
@@ -22,7 +22,7 @@ export default function MasterDashboard() {
   const [loading, setLoading] = useState(true);
   
   const [editingStore, setEditingStore] = useState(null);
-  const [contractFile, setContractFile] = useState(null); // 🔥 Estado para o PDF
+  const [contractFile, setContractFile] = useState(null); 
   
   const [viewingInvoicesStore, setViewingInvoicesStore] = useState(null);
   const [invoices, setInvoices] = useState([]);
@@ -31,6 +31,9 @@ export default function MasterDashboard() {
 
   const [isSuperMaster, setIsSuperMaster] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showBlocked, setShowBlocked] = useState(false);
 
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
@@ -150,7 +153,7 @@ export default function MasterDashboard() {
   };
 
   const handleEditClick = (store) => {
-    setContractFile(null); // Reseta o arquivo ao abrir o modal
+    setContractFile(null); 
     
     let parsedStreet = store.street || '';
     let parsedNumber = store.number || '';
@@ -201,7 +204,7 @@ export default function MasterDashboard() {
       temSuporte: store.temSuporte || false,
       valorSuporte: store.valorSuporte || '',
       adminUserId: store.adminUserId || '',
-      contratoAssinado: store.contratoAssinado || false // 🔥 Carrega o status do contrato
+      contratoAssinado: store.contratoAssinado || false 
     });
   };
 
@@ -269,14 +272,13 @@ export default function MasterDashboard() {
         planoSaaSId: editingStore.planoSaaSId, temSuporte: editingStore.temSuporte,
         valorSuporte: valorSup, monthlyFee: totalFatura, 
         adminUserId: editingStore.adminUserId === '' || editingStore.adminUserId === 'null' ? null : editingStore.adminUserId,
-        contratoAssinado: editingStore.contratoAssinado // 🔥 Atualiza o status do contrato
+        contratoAssinado: editingStore.contratoAssinado 
       };
 
       if (editingStore.senhaResponsavel && editingStore.senhaResponsavel.trim() !== '') {
         payload.senhaResponsavel = editingStore.senhaResponsavel;
       }
 
-      // 1. Atualiza os dados da loja
       const res = await fetch(`${API_URL}/api/master/lojas/${editingStore.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload)
       });
@@ -284,7 +286,6 @@ export default function MasterDashboard() {
       
       if (res.ok && data.success) { 
         
-        // 2. Faz o Upload do PDF se tiver sido selecionado
         if (editingStore.contratoAssinado && contractFile) {
             const fileData = new FormData();
             fileData.append('contrato_pdf', contractFile);
@@ -321,6 +322,25 @@ export default function MasterDashboard() {
   };
 
   const lojasAtivas = stores.filter(s => s.status === 'ACTIVE' || s.isActive).length;
+
+  // LÓGICA DO FILTRO INTELIGENTE
+  const filteredStores = stores.filter(store => {
+    const search = searchTerm.toLowerCase();
+    
+    const matchesSearch = 
+      (store.razaoSocial && store.razaoSocial.toLowerCase().includes(search)) ||
+      (store.cnpj && store.cnpj.includes(search)) ||
+      (store.adminUser && store.adminUser.name && store.adminUser.name.toLowerCase().includes(search)) ||
+      (store.adminUser && store.adminUser.cpf && store.adminUser.cpf.includes(search));
+    
+    if (showBlocked) {
+      // Considera bloqueado se o status for inativo, pendente ou sem contrato assinado
+      const isBlocked = store.status === 'BLOCKED' || !store.isActive || !store.contratoAssinado;
+      return matchesSearch && isBlocked;
+    }
+    
+    return matchesSearch;
+  });
 
   if (loading) return <div className="h-full flex flex-col items-center justify-center text-[#f58220] font-bold"><span className="text-4xl animate-spin mb-4">⚙️</span> Carregando Master...</div>;
 
@@ -373,6 +393,27 @@ export default function MasterDashboard() {
         </div>
       </div>
 
+      {/*BARRA DE PESQUISA E FILTROS */}
+      <div className="bg-white border border-slate-200 p-4 rounded-3xl shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <input 
+            type="text" 
+            placeholder="Buscar por nome da loja, CNPJ, nome do franqueado ou CPF..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0e4a56] font-medium transition-colors"
+          />
+        </div>
+        <button 
+          onClick={() => setShowBlocked(!showBlocked)} 
+          className={`px-6 py-3.5 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 border w-full md:w-auto whitespace-nowrap ${showBlocked ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'}`}
+        >
+          <Filter className="w-4 h-4" />
+          {showBlocked ? 'Mostrando Apenas Bloqueados / Pendentes' : 'Filtrar Lojas Bloqueadas'}
+        </button>
+      </div>
+
       {/* Tabela de Lojas */}
       <div className="bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -389,15 +430,15 @@ export default function MasterDashboard() {
                 <th className="px-6 py-5">Responsável / Franqueado</th>
                 <th className="px-6 py-5">Plano / Mensal</th>
                 <th className="px-6 py-5">Situação Legal</th>
-                <th className="px-6 py-5">Status</th>
+                <th className="px-6 py-5">Status Operacional</th>
                 <th className="px-6 py-5 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {stores.map(store => {
+              {filteredStores.map(store => {
                 const planoVinculado = planos.find(p => p.id === store.planoSaaSId);
                 return (
-                  <tr key={store.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={store.id} className={`transition-colors ${(!store.isActive || store.status === 'BLOCKED') ? 'bg-red-50/30' : 'hover:bg-slate-50'}`}>
                     <td className="px-6 py-5">
                       <p className="font-black text-slate-800 text-base">{store.razaoSocial}</p>
                       <p className="text-[#f58220] font-mono text-xs">/{store.slug}</p>
@@ -419,7 +460,6 @@ export default function MasterDashboard() {
                        {store.temSuporte && <p className="text-[10px] text-emerald-600 font-bold mt-0.5">+ Suporte Técnico</p>}
                     </td>
 
-                    {/* 🔥 NOVO: Coluna Situação Legal */}
                     <td className="px-6 py-5">
                       {store.contratoAssinado ? (
                         <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center w-fit gap-1.5">
@@ -444,13 +484,21 @@ export default function MasterDashboard() {
                   </tr>
                 )
               })}
-              {stores.length === 0 && <tr><td colSpan="6" className="text-center py-12 text-slate-400">Nenhuma loja para exibir.</td></tr>}
+              {filteredStores.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="text-center py-16">
+                    <span className="text-4xl block mb-4">🕵️‍♂️</span>
+                    <p className="text-slate-500 font-bold text-lg">Nenhuma loja encontrada.</p>
+                    <p className="text-slate-400 text-sm mt-1">Altere o texto da pesquisa ou remova os filtros.</p>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* MODAL DE EDIÇÃO DE LOJA */}
+      {/* MODAIS (EDITAR LOJA E GERAR COBRANÇA) */}
       {editingStore && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-6 md:p-10 rounded-[2.5rem] w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[92vh] animate-fade-in-up">
@@ -538,7 +586,7 @@ export default function MasterDashboard() {
                 </div>
               </div>
 
-              {/* 🔥 NOVO: BLOCO JURÍDICO (DOCUMENTAÇÃO NA EDIÇÃO) */}
+              {/*BLOCO JURÍDICO (DOCUMENTAÇÃO NA EDIÇÃO) */}
               <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 shadow-sm space-y-4">
                  <h4 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><span>📄</span> Documentação Jurídica</h4>
                  <div className="flex flex-col gap-4">
