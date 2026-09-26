@@ -17,7 +17,7 @@ export default function MasterDashboard() {
   const [forgotError, setForgotError] = useState('');
   
   const [stores, setStores] = useState([]);
-  const [planos, setPlanos] = useState([]); // 🔥 NOVO: Estado para os Planos Dinâmicos
+  const [planos, setPlanos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingStore, setEditingStore] = useState(null);
   
@@ -44,7 +44,7 @@ export default function MasterDashboard() {
   useEffect(() => { 
     if (isAuthenticated) {
       checkSuperMasterAccess().then(() => {
-        fetchPlanos(); // 🔥 Busca os planos assim que logar
+        fetchPlanos(); 
         fetchStores(); 
       });
     }
@@ -103,15 +103,6 @@ export default function MasterDashboard() {
     } catch (err) { setForgotStatus('error'); setForgotError('Erro de comunicação.'); }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('zenix_master_token');
-    localStorage.removeItem('zenix_super_token');
-    localStorage.removeItem('zenix_user');
-    setIsAuthenticated(false); 
-    setEmail('');
-    setPassword('');
-  };
-
   const checkSuperMasterAccess = async () => {
     try {
       const superToken = localStorage.getItem('zenix_super_token');
@@ -129,7 +120,6 @@ export default function MasterDashboard() {
     } catch (error) {}
   };
 
-  // 🔥 NOVO: Busca os Planos Dinâmicos
   const fetchPlanos = async () => {
     try {
       const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
@@ -203,7 +193,6 @@ export default function MasterDashboard() {
       cep: parsedCep, street: parsedStreet, number: parsedNumber, complement: parsedComp, 
       neighborhood: parsedNeigh, city: parsedCity, state: parsedState,
       
-      // 🔥 DADOS DO NOVO PLANO
       planoSaaSId: store.planoSaaSId || '',
       temSuporte: store.temSuporte || false,
       valorSuporte: store.valorSuporte || '',
@@ -261,7 +250,6 @@ export default function MasterDashboard() {
       const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
       const fullAddress = `${editingStore.street || ''}, ${editingStore.number || ''} ${editingStore.complement ? `- ${editingStore.complement}` : ''} - ${editingStore.neighborhood || ''}, ${editingStore.city || ''}/${editingStore.state || ''} (CEP: ${editingStore.cep || ''})`;
 
-      // 🔥 MATEMÁTICA: Plano Base + Valor de Suporte = Valor Mensal
       const planoSelecionado = planos.find(p => p.id === editingStore.planoSaaSId);
       const precoPlano = planoSelecionado ? planoSelecionado.precoBase : 0;
       const valorSup = editingStore.temSuporte ? Number(editingStore.valorSuporte || 0) : 0;
@@ -320,30 +308,34 @@ export default function MasterDashboard() {
 
   const lojasAtivas = stores.filter(s => s.status === 'ACTIVE' || s.isActive).length;
 
+  if (loading) return <div className="h-full flex flex-col items-center justify-center text-amber-500 font-bold"><span className="text-4xl animate-spin mb-4">⚙️</span> Carregando Master...</div>;
+
+  // 1. TELA DE LOGIN (Se não estiver autenticado)
+  // Nota: Não usamos h-screen aqui porque o Layout do Master (Sidebar) já ocupa a tela toda.
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans relative overflow-hidden">
-        <div className="bg-white border border-slate-200 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative z-10 animate-fade-in-up">
+      <div className="h-full flex items-center justify-center relative overflow-hidden">
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative z-10 animate-fade-in-up">
           <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-500 to-orange-500"></div>
           <div className="text-center mb-8">
             <span className="text-5xl mb-4 inline-block drop-shadow-sm">👑</span>
-            <h1 className="text-3xl font-black text-slate-800 tracking-tight">Zenix Master</h1>
+            <h1 className="text-3xl font-black text-white tracking-tight">Zenix Master</h1>
             <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest font-bold">Gestão SaaS</p>
           </div>
           <form onSubmit={handleMasterLogin} className="space-y-5">
             <div>
                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">E-mail de Acesso</label>
-               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-900 focus:outline-none focus:border-amber-500" placeholder="seu@email.com" />
+               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-amber-500" placeholder="admin@zenixfood.com" />
             </div>
             <div>
                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex justify-between items-end mb-1">
                  <span>Senha</span>
-                 <button type="button" onClick={() => { setIsForgotModalOpen(true); setForgotStatus('idle'); setForgotEmail(email); }} className="text-amber-600 hover:text-amber-500 normal-case">Esqueceu a senha?</button>
+                 <button type="button" onClick={() => { setIsForgotModalOpen(true); setForgotStatus('idle'); setForgotEmail(email); }} className="text-amber-600 hover:text-amber-500 normal-case">Esqueceu?</button>
                </label>
-               <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-900 focus:outline-none focus:border-amber-500" placeholder="••••••••" />
+               <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-amber-500" placeholder="••••••••" />
             </div>
-            {loginError && <div className="bg-red-50 text-red-600 p-3 rounded-xl border border-red-100 text-xs font-bold text-center">⚠️ {loginError}</div>}
-            <button type="submit" disabled={isLoginLoading} className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-xl transition-all shadow-lg mt-2 cursor-pointer flex items-center justify-center gap-2">
+            {loginError && <div className="bg-red-500/10 text-red-500 p-3 rounded-xl border border-red-500/20 text-xs font-bold text-center">⚠️ {loginError}</div>}
+            <button type="submit" disabled={isLoginLoading} className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-4 rounded-xl transition-all shadow-lg mt-2 cursor-pointer flex items-center justify-center gap-2">
               {isLoginLoading ? <span className="animate-spin text-xl">⏳</span> : 'Acessar Painel'}
             </button>
           </form>
@@ -352,52 +344,33 @@ export default function MasterDashboard() {
     );
   }
 
-  if (loading) return <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-amber-500 font-bold"><span className="text-4xl animate-spin mb-4">⚙️</span> Carregando Master...</div>;
-
+  // 2. DASHBOARD (Se estiver autenticado)
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-700 font-sans p-6 md:p-10">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-slate-200 pb-6 gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-slate-800 flex items-center gap-3">
-            <span>👑</span> Zenix Master {isSuperMaster && <span className="bg-purple-100 text-purple-700 text-[10px] px-2 py-1 rounded-lg uppercase tracking-widest ml-2">Global</span>}
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">Gestão central de todos os inquilinos (restaurantes).</p>
+    <div className="space-y-8 animate-fade-in-up">
+      
+      {/* Cards de Resumo */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-sm">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Lojas Ativas</p>
+          <p className="text-4xl font-black text-white">{lojasAtivas} <span className="text-sm font-medium text-slate-500">/ {stores.length} total</span></p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button onClick={handleLogout} className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer">Sair</button>
-          
-          {isSuperMaster && (
-            <>
-              <button onClick={() => router.push('/master/planos')} className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-5 py-2.5 rounded-xl font-black shadow-sm cursor-pointer flex items-center gap-2">
-                <span>💎</span> Planos SaaS
-              </button>
-              <button onClick={() => router.push('/master/franquias')} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-5 py-2.5 rounded-xl font-black shadow-sm cursor-pointer flex items-center gap-2">
-                <span>👥</span> Gestão de Franquias
-              </button>
-            </>
-          )}
+        <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-3xl shadow-sm">
+          <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">MRR Potencial</p>
+          <p className="text-4xl font-black text-emerald-400">R$ {stores.reduce((acc, store) => acc + Number(store.monthlyFee || 0), 0).toFixed(2)}</p>
+        </div>
+      </div>
 
-          <button onClick={() => router.push('/master/stores/new')} className="bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-2.5 rounded-xl font-black shadow-md cursor-pointer flex items-center gap-2">
-            <span>+</span> Cadastrar Loja
+      {/* Tabela de Lojas */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+        <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+          <h2 className="font-black text-white text-lg">Suas Lojas</h2>
+          <button onClick={() => router.push('/master/stores/new')} className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-xl font-black shadow-md cursor-pointer text-xs">
+            + Cadastrar Nova
           </button>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Lojas Ativas</p>
-          <p className="text-4xl font-black text-slate-800">{lojasAtivas} <span className="text-sm font-medium text-slate-500">/ {stores.length} total</span></p>
-        </div>
-        <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-3xl shadow-sm">
-          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">MRR Potencial</p>
-          <p className="text-4xl font-black text-emerald-700">R$ {stores.reduce((acc, store) => acc + Number(store.monthlyFee || 0), 0).toFixed(2)}</p>
-        </div>
-      </div>
-
-      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-widest text-[10px] font-black">
+            <thead className="bg-slate-950 border-b border-slate-800 text-slate-500 uppercase tracking-widest text-[10px] font-black">
               <tr>
                 <th className="px-6 py-5">Loja / Slug</th>
                 <th className="px-6 py-5">Responsável / Franqueado</th>
@@ -406,36 +379,36 @@ export default function MasterDashboard() {
                 <th className="px-6 py-5 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-800">
               {stores.map(store => {
                 const planoVinculado = planos.find(p => p.id === store.planoSaaSId);
                 return (
-                  <tr key={store.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-5"><p className="font-black text-slate-800 text-base">{store.razaoSocial}</p><p className="text-amber-600 font-mono text-xs">/{store.slug}</p></td>
+                  <tr key={store.id} className="hover:bg-slate-800/50 transition-colors">
+                    <td className="px-6 py-5"><p className="font-black text-white text-base">{store.razaoSocial}</p><p className="text-amber-500 font-mono text-xs">/{store.slug}</p></td>
                     <td className="px-6 py-5">
-                       <p className="font-black text-slate-600">{store.nomeResponsavel}</p>
+                       <p className="font-black text-slate-300">{store.nomeResponsavel}</p>
                        <p className="text-slate-500 text-xs font-bold mb-1.5">{store.telefoneEmpresa}</p>
                        {store.adminUser ? (
-                         <span className="bg-blue-50 border border-blue-100 text-blue-700 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center w-fit gap-1 mt-1">👥 Franqueado: {store.adminUser.name}</span>
+                         <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center w-fit gap-1 mt-1">👥 Franqueado: {store.adminUser.name}</span>
                        ) : (
-                         <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center w-fit gap-1 mt-1">🏢 Matriz</span>
+                         <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center w-fit gap-1 mt-1">🏢 Matriz</span>
                        )}
                     </td>
                     <td className="px-6 py-5">
-                       <span className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">
+                       <span className="bg-purple-500/10 text-purple-400 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">
                           {planoVinculado ? planoVinculado.nome : store.plan || 'SEM PLANO'}
                        </span>
-                       <p className="text-slate-800 font-black mt-1">R$ {parseFloat(store.monthlyFee || 0).toFixed(2)}</p>
-                       {store.temSuporte && <p className="text-[10px] text-emerald-600 font-bold mt-0.5">+ Suporte Técnico</p>}
+                       <p className="text-white font-black mt-2">R$ {parseFloat(store.monthlyFee || 0).toFixed(2)}</p>
+                       {store.temSuporte && <p className="text-[10px] text-emerald-400 font-bold mt-0.5">+ Suporte Técnico</p>}
                     </td>
                     <td className="px-6 py-5">
-                      <button onClick={() => toggleStoreStatus(store)} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest border cursor-pointer ${store.status === 'ACTIVE' || store.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                      <button onClick={() => toggleStoreStatus(store)} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest border cursor-pointer ${store.status === 'ACTIVE' || store.isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
                         {store.status === 'ACTIVE' || store.isActive ? 'SISTEMA LIBERADO' : 'BLOQUEADO'}
                       </button>
                     </td>
                     <td className="px-6 py-5 text-right space-x-2">
-                      <button onClick={() => handleOpenInvoices(store)} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer">💳 Cobranças</button>
-                      <button onClick={() => handleEditClick(store)} className="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer">Editar Dados</button>
+                      <button onClick={() => handleOpenInvoices(store)} className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer">💳 Cobranças</button>
+                      <button onClick={() => handleEditClick(store)} className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer">Editar Dados</button>
                     </td>
                   </tr>
                 )
@@ -446,54 +419,55 @@ export default function MasterDashboard() {
         </div>
       </div>
 
+      {/* MODAIS (EDTAR LOJA E GERAR COBRANÇA) */}
+      {/* Mantivemos os modais usando tema escuro para casar com o Master */}
       {editingStore && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 p-6 md:p-10 rounded-[2.5rem] w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[92vh] animate-fade-in-up">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 p-6 md:p-10 rounded-[2.5rem] w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[92vh] animate-fade-in-up">
             
-            <div className="flex justify-between items-center mb-6 shrink-0 border-b border-slate-100 pb-4">
-              <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3"><span className="text-amber-500">✏️</span> Editar: {editingStore.razaoSocial}</h2>
-              <button onClick={() => setEditingStore(null)} className="w-10 h-10 bg-slate-100 hover:bg-red-100 hover:text-red-600 text-slate-500 rounded-full flex items-center justify-center font-black text-lg cursor-pointer">✕</button>
+            <div className="flex justify-between items-center mb-6 shrink-0 border-b border-slate-800 pb-4">
+              <h2 className="text-2xl font-black text-white flex items-center gap-3"><span className="text-amber-500">✏️</span> Editar: {editingStore.razaoSocial}</h2>
+              <button onClick={() => setEditingStore(null)} className="w-10 h-10 bg-slate-800 hover:bg-red-500/20 hover:text-red-500 text-slate-400 rounded-full flex items-center justify-center font-black text-lg cursor-pointer">✕</button>
             </div>
 
             <form onSubmit={handleSaveEdit} className="overflow-y-auto pr-2 space-y-6 flex-1 hide-scrollbar">
               
-              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4">
-                <h3 className="text-xs font-black text-amber-600 uppercase tracking-widest flex items-center gap-2"><span>🏬</span> Dados Jurídicos e Fiscais</h3>
+              <div className="bg-slate-950 p-6 rounded-3xl border border-slate-800 space-y-4">
+                <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center gap-2"><span>🏬</span> Dados Jurídicos e Fiscais</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Slug na URL</label><input type="text" required value={editingStore.slug} onChange={e => setEditingStore({...editingStore, slug: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-amber-600 font-mono shadow-sm font-bold" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Razão Social</label><input type="text" required value={editingStore.razaoSocial} onChange={e => setEditingStore({...editingStore, razaoSocial: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 shadow-sm font-bold" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Slug na URL</label><input type="text" required value={editingStore.slug} onChange={e => setEditingStore({...editingStore, slug: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-amber-500 font-mono shadow-sm font-bold" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Razão Social</label><input type="text" required value={editingStore.razaoSocial} onChange={e => setEditingStore({...editingStore, razaoSocial: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white shadow-sm font-bold" /></div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">CNPJ</label><input type="text" required value={editingStore.cnpj} onChange={handleEditCnpjChange} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 font-mono shadow-sm" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Inscrição Estadual</label><input type="text" value={editingStore.inscricaoEstadual} onChange={e => setEditingStore({...editingStore, inscricaoEstadual: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 shadow-sm" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Inscrição Municipal</label><input type="text" value={editingStore.inscricaoMunicipal} onChange={e => setEditingStore({...editingStore, inscricaoMunicipal: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">CNPJ</label><input type="text" required value={editingStore.cnpj} onChange={handleEditCnpjChange} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white font-mono shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Inscrição Estadual</label><input type="text" value={editingStore.inscricaoEstadual} onChange={e => setEditingStore({...editingStore, inscricaoEstadual: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Inscrição Municipal</label><input type="text" value={editingStore.inscricaoMunicipal} onChange={e => setEditingStore({...editingStore, inscricaoMunicipal: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white shadow-sm" /></div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">E-mail da Empresa</label><input type="email" required value={editingStore.emailEmpresa} onChange={e => setEditingStore({...editingStore, emailEmpresa: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 shadow-sm" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Telefone / WhatsApp</label><input type="tel" required value={editingStore.telefoneEmpresa} onChange={e => handleEditPhoneChange(e, 'telefoneEmpresa')} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">E-mail da Empresa</label><input type="email" required value={editingStore.emailEmpresa} onChange={e => setEditingStore({...editingStore, emailEmpresa: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Telefone / WhatsApp</label><input type="tel" required value={editingStore.telefoneEmpresa} onChange={e => handleEditPhoneChange(e, 'telefoneEmpresa')} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white shadow-sm" /></div>
                 </div>
               </div>
 
-              <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 space-y-4">
-                <h3 className="text-xs font-black text-blue-600 uppercase tracking-widest flex items-center gap-2"><span>👔</span> Responsável & Acesso Master da Loja</h3>
+              <div className="bg-blue-500/5 p-6 rounded-3xl border border-blue-500/20 space-y-4">
+                <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2"><span>👔</span> Responsável & Acesso Master da Loja</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Nome Completo do Dono</label><input type="text" required value={editingStore.nomeResponsavel} onChange={e => setEditingStore({...editingStore, nomeResponsavel: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 font-bold shadow-sm" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">CPF</label><input type="text" required value={editingStore.cpfResponsavel} onChange={handleEditCpfChange} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 font-mono shadow-sm" /></div>
-                  <div><label className="text-[10px] font-black text-blue-700 uppercase block mb-1">E-mail de Acesso (Login)</label><input type="email" required value={editingStore.emailResponsavel} onChange={e => setEditingStore({...editingStore, emailResponsavel: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 font-bold shadow-sm" /></div>
-                  <div><label className="text-[10px] font-black text-blue-700 uppercase block mb-1">Nova Senha Master (Opcional)</label><input type="text" value={editingStore.senhaResponsavel} onChange={e => setEditingStore({...editingStore, senhaResponsavel: e.target.value})} placeholder="Deixe em branco para manter a atual" className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Nome Completo do Dono</label><input type="text" required value={editingStore.nomeResponsavel} onChange={e => setEditingStore({...editingStore, nomeResponsavel: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white font-bold shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">CPF</label><input type="text" required value={editingStore.cpfResponsavel} onChange={handleEditCpfChange} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white font-mono shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-blue-400 uppercase block mb-1">E-mail de Acesso (Login)</label><input type="email" required value={editingStore.emailResponsavel} onChange={e => setEditingStore({...editingStore, emailResponsavel: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white font-bold shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-blue-400 uppercase block mb-1">Nova Senha Master (Opcional)</label><input type="text" value={editingStore.senhaResponsavel} onChange={e => setEditingStore({...editingStore, senhaResponsavel: e.target.value})} placeholder="Deixe em branco para manter a atual" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white shadow-sm" /></div>
                 </div>
               </div>
 
-              {/* 🔥 NOVO: ÁREA DE PLANOS E SUPORTE DINÂMICOS */}
-              <div className="bg-purple-50 p-6 rounded-3xl border border-purple-200 space-y-4">
-                <h3 className="text-xs font-black text-purple-600 uppercase tracking-widest flex items-center gap-2"><span>💎</span> Plano SaaS e Suporte</h3>
+              <div className="bg-purple-500/5 p-6 rounded-3xl border border-purple-500/20 space-y-4">
+                <h3 className="text-xs font-black text-purple-400 uppercase tracking-widest flex items-center gap-2"><span>💎</span> Plano SaaS e Suporte</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Selecione o Pacote Base</label>
                     <select 
                       value={editingStore.planoSaaSId || ''} 
                       onChange={e => setEditingStore({...editingStore, planoSaaSId: e.target.value})} 
-                      className="w-full bg-white border border-purple-300 rounded-xl p-3.5 text-sm text-slate-900 font-bold shadow-sm cursor-pointer"
+                      className="w-full bg-slate-900 border border-purple-500/30 rounded-xl p-3.5 text-sm text-white font-bold shadow-sm cursor-pointer"
                     >
                        <option value="">-- Escolha um Plano --</option>
                        {planos.map(p => (
@@ -503,21 +477,21 @@ export default function MasterDashboard() {
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Fatura Mensal Final (R$)</label>
-                    <div className="w-full bg-purple-100 border border-purple-300 rounded-xl p-3.5 text-sm text-purple-800 font-black shadow-inner flex items-center">
+                    <div className="w-full bg-purple-500/10 border border-purple-500/30 rounded-xl p-3.5 text-sm text-purple-400 font-black shadow-inner flex items-center">
                        R$ {((planos.find(p => p.id === editingStore.planoSaaSId)?.precoBase || 0) + (editingStore.temSuporte ? Number(editingStore.valorSuporte || 0) : 0)).toFixed(2)}
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white p-4 rounded-2xl border border-purple-100 mt-2 flex flex-col gap-3">
+                <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 mt-2 flex flex-col gap-3">
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input 
                       type="checkbox" 
                       checked={editingStore.temSuporte} 
                       onChange={e => setEditingStore({...editingStore, temSuporte: e.target.checked})} 
-                      className="w-5 h-5 accent-purple-600"
+                      className="w-5 h-5 accent-purple-500"
                     />
-                    <span className="text-sm font-bold text-slate-800">⌨️ Adicionar Suporte Técnico Extra e outros serviços</span>
+                    <span className="text-sm font-bold text-white">⌨️ Adicionar Suporte Técnico Extra</span>
                   </label>
                   {editingStore.temSuporte && (
                     <div className="animate-fade-in-up mt-2">
@@ -527,7 +501,7 @@ export default function MasterDashboard() {
                         value={editingStore.valorSuporte} 
                         onChange={e => setEditingStore({...editingStore, valorSuporte: e.target.value})} 
                         placeholder="Ex: 50.00" 
-                        className="w-full md:w-1/2 bg-white border border-purple-300 rounded-xl p-3 text-sm text-purple-700 font-black shadow-sm" 
+                        className="w-full md:w-1/2 bg-slate-950 border border-purple-500/30 rounded-xl p-3 text-sm text-purple-400 font-black shadow-sm" 
                       />
                     </div>
                   )}
@@ -535,9 +509,9 @@ export default function MasterDashboard() {
               </div>
 
               {isSuperMaster && (
-                <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 space-y-2">
-                  <h3 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><span>👥</span> Vínculo de Gestão (Franqueado/Revenda)</h3>
-                  <select value={editingStore.adminUserId || ''} onChange={e => setEditingStore({...editingStore, adminUserId: e.target.value})} className="w-full bg-white border border-emerald-300 rounded-xl p-3.5 text-sm text-slate-900 font-bold shadow-sm cursor-pointer mt-2">
+                <div className="bg-emerald-500/5 p-6 rounded-3xl border border-emerald-500/20 space-y-2">
+                  <h3 className="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2"><span>👥</span> Vínculo de Gestão (Franqueado)</h3>
+                  <select value={editingStore.adminUserId || ''} onChange={e => setEditingStore({...editingStore, adminUserId: e.target.value})} className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl p-3.5 text-sm text-white font-bold shadow-sm cursor-pointer mt-2">
                     <option value="">-- Sem Vínculo (Pertence à Matriz) --</option>
                     {adminUsers.map(user => (
                       <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
@@ -546,26 +520,26 @@ export default function MasterDashboard() {
                 </div>
               )}
 
-              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4">
-                <h3 className="text-xs font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2"><span>📍</span> Endereço Completo</h3>
+              <div className="bg-slate-950 p-6 rounded-3xl border border-slate-800 space-y-4">
+                <h3 className="text-xs font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2"><span>📍</span> Endereço Completo</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">CEP</label><input type="text" value={editingStore.cep} onChange={handleEditCepSearch} placeholder="00000-000" className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 font-mono shadow-sm" /></div>
-                  <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Logradouro (Rua / Avenida)</label><input type="text" value={editingStore.street} onChange={e => setEditingStore({...editingStore, street: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">CEP</label><input type="text" value={editingStore.cep} onChange={handleEditCepSearch} placeholder="00000-000" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white font-mono shadow-sm" /></div>
+                  <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Logradouro (Rua / Avenida)</label><input type="text" value={editingStore.street} onChange={e => setEditingStore({...editingStore, street: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white shadow-sm" /></div>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Número</label><input type="text" value={editingStore.number} onChange={e => setEditingStore({...editingStore, number: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 shadow-sm" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Complemento</label><input type="text" value={editingStore.complement} onChange={e => setEditingStore({...editingStore, complement: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 shadow-sm" /></div>
-                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Bairro</label><input type="text" value={editingStore.neighborhood} onChange={e => setEditingStore({...editingStore, neighborhood: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Número</label><input type="text" value={editingStore.number} onChange={e => setEditingStore({...editingStore, number: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Complemento</label><input type="text" value={editingStore.complement} onChange={e => setEditingStore({...editingStore, complement: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white shadow-sm" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Bairro</label><input type="text" value={editingStore.neighborhood} onChange={e => setEditingStore({...editingStore, neighborhood: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white shadow-sm" /></div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Cidade</label><input type="text" value={editingStore.city} onChange={e => setEditingStore({...editingStore, city: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 shadow-sm" /></div>
-                    <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">UF</label><input type="text" maxLength={2} value={editingStore.state} onChange={e => setEditingStore({...editingStore, state: e.target.value.toUpperCase()})} className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-900 uppercase font-mono text-center shadow-sm" /></div>
+                    <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Cidade</label><input type="text" value={editingStore.city} onChange={e => setEditingStore({...editingStore, city: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white shadow-sm" /></div>
+                    <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">UF</label><input type="text" maxLength={2} value={editingStore.state} onChange={e => setEditingStore({...editingStore, state: e.target.value.toUpperCase()})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-white uppercase font-mono text-center shadow-sm" /></div>
                   </div>
                 </div>
               </div>
 
-              <div className="pt-4 flex gap-4 shrink-0 mt-4 border-t border-slate-100">
-                <button type="button" onClick={() => setEditingStore(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 font-bold py-4 rounded-2xl cursor-pointer text-sm">Cancelar</button>
-                <button type="submit" className="flex-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-black py-4 rounded-2xl shadow-md cursor-pointer active:scale-95 text-base">Salvar Alterações</button>
+              <div className="pt-4 flex gap-4 shrink-0 mt-4 border-t border-slate-800">
+                <button type="button" onClick={() => setEditingStore(null)} className="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold py-4 rounded-2xl cursor-pointer text-sm transition-colors">Cancelar</button>
+                <button type="submit" className="flex-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-4 rounded-2xl shadow-md cursor-pointer active:scale-95 text-base transition-colors">Salvar Alterações</button>
               </div>
 
             </form>
@@ -574,27 +548,27 @@ export default function MasterDashboard() {
       )}
 
       {viewingInvoicesStore && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 p-8 rounded-[2rem] w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh] animate-fade-in-up">
-            <div className="flex justify-between items-center mb-6 shrink-0 border-b border-slate-100 pb-4">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh] animate-fade-in-up">
+            <div className="flex justify-between items-center mb-6 shrink-0 border-b border-slate-800 pb-4">
               <div>
-                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3"><span className="text-emerald-500">💳</span> Central de Cobranças</h2>
-                <p className="text-slate-500 text-sm font-medium mt-1">Gerar faturas para <strong className="text-slate-800">{viewingInvoicesStore.razaoSocial}</strong></p>
+                <h2 className="text-2xl font-black text-white flex items-center gap-3"><span className="text-emerald-500">💳</span> Central de Cobranças</h2>
+                <p className="text-slate-400 text-sm font-medium mt-1">Gerar faturas para <strong className="text-white">{viewingInvoicesStore.razaoSocial}</strong></p>
               </div>
-              <button onClick={() => setViewingInvoicesStore(null)} className="w-10 h-10 bg-slate-100 hover:bg-red-100 text-slate-500 rounded-full flex items-center justify-center font-black text-lg cursor-pointer">✕</button>
+              <button onClick={() => setViewingInvoicesStore(null)} className="w-10 h-10 bg-slate-800 hover:bg-red-500/20 hover:text-red-500 text-slate-400 rounded-full flex items-center justify-center font-black text-lg cursor-pointer">✕</button>
             </div>
             <div className="overflow-y-auto pr-2 space-y-6 flex-1 hide-scrollbar">
-              <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-3xl shadow-sm">
-                 <h3 className="text-sm font-black text-emerald-700 uppercase tracking-widest mb-4 flex items-center gap-2"><span>🏦</span> Gerar Novo Boleto</h3>
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-3xl shadow-sm">
+                 <h3 className="text-sm font-black text-emerald-400 uppercase tracking-widest mb-4 flex items-center gap-2"><span>🏦</span> Gerar Novo Boleto</h3>
                  <form onSubmit={handleGenerateBoletoCora} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Referência</label><input type="text" required value={newInvoiceForm.reference} onChange={e => setNewInvoiceForm({...newInvoiceForm, reference: e.target.value})} className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm font-bold" /></div>
-                      <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Valor (R$)</label><input type="number" step="0.01" required value={newInvoiceForm.amount} onChange={e => setNewInvoiceForm({...newInvoiceForm, amount: e.target.value})} className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm text-emerald-700 font-black" /></div>
-                      <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Vencimento</label><input type="date" required value={newInvoiceForm.dueDate} onChange={e => setNewInvoiceForm({...newInvoiceForm, dueDate: e.target.value})} className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm font-bold text-slate-700" /></div>
-                      <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Observações</label><input type="text" value={newInvoiceForm.notes} onChange={e => setNewInvoiceForm({...newInvoiceForm, notes: e.target.value})} className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm" /></div>
+                      <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Referência</label><input type="text" required value={newInvoiceForm.reference} onChange={e => setNewInvoiceForm({...newInvoiceForm, reference: e.target.value})} className="w-full bg-slate-950 border border-emerald-500/30 text-white rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-emerald-500" /></div>
+                      <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Valor (R$)</label><input type="number" step="0.01" required value={newInvoiceForm.amount} onChange={e => setNewInvoiceForm({...newInvoiceForm, amount: e.target.value})} className="w-full bg-slate-950 border border-emerald-500/30 rounded-xl p-3 text-sm text-emerald-400 font-black focus:outline-none focus:border-emerald-500" /></div>
+                      <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Vencimento</label><input type="date" required value={newInvoiceForm.dueDate} onChange={e => setNewInvoiceForm({...newInvoiceForm, dueDate: e.target.value})} className="w-full bg-slate-950 border border-emerald-500/30 rounded-xl p-3 text-sm font-bold text-white focus:outline-none focus:border-emerald-500" /></div>
+                      <div><label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Observações</label><input type="text" value={newInvoiceForm.notes} onChange={e => setNewInvoiceForm({...newInvoiceForm, notes: e.target.value})} className="w-full bg-slate-950 border border-emerald-500/30 text-white rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500" /></div>
                     </div>
                     <div className="flex justify-end pt-2">
-                       <button type="submit" disabled={isGeneratingBoleto} className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-8 py-3 rounded-xl shadow-md cursor-pointer">Emitir e Enviar Boleto Cora</button>
+                       <button type="submit" disabled={isGeneratingBoleto} className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-8 py-3 rounded-xl shadow-md cursor-pointer transition-colors">Emitir e Enviar Boleto Cora</button>
                     </div>
                  </form>
               </div>
