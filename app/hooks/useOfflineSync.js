@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/db'; // Ajuste o caminho se a sua pasta lib estiver em outro lugar
+import { db } from './lib/db'; 
 
 export function useOfflineSync(API_URL, lojaId, token) {
   const [isOnline, setIsOnline] = useState(true);

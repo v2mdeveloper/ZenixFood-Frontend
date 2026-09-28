@@ -3,8 +3,8 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
-// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
-import { useOfflineSync } from '@/hooks/useOfflineSync';
+// IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
+import { useOfflineSync } from './hooks/useOfflineSync';
 
 import Header from './components/Header';
 import Footer from './components/Footer';

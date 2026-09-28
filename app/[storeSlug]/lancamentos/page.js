@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 // 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
-import { useOfflineSync } from '@/hooks/useOfflineSync';
+import { useOfflineSync } from './hooks/useOfflineSync';
 
 export default function LancamentosPage() {
   const params = useParams();

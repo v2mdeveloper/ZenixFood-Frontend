@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
-import { useOfflineSync } from '@/hooks/useOfflineSync'; // Ajuste o caminho se necessário
+//IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
+import { useOfflineSync } from './hooks/useOfflineSync'; // Ajuste o caminho se necessário
 
 export default function PdvTab({ employeeUser, allProducts, menu }) {
   const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';

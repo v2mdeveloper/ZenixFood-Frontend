@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
-import { useOfflineSync } from '@/hooks/useOfflineSync';
+// IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
+import { useOfflineSync } from './hooks/useOfflineSync';
 
 //FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {
@@ -31,7 +31,7 @@ export default function TotemModerno() {
 
   const TOKEN_JWT = typeof window !== 'undefined' ? localStorage.getItem('zenix_token') : '';
 
-  // 🔥 INICIALIZA O MOTOR OFFLINE
+  // INICIALIZA O MOTOR OFFLINE
   const { isOnline, pedidosPendentes, processarPedido } = useOfflineSync(API_URL, storeSlug, TOKEN_JWT);
 
   const [storeData, setStoreData] = useState(null);
