@@ -1,8 +1,27 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect, Suspense, useMemo } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
+import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
+// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
 import { useOfflineSync } from '@/app/hooks/useOfflineSync';
+
+import Header from './components/Header';
+import Footer from './components/Footer';
+import FloatingCart from './components/FloatingCart';
+
+import MenuView from './components/views/MenuView';
+import AuthView from './components/views/AuthView';
+import CheckoutView from './components/views/CheckoutView';
+import OrdersView from './components/views/OrdersView';
+import ProfileView from './components/views/ProfileView';
+import LiveCamView from './components/views/LiveCamView';
+
+import CarrosselAvaliacoes from './components/CarrosselAvaliacoes';
+import ReviewModal from './components/modals/ReviewModal';
+import CostelaModal from './components/modals/CostelaModal';
+import UpsellModal from './components/modals/UpsellModal';
+import ProductDetailsModal from './components/modals/ProductDetailsModal';
 
 //FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {
@@ -18,46 +37,93 @@ const getCategoryIcon = (category) => {
   if (/cafe|café|cappuccino/i.test(textToSearch)) return '☕';
   if (/churasco|espetinho|/i.test(textToSearch)) return '🥩';
 
-  return '🍽️'; // Ícone Padrão caso não ache nenhuma palavra-chave
+  return '🍽️'; 
 };
 
-export default function TotemModerno() {
-  const params = useParams();
-  const storeSlug = params?.storeSlug || '';
+function HomeContent({ storeSlug }) {
+  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [selectedProductModal, setSelectedProductModal] = useState(null);
 
-  const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
-    ? 'http://localhost:3333' 
-    : 'https://zenixfood-backend.onrender.com';
-
-  const TOKEN_JWT = typeof window !== 'undefined' ? localStorage.getItem('zenix_token') : '';
-
-  // INICIALIZA O MOTOR OFFLINE
-  const { isOnline, pedidosPendentes, processarPedido } = useOfflineSync(API_URL, storeSlug, TOKEN_JWT);
-
-  const [storeData, setStoreData] = useState(null);
   const [menu, setMenu] = useState([]);
-  const [activeCategory, setActiveCategory] = useState(null);
-  const [cart, setCart] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [highlights, setHighlights] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [upsells, setUpsells] = useState([]); 
 
-  // Estados de Idioma, Inatividade e Checkout
+  const [cart, setCart] = useState([]);
+  const [clientOrders, setClientOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('menu');
+  const [user, setUser] = useState(null);
+
+  const [authMode, setAuthMode] = useState('login');
+  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', phone: '', cpf: '', birthDate: '', address: '', cep: '' });
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [profileForm, setProfileForm] = useState({ name: '', email: '', password: '', phone: '', cpf: '', birthDate: '', address: '', cep: '' });
+
+  const [cep, setCep] = useState('');
+  const [address, setAddress] = useState('');
+  const [observations, setObservations] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('PIX_ONLINE');
+  const [useCashback, setUseCashback] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponError, setCouponError] = useState('');
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [cpfNaNota, setCpfNaNota] = useState('');
+
+  const [deliveryFee, setDeliveryFee] = useState(5.00);
+  const [cashbackPercent, setCashbackPercent] = useState(5);
+  const [isStoreOpen, setIsStoreOpen] = useState(true);
+  const [storeSettings, setStoreSettings] = useState(null);
+
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [pixInfo, setPixInfo] = useState(null);
+  const [pixCopied, setPixCopied] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  
+  const [reviewOrder, setReviewOrder] = useState(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  const [showCostelaModal, setShowCostelaModal] = useState(false);
+  const [costelaProduct, setCostelaProduct] = useState(null);
+  const [costelaSize, setCostelaSize] = useState('500g'); 
+  const [costelaTime, setCostelaTime] = useState('12:00'); 
+
+  const [showUpsellModal, setShowUpsellModal] = useState(false);
+  const [upsellItem, setUpsellItem] = useState(null);
+  const [watchingOrder, setWatchingOrder] = useState(null);
+  const [currentDomain, setCurrentDomain] = useState('localhost');
+
+  const [isTotemMode, setIsTotemMode] = useState(false);
+  const [totemName, setTotemName] = useState('');
+
+  // Estados específicos do Totem Tradicional (Tela de Idioma)
   const [isIdle, setIsIdle] = useState(true);
   const [lang, setLanguage] = useState('pt');
-  
-  // ESTADOS PARA O PAGAMENTO E NOME
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [customerName, setCustomerName] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccessData, setOrderSuccessData] = useState(null);
 
-  // 🍕 ESTADOS DO CONSTRUTOR DE PIZZAS
-  const [pizzaBuilderOpen, setPizzaBuilderOpen] = useState(false);
+  const [showPizzaModal, setShowPizzaModal] = useState(false);
   const [pizzaBase, setPizzaBase] = useState(null);
   const [pizzaFlavorCount, setPizzaFlavorCount] = useState(1);
   const [pizzaSelectedFlavors, setPizzaSelectedFlavors] = useState([]);
 
-  // Traduções Dinâmicas
+  const API_URL = 'https://zenixfood-backend.onrender.com';
+  const searchParams = useSearchParams();
+  const TOKEN_JWT = typeof window !== 'undefined' ? (localStorage.getItem('@Zenix:token') || localStorage.getItem('zenix_token')) : '';
+
+  // 🔥 INICIALIZA O MOTOR OFFLINE
+  const { isOnline, pedidosPendentes, processarPedido } = useOfflineSync(API_URL, storeSlug, TOKEN_JWT);
+
+  // Traduções Dinâmicas para o Modo Totem
   const i18n = {
     pt: {
       touchToStart: "Toque para Iniciar", selectLanguage: "Selecione seu idioma", cancelOrder: "Cancelar Pedido",
@@ -88,86 +154,156 @@ export default function TotemModerno() {
     }
   };
 
-  useEffect(() => {
-    if (!storeSlug) return;
-    const fetchStoreAndMenu = async () => {
-      try {
-        const [resStore, resMenu] = await Promise.all([
-          fetch(`${API_URL}/api/settings/public/${storeSlug}`),
-          fetch(`${API_URL}/api/menu/public/${storeSlug}`)
-        ]);
-        
-        if (resStore.ok) setStoreData(await resStore.json());
-        if (resMenu.ok) {
-          const menuData = await resMenu.json();
-          setMenu(menuData);
-          if (menuData.length > 0) setActiveCategory(menuData[0].id);
-        }
-      } catch (error) { console.error("Erro ao carregar dados", error); } finally { setLoading(false); }
+  const fetchWithStore = async (url, options = {}) => {
+    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
+    const headers = {
+      ...(TOKEN_JWT && { 'Authorization': `Bearer ${TOKEN_JWT}` }),
+      ...(storeId && { 'x-loja-slug': storeId }),
+      ...options.headers,
     };
-    fetchStoreAndMenu();
-  }, [storeSlug]);
-
-  useEffect(() => {
-    let timeoutId;
-    const resetIdleTimer = () => {
-      if (!isIdle && !orderSuccessData) {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          setIsIdle(true); setCart([]); setIsCheckoutOpen(false); setPizzaBuilderOpen(false);
-          if (menu.length > 0) setActiveCategory(menu[0].id);
-        }, 60000); 
-      }
-    };
-    window.addEventListener('touchstart', resetIdleTimer);
-    window.addEventListener('click', resetIdleTimer);
-    resetIdleTimer();
-    return () => {
-      window.removeEventListener('touchstart', resetIdleTimer);
-      window.removeEventListener('click', resetIdleTimer);
-      clearTimeout(timeoutId);
-    };
-  }, [isIdle, menu, orderSuccessData]);
-
-  useEffect(() => {
-    if (orderSuccessData) {
-      const timer = setTimeout(() => {
-        setOrderSuccessData(null); setIsIdle(true);
-      }, 10000);
-      return () => clearTimeout(timer);
+    const finalOptions = { ...options, headers, cache: 'no-store' };
+    const response = await fetch(url, finalOptions);
+    if (response.status === 402 && typeof window !== 'undefined') {
+        window.location.href = `/${storeSlug}/bloqueado`; 
     }
-  }, [orderSuccessData]);
+    return response;
+  };
 
-  const handleStart = (selectedLang) => {
-    setLanguage(selectedLang); setIsIdle(false);
-    const elem = document.documentElement;
-    if (!document.fullscreenElement) {
-      if (elem.requestFullscreen) elem.requestFullscreen().catch(e => {});
+  useEffect(() => {
+    if (storeSettings?.mercadoPagoPublicKey) {
+      initMercadoPago(storeSettings.mercadoPagoPublicKey);
     }
-  };
+  }, [storeSettings]);
 
-  // 🎯 LÓGICA DE CARRINHO
-  const addToCart = (productToAdd) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === productToAdd.id);
-      if (existing) return prev.map(item => item.id === productToAdd.id ? { ...item, quantity: item.quantity + 1 } : item);
-      return [...prev, { ...productToAdd, quantity: 1 }];
-    });
-  };
-
-  const updateQuantity = (id, delta) => {
-    setCart(prev => prev.map(item => item.id === id ? { ...item, quantity: item.quantity + delta } : item).filter(i => i.quantity > 0));
-  };
-
-  // 🍕 LÓGICA DO CONSTRUTOR DE PIZZAS
-  const handleProductClick = (prod) => {
-    if (prod.isPizza && prod.maxFlavors > 1) {
-      setPizzaBase(prod);
-      setPizzaFlavorCount(1);
-      setPizzaSelectedFlavors([prod]); 
-      setPizzaBuilderOpen(true);
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('@Zenix:clientTheme');
+    if (savedTheme === 'light') {
+      setIsDarkMode(false);
+      document.documentElement.classList.remove('dark');
     } else {
-      addToCart(prod);
+      setIsDarkMode(true);
+      document.documentElement.classList.add('dark');
+    }
+
+    const savedToken = localStorage.getItem('@Zenix:token') || localStorage.getItem('zenix_token');
+    const savedUser = localStorage.getItem('@Zenix:user') || localStorage.getItem('zenix_user');
+    if (savedToken && savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
+      
+      let extCep = '';
+      let extRua = parsedUser.address || '';
+      const match = extRua.match(/CEP:\s*(.*?)\s*-\s*(.*)/);
+      if (match) { extCep = match[1]; extRua = match[2]; }
+      
+      setProfileForm({ 
+        name: parsedUser.name, email: parsedUser.email, phone: parsedUser.phone || '', 
+        cpf: parsedUser.cpf || '', birthDate: parsedUser.birthDate || '', 
+        address: extRua, cep: extCep, password: '' 
+      });
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = !isDarkMode;
+    setIsDarkMode(newTheme);
+    localStorage.setItem('@Zenix:clientTheme', newTheme ? 'dark' : 'light');
+    if (newTheme) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  };
+
+  const handleFullscreen = () => {
+    if (typeof document !== 'undefined') {
+      const docEl = document.documentElement;
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (docEl.requestFullscreen) docEl.requestFullscreen().catch(()=>{});
+        else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen().catch(()=>{});
+      }
+    }
+  };
+
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [view]);
+
+  useEffect(() => {
+     setCurrentDomain(window.location.hostname);
+     if (searchParams.get('totem') === 'true') setIsTotemMode(true);
+  }, [searchParams]);
+
+  // Temporizador de inatividade se for Totem
+  useEffect(() => {
+    if (!isTotemMode) return;
+    let timeout;
+    const handleInteraction = () => {
+        handleFullscreen();
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          setIsIdle(true); setCart([]); setTotemName(''); setView('menu'); setShowUpsellModal(false); setPixInfo(null); setSelectedProductModal(null); setShowPizzaModal(false);
+        }, 120000); 
+    };
+    window.addEventListener('mousemove', handleInteraction);
+    window.addEventListener('touchstart', handleInteraction);
+    window.addEventListener('click', handleInteraction);
+    handleInteraction();
+    return () => {
+        clearTimeout(timeout);
+        window.removeEventListener('mousemove', handleInteraction);
+        window.removeEventListener('touchstart', handleInteraction);
+        window.removeEventListener('click', handleInteraction);
+    }
+  }, [isTotemMode]);
+
+  const fetchSystemSettings = () => {
+    const timestamp = Date.now(); 
+    fetchWithStore(`${API_URL}/api/settings?_=${timestamp}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const openStatus = data.isOpen !== undefined ? data.isOpen : true; 
+        setIsStoreOpen(openStatus && !data.isManualFechado);
+        setDeliveryFee(Number(data.deliveryFee) || 0);
+        setCashbackPercent(Number(data.cashbackPercent) || 0);
+        setStoreSettings(data);
+      })
+      .catch((err) => console.error(err));
+  };
+
+  useEffect(() => {
+    fetchSystemSettings();
+    const settingsInterval = setInterval(() => { if(isOnline) fetchSystemSettings(); }, 30000);
+    return () => clearInterval(settingsInterval);
+  }, [isOnline]);
+
+  useEffect(() => {
+    const timestamp = Date.now();
+    Promise.all([
+      fetchWithStore(`${API_URL}/api/menu?_=${timestamp}`).then((res) => res.json()),
+      fetchWithStore(`${API_URL}/api/products/highlights?_=${timestamp}`).then((res) => res.json()),
+      fetchWithStore(`${API_URL}/api/suppliers?_=${timestamp}`).then((res) => res.ok ? res.json() : []).catch(() => []),
+      fetchWithStore(`${API_URL}/api/upsells?_=${timestamp}`).then((res) => res.ok ? res.json() : []).catch(() => []) 
+    ]).then(([menuData, highlightsData, suppliersData, upsellsData]) => {
+      setMenu(menuData); 
+      setHighlights(highlightsData); 
+      setSuppliers(suppliersData); 
+      setUpsells(upsellsData || []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const handleOpenCostelaModal = (product) => {
+    setCostelaProduct(product); 
+    setCostelaSize('500g'); 
+    setCostelaTime('12:00'); 
+    setShowCostelaModal(true);
+    setSelectedProductModal(null);
+  };
+
+  const handleOpenProductModal = (product) => { 
+    if (product.isPizza && product.maxFlavors > 1) {
+      setPizzaBase(product);
+      setPizzaFlavorCount(1);
+      setPizzaSelectedFlavors([product]);
+      setShowPizzaModal(true);
+    } else {
+      setSelectedProductModal(product); 
     }
   };
 
@@ -176,7 +312,7 @@ export default function TotemModerno() {
       setPizzaSelectedFlavors(prev => prev.filter(f => f.id !== flavorProd.id));
     } else {
       if (pizzaSelectedFlavors.length < pizzaFlavorCount) {
-        setPizzaSelectedFlavors(prev => [...prev, flavorProd]); 
+        setPizzaSelectedFlavors(prev => [...prev, flavorProd]);
       }
     }
   };
@@ -187,7 +323,7 @@ export default function TotemModerno() {
       const sum = pizzaSelectedFlavors.reduce((acc, f) => acc + Number(f.price), 0);
       return sum / pizzaSelectedFlavors.length;
     } else {
-      return Math.max(...pizzaSelectedFlavors.map(f => Number(f.price)));
+      return Math.max(...pizzaSelectedFlavors.map(f => Number(f.price))); 
     }
   };
 
@@ -196,183 +332,237 @@ export default function TotemModerno() {
     const customId = `${pizzaBase.id}-` + pizzaSelectedFlavors.map(f => f.id).sort().join('-');
     const customName = `🍕 ${pizzaFlavorCount} Sabores: ` + pizzaSelectedFlavors.map(f => f.name).join(' / ');
     
-    const cartItem = {
-      ...pizzaBase,
-      id: customId,
-      productId: pizzaBase.id,
-      name: customName,
-      price: finalPrice,
-      flavors: pizzaSelectedFlavors.map(f => ({ productId: f.id, name: f.name }))
-    };
-
-    addToCart(cartItem);
-    setPizzaBuilderOpen(false);
+    setCart((prev) => {
+      const existing = prev.find((item) => item.id === customId);
+      if (existing) return prev.map((item) => item === existing ? { ...item, quantity: item.quantity + 1 } : item);
+      return [...prev, { 
+         id: customId,
+         productId: pizzaBase.id, 
+         name: customName, 
+         price: finalPrice, 
+         quantity: 1, 
+         observation: '',
+         flavors: pizzaSelectedFlavors.map(f => ({ productId: f.id, name: f.name }))
+      }];
+    });
+    
+    setShowPizzaModal(false);
+    setPizzaBase(null);
   };
 
-  // ============================================================================
-  // INTEGRAÇÃO SMART POS TOTEM: DEEP LINK (APP-TO-APP)
-  // ============================================================================
- const dispararPagamentoSmartPos = (provider, totalFinal, metodoPagamento, orderId) => {
-    const valorCentavos = Math.round(Number(totalFinal) * 100);
-    
-    let tipoTransacao = 'DEBIT'; 
-    if (metodoPagamento.includes('CREDIT')) tipoTransacao = 'CREDIT';
-    if (metodoPagamento.includes('PIX')) tipoTransacao = 'PIX';
-
-    // Pega a URL exata em que você está agora para a máquina saber para onde voltar
-    const returnUrl = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
-
-    let deepLink = '';
-
-    switch (provider) {
-      case 'stone':
-        deepLink = `stone://pay?amount=${valorCentavos}&editable_amount=0&transaction_type=${tipoTransacao}&return_scheme=${returnUrl}`;
-        break;
-      case 'pagseguro':
-        let pagTipo = 2; if (tipoTransacao === 'CREDIT') pagTipo = 1; if (tipoTransacao === 'PIX') pagTipo = 4;
-        deepLink = `pagseguro://pay?amount=${valorCentavos}&type=${pagTipo}&return_scheme=${returnUrl}`;
-        break;
-      case 'mercado_pago':
-        deepLink = `mercadopago://pay?amount=${Number(totalFinal).toFixed(2)}&return_url=${returnUrl}`;
-        break;
-      
-      // 🔥 O NOSSO SIMULADOR DE MÁQUINA!
-      case 'simulador':
-        alert(`(SIMULADOR) O sistema chamou a máquina de cartões.\n\nValor: R$ ${Number(totalFinal).toFixed(2)}\nMétodo: ${tipoTransacao}\n\nAguardando cliente digitar a senha...`);
-        
-        // Finge que o cliente demorou 3 segundos a pagar e devolve para o sistema!
-        setTimeout(() => {
-            alert("(SIMULADOR) Pagamento Aprovado na Máquina! Imprimindo comprovante...");
-        }, 3000);
-        return true;
-
-      default: return false;
+  const addToCart = (product, quantity = 1, observation = '') => {
+    if (product.name.toLowerCase().includes('costela')) {
+       handleOpenCostelaModal(product);
+       return;
     }
-
-    if (provider !== 'simulador') {
-        console.log(`[Smart POS] Disparando: ${deepLink}`);
-        window.location.href = deepLink;
+    if (!isStoreOpen && !isTotemMode) {
+      alert('A loja está fechada no momento! Confira nossos horários no rodapé.');
+      return;
     }
-    
-    return true;
+    setCart((prev) => {
+      const existing = prev.find((item) => (item.productId === product.id || item.id === product.id) && item.observation === observation && !item.flavors);
+      if (existing) return prev.map((item) => item === existing ? { ...item, quantity: item.quantity + quantity } : item);
+      return [...prev, { id: product.id, productId: product.id, name: product.name, price: Number(product.price), quantity, observation }];
+    });
   };
 
-  // ==========================================
-  // 🔥 FINALIZAÇÃO DE PEDIDO COM SUPORTE OFFLINE
-  // ==========================================
-  const handleFinalizeOrder = async () => {
-    if (!customerName.trim() || !paymentMethod) return alert(t.namePrompt);
-    setIsSubmitting(true);
-    
-    const payload = {
-      clientId: "TOTEM_MODE", 
-      origin: "TOTEM",
-      customerName: customerName,
-      address: `Cliente: ${customerName}`, 
-      paymentMethod: paymentMethod, 
-      total: totalCart,
-      items: cart.map(item => ({ 
-        productId: item.productId || item.id, 
-        quantity: item.quantity, 
-        price: item.price,
-        name: item.name,
-        flavors: item.flavors ? JSON.stringify(item.flavors) : null 
-      }))
-    };
+  const confirmCostelaOrder = () => {
+    const price500 = Number(costelaProduct.price);
+    const price700 = Number(costelaProduct.price700g) > 0 ? Number(costelaProduct.price700g) : price500 * 1.4;
+    const price1000 = Number(costelaProduct.price1kg) > 0 ? Number(costelaProduct.price1kg) : price500 * 1.9;
+    let finalPrice = price500;
+    if (costelaSize === '700g') finalPrice = price700;
+    if (costelaSize === '1kg') finalPrice = price1000;
 
+    setCart((prev) => {
+      const existing = prev.find((item) => item.productId === costelaProduct.id && item.size === costelaSize && item.time === costelaTime);
+      if (existing) { return prev.map(item => item === existing ? { ...item, quantity: item.quantity + 1 } : item); }
+      return [...prev, { productId: costelaProduct.id, name: `${costelaProduct.name} - ${costelaSize} (Agendado Dom: ${costelaTime})`, price: finalPrice, quantity: 1, isScheduled: true, size: costelaSize, time: costelaTime }];
+    });
+    setShowCostelaModal(false); setCostelaProduct(null);
+  };
+
+  const removeFromCart = (idOuProductId) => {
+    setCart((prev) => prev.filter(item => item.id !== idOuProductId && item.productId !== idOuProductId));
+    if (cart.length === 1) setView('menu');
+  };
+
+  const cartTotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
+
+  let couponDiscount = 0;
+  if (appliedCoupon && !isTotemMode) {
+      if (appliedCoupon.type === 'PERCENTAGE') couponDiscount = cartTotal * (appliedCoupon.value / 100);
+      else if (appliedCoupon.type === 'FIXED') couponDiscount = appliedCoupon.value;
+  }
+
+  const finalDeliveryFee = isTotemMode ? 0 : deliveryFee;
+  const baseTotal = cartTotal + finalDeliveryFee - couponDiscount;
+  const availableCashback = user?.cashback?.balance ? Number(user.cashback.balance) : 0;
+  let discount = 0; 
+  let finalTotal = baseTotal;
+
+  if (useCashback && availableCashback > 0 && !isTotemMode) {
+     discount = Math.min(availableCashback, Math.max(0, finalTotal));
+     finalTotal -= discount;
+  }
+  finalTotal = Math.max(0, finalTotal);
+
+  const mpInitialization = useMemo(() => ({ amount: finalTotal }), [finalTotal]);
+  const mpCustomization = useMemo(() => ({ paymentMethods: { creditCard: "all", debitCard: "all", maxInstallments: 3 } }), []);
+
+  const triggerCheckoutFlow = () => {
+    const currentChannel = isTotemMode ? 'TOTEM' : 'APP';
+    let matchedRule = null;
+    let triggerItemIndex = -1;
+
+    for (let i = 0; i < cart.length; i++) {
+      if (cart[i].upsold) continue; 
+      matchedRule = upsells.find(u => u.channels.includes(currentChannel) && u.triggerProductIds.includes(cart[i].productId));
+      if (matchedRule) { triggerItemIndex = i; break; }
+    }
+
+    if (matchedRule && triggerItemIndex !== -1) {
+      let offerProductFull = null;
+      for (const cat of menu) {
+        const found = cat.products.find(p => p.id === matchedRule.offerProductId);
+        if (found) { offerProductFull = found; break; }
+      }
+      setUpsellItem({ ...offerProductFull, id: matchedRule.offerProductId, name: matchedRule.offerProductName, offerPrice: Number(matchedRule.offerPrice), triggerCartIndex: triggerItemIndex });
+      setShowUpsellModal(true); return;
+    }
+    setView('checkout');
+  };
+
+  const handleVerSacola = () => {
+    if (!user && !isTotemMode) { setAuthMode('login'); setView('auth'); return; }
+    triggerCheckoutFlow();
+  };
+
+  const handleAcceptUpsell = () => {
+    setCart(prev => {
+      const newCart = [...prev];
+      if (upsellItem.triggerCartIndex !== undefined && newCart[upsellItem.triggerCartIndex]) newCart[upsellItem.triggerCartIndex].upsold = true;
+      newCart.push({ productId: upsellItem.id, name: `✨ Oferta: ${upsellItem.name}`, price: upsellItem.offerPrice, quantity: 1, observation: 'Adicional Automático' });
+      return newCart;
+    });
+    setShowUpsellModal(false); setUpsellItem(null); setView('checkout');
+  };
+
+  const handleDeclineUpsell = () => {
+    setCart(prev => {
+      const newCart = [...prev];
+      if (upsellItem.triggerCartIndex !== undefined && newCart[upsellItem.triggerCartIndex]) newCart[upsellItem.triggerCartIndex].upsold = true;
+      return newCart;
+    });
+    setShowUpsellModal(false); setUpsellItem(null); setView('checkout');
+  };
+
+  const buildItemsPayload = () => cart.map(item => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      price: item.price,
+      observation: item.observation,
+      name: item.name,
+      flavors: item.flavors ? JSON.stringify(item.flavors) : undefined
+  }));
+
+  // =========================================================================
+  // 🔥 FINALIZAÇÃO DE PEDIDO (DELIVERY E TOTEM OFFLINE)
+  // =========================================================================
+  const handleCheckoutBtnClick = async (e, customFullAddress) => {
+    if (e) e.preventDefault();
+    if (isSubmittingOrder) return;
+    if (isTotemMode && !totemName.trim()) { alert('⚠️ Informe o seu NOME para te chamarmos no balcão!'); return; }
+    if (!user && !isTotemMode) { setAuthMode('login'); setView('auth'); return; }
+
+    const hasScheduledItem = cart.some(i => i.isScheduled);
+    if (!isStoreOpen && !hasScheduledItem && !isTotemMode) { alert('A loja está fechada agora.'); return; }
+    if (paymentMethod === 'CREDIT_CARD_ONLINE') { setView('payment_card'); return; }
+
+    if (!isOnline && !isTotemMode) {
+        alert("⚠️ Sem conexão com a internet. Verifique sua rede e tente novamente.");
+        return;
+    }
+
+    setIsSubmittingOrder(true);
     try {
-      // 1. TENTA ENVIAR PARA A NUVEM (SE TIVER INTERNET)
+      const payloadParams = {
+          clientId: isTotemMode ? 'TOTEM_MODE' : user.id,
+          origin: isTotemMode ? 'TOTEM' : 'APP',
+          customerName: isTotemMode ? totemName : user?.name,
+          items: buildItemsPayload(),
+          address: isTotemMode ? `Cliente Totem: ${totemName}` : customFullAddress,
+          paymentMethod,
+          total: cartTotal,
+          useCashback,
+          couponCode: appliedCoupon?.code || null,
+          client: { name: isTotemMode ? totemName : user?.name, cpf: cpfNaNota }
+      };
+
       if (isOnline) {
           const res = await fetch(`${API_URL}/api/orders`, {
-            method: 'POST',
-            headers: { 
-               'Content-Type': 'application/json',
-               'x-loja-slug': storeSlug 
-            },
-            body: JSON.stringify(payload)
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'x-loja-slug': storeSlug },
+            body: JSON.stringify(payloadParams)
           });
           const data = await res.json();
-          
           if (res.ok && data.success) {
-            const orderId = data.order.id;
-
-            setOrderSuccessData(data.order);
-            setCart([]); setCustomerName(''); setPaymentMethod(''); setIsCheckoutOpen(false);
-
-            const provider = storeData?.smartPosProvider || storeData?.settings?.smartPosProvider;
-            const metodosEletronicos = ['CREDIT_CARD', 'PIX'];
-            
-            if (provider && provider !== 'none' && metodosEletronicos.includes(paymentMethod)) {
-                setTimeout(() => { dispararPagamentoSmartPos(provider, totalCart, paymentMethod, orderId); }, 1500);
+            if (!isTotemMode) setUser({ ...user, cashback: { balance: data.newBalance } });
+            if (data.pix) { setPixInfo(data.pix); setView('payment_pix'); } 
+            else {
+              if (isTotemMode) { alert(`✅ Pedido realizado!\nDirija-se ao caixa para pagamento.`); setCart([]); setTotemName(''); setView('menu'); } 
+              else { alert(`Pedido realizado!`); setCart([]); setUseCashback(false); setObservations(''); setCouponCode(''); setAppliedCoupon(null); setView('orders'); }
             }
-          } else {
-            alert(`Erro:\n\n${data.details || data.error}`);
-          }
-      } 
-      // 2. MODO OFFLINE (GUARDA NO DEXIE E MANDA PRO CAIXA VIA WI-FI)
-      else {
+          } else alert(data.error);
+      } else if (isTotemMode) {
+          // MODO OFFLINE PARA TOTEM
           const shortIdRandom = Math.floor(1000 + Math.random() * 9000);
-          
-          // Salva no banco de dados do navegador (para sincronizar com a nuvem quando a net voltar)
-          const offlineRes = await processarPedido(payload);
+          const offlineRes = await processarPedido(payloadParams);
           
           if (offlineRes.success) {
               const mockOrder = {
                   id: `OFF-${Date.now()}`,
                   shortId: shortIdRandom,
-                  customerName: customerName,
+                  customerName: totemName,
                   paymentMethod: paymentMethod,
-                  total: totalCart,
+                  total: cartTotal,
                   items: cart
               };
 
-              // Dispara imediatamente para o Computador do Caixa via Rede Local (Para a Cozinha começar a fazer)
               const printIp = localStorage.getItem('zenix_print_ip');
               if (printIp) {
                   const payloadOffline = {
                       tabId: `TOTEM-${shortIdRandom}`,
                       tabNumber: `TOTEM-${shortIdRandom}`,
                       employeeName: 'Totem de Autoatendimento',
-                      items: payload.items,
+                      items: payloadParams.items,
                       paymentMethod: paymentMethod,
-                      total: totalCart,
-                      customerName: customerName
+                      total: cartTotal,
+                      customerName: totemName
                   };
                   fetch(`http://${printIp}:8080/pedido-local`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify(payloadOffline)
                   }).catch(() => console.warn("Caixa local inacessível."));
               }
 
-              // Tela de Sucesso
               setOrderSuccessData(mockOrder);
-              setCart([]); setCustomerName(''); setPaymentMethod(''); setIsCheckoutOpen(false);
-
-              // Dispara a maquininha Smart POS (se tiver)
-              const provider = storeData?.smartPosProvider || storeData?.settings?.smartPosProvider;
-              const metodosEletronicos = ['CREDIT_CARD', 'PIX'];
-              if (provider && provider !== 'none' && metodosEletronicos.includes(paymentMethod)) {
-                  setTimeout(() => { dispararPagamentoSmartPos(provider, totalCart, paymentMethod, mockOrder.id); }, 1500);
-              }
+              setCart([]); setTotemName(''); setView('menu');
           } else {
-              alert("Erro ao gravar pedido offline.");
+              alert("Erro ao gravar pedido offline no Totem.");
           }
       }
-    } catch (e) { alert("Erro de conexão."); }
-    setIsSubmitting(false);
+    } catch (error) { alert("Erro de comunicação com o sistema."); } finally { setIsSubmittingOrder(false); }
   };
 
-  const totalCart = cart.reduce((acc, curr) => acc + (Number(curr.price) * curr.quantity), 0);
   const t = i18n[lang];
 
-  if (loading) return <div className="h-screen bg-slate-50 flex items-center justify-center text-3xl font-black text-amber-500 animate-pulse">Iniciando Totem...</div>;
+  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-[#0a0a0a] text-amber-500 font-bold"><div className="animate-pulse flex flex-col items-center"><span className="text-4xl mb-4">⚡</span><p>Carregando sistema...</p></div></div>;
   if (!storeData) return <div className="h-screen bg-slate-50 flex items-center justify-center text-2xl font-bold text-red-500">Loja não encontrada.</div>;
 
   // ==========================================
-  // TELA DE DESCANSO
+  // MODO TOTEM: TELA DE DESCANSO
   // ==========================================
-  if (isIdle) {
+  if (isIdle && isTotemMode) {
     return (
       <div className="relative w-screen h-screen flex flex-col items-center justify-end pb-32 bg-slate-900 animate-fade-in-up overflow-hidden">
         {storeData.totemCoverImageUrl ? <img src={storeData.totemCoverImageUrl} alt="Capa" className="absolute inset-0 w-full h-full object-cover opacity-60" /> : <div className="absolute inset-0 w-full h-full bg-gradient-to-b from-amber-500 to-orange-600 opacity-80"></div>}
@@ -386,50 +576,41 @@ export default function TotemModerno() {
            <button onClick={() => handleStart('es')} className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-2xl hover:scale-105 transition-transform bg-white focus:outline-none"><img src="https://flagcdn.com/w320/es.png" alt="ES" className="w-full h-full object-cover" /></button>
         </div>
 
-        {/* 🔥 BOTÃO SECRETO PARA CONFIGURAR IP DO CAIXA (RODAPÉ) */}
+        {/* 🔥 BOTÃO VISÍVEL DE CONFIGURAÇÃO DO IP NO RODAPÉ DO TOTEM */}
         <div 
           onClick={() => {
             const atual = localStorage.getItem('zenix_print_ip') || '';
-            const novo = prompt("⚙️ Configuração Técnica\nQual o IP local (Wi-Fi) do Computador do Caixa?", atual);
-            if (novo !== null) { localStorage.setItem('zenix_print_ip', novo); alert("IP Salvo: " + novo); }
+            const novo = prompt("⚙️ Configuração da Rede Local\nQual o IP local (Wi-Fi) do Computador do Caixa?", atual);
+            if (novo !== null) { localStorage.setItem('zenix_print_ip', novo); alert("IP Salvo com sucesso: " + novo); }
           }}
-          className="absolute bottom-2 right-4 text-[10px] text-slate-400 font-bold z-50 cursor-pointer hover:text-white"
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-md px-6 py-2 rounded-full text-xs text-amber-400 font-black z-50 cursor-pointer border border-amber-400/30 shadow-lg uppercase tracking-wider hover:bg-black/60 transition-colors"
         >
-          Desenvolvido por V2M Commercial Automation & Software Developer
+          ⚙️ Configurar IP do Caixa na Rede
         </div>
       </div>
     );
   }
 
-  // ==========================================
-  // TELA DE SUCESSO
-  // ==========================================
-  if (orderSuccessData) {
-    const isEletronico = ['CREDIT_CARD', 'PIX'].includes(orderSuccessData.paymentMethod);
-    const provider = storeData?.smartPosProvider || storeData?.settings?.smartPosProvider;
-    const hasSmartPos = provider && provider !== 'none';
+  // Se não for totem, a tela de descanso é ignorada e vai direto para o cardápio
+  if (isIdle && !isTotemMode) {
+      setIsIdle(false);
+  }
 
-    // Se a máquina estiver ativa e for Cartão, avisa para olhar para o PIN Pad
-    let orientacao = '';
-    if (orderSuccessData.paymentMethod === 'PAGAR_NO_CAIXA') {
-        orientacao = lang === 'pt' ? 'Vá até o Caixa para efetuar o pagamento.' : lang === 'en' ? 'Please proceed to the counter to pay.' : 'Vaya a la caja para pagar.';
-    } else if (hasSmartPos && isEletronico) {
-        orientacao = lang === 'pt' ? 'Siga as instruções para pagamento na máquina...' : lang === 'en' ? 'Follow the payment instructions on the terminal...' : 'Siga las instrucciones de pago en la máquina...';
-    } else {
-        orientacao = t.orderSuccessSub;
-    }
-
+  // ==========================================
+  // MODO TOTEM: TELA DE SUCESSO
+  // ==========================================
+  if (orderSuccessData && isTotemMode) {
     return (
       <div className="relative w-screen h-screen flex flex-col items-center justify-center bg-emerald-600 animate-fade-in-up">
         <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center max-w-2xl w-[90%]">
           <span className="text-7xl block mb-6 animate-bounce">✅</span>
           <h1 className="text-4xl font-black text-slate-900 mb-2">{t.orderSuccessTitle}</h1>
-          <p className="text-xl text-amber-600 font-black mb-8">{orientacao}</p>
+          <p className="text-xl text-amber-600 font-black mb-8">Vá até o Caixa para efetuar o pagamento e retirar seu comprovante.</p>
           
           <div className="bg-slate-100 p-8 rounded-3xl border-2 border-slate-200 mb-8 inline-block w-full">
             <p className="text-lg text-slate-500 font-bold uppercase tracking-widest">{t.passwordIs}</p>
             <p className="text-[6rem] font-black text-emerald-600 leading-none">{orderSuccessData.shortId}</p>
-            <p className="text-2xl text-slate-800 font-black mt-4">{orderSuccessData.customerName || customerName}</p>
+            <p className="text-2xl text-slate-800 font-black mt-4">{orderSuccessData.customerName || totemName}</p>
           </div>
 
           <button onClick={() => { setOrderSuccessData(null); setIsIdle(true); }} className="w-full bg-emerald-500 text-white py-6 rounded-2xl font-black text-2xl shadow-xl active:scale-95 transition-all">
@@ -441,229 +622,198 @@ export default function TotemModerno() {
   }
 
   // ==========================================
-  // TELA PRINCIPAL DO TOTEM
+  // TELA PRINCIPAL (CARDÁPIO DIGITAL / TOTEM)
   // ==========================================
   return (
-    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden select-none animate-fade-in-up relative">
-      
-      {/* SIDEBAR */}
-      <aside className="w-32 md:w-48 bg-white shadow-[2px_0_15px_rgba(0,0,0,0.05)] flex flex-col z-20">
-        <div className="h-24 md:h-32 flex items-center justify-center p-4 border-b border-slate-100 shrink-0">
-           {storeData.logoUrl || storeData.store?.logoUrl ? (
-             <img src={storeData.logoUrl || storeData.store?.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
-           ) : <span className="font-black text-xl text-center text-slate-800">{storeData.store?.razaoSocial || 'ZenixFood'}</span>}
-        </div>
-        <div className="flex-1 overflow-y-auto hide-scrollbar py-4 space-y-2 px-2">
-          {menu.map(cat => (
-            <button key={cat.id} onClick={() => setActiveCategory(cat.id)} className={`w-full flex flex-col items-center justify-center p-3 rounded-2xl transition-all ${activeCategory === cat.id ? 'bg-amber-500 text-slate-900 shadow-md transform scale-105' : 'bg-transparent text-slate-500 hover:bg-slate-100'}`}>
-              <div className={`w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center mb-2 bg-white shadow-sm ${activeCategory === cat.id ? 'border-2 border-white' : ''}`}>
-                 <span className="text-xl md:text-2xl">{getCategoryIcon(cat)}</span>
+    <div className={isDarkMode ? 'dark' : ''}>
+      <div className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 font-sans pb-28 selection:bg-amber-500 selection:text-zinc-950 transition-colors duration-500 flex flex-col justify-between">
+        
+        {!isTotemMode && <Header view={view} setView={setView} isScrolled={isScrolled} user={user} availableCashback={availableCashback} setAuthMode={setAuthMode} isDarkMode={isDarkMode} toggleTheme={toggleTheme} storeSettings={storeSettings} />}
+        
+        {isTotemMode && (
+          <div className="relative bg-white dark:bg-gradient-to-b dark:from-black dark:to-[#0a0a0a] border-b border-slate-200 dark:border-white/5 p-6 md:p-8 flex justify-between items-center sticky top-0 z-40 shadow-xl transition-colors overflow-hidden">
+              {storeSettings?.totemCoverImageUrl && (
+                <div className="absolute inset-0 z-0 opacity-40 pointer-events-none" style={{ backgroundImage: `url('${storeSettings.totemCoverImageUrl}')`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+              )}
+
+              <div className="flex items-center gap-4 relative z-10">
+                  <span className="text-4xl animate-bounce">⚡</span>
+                  <div>
+                    <h1 className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tight flex items-center gap-3">
+                        {storeSettings?.store?.name || 'Zenix'}
+                        {!isOnline && <span className="bg-red-500 text-white px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest font-black animate-pulse shadow-sm">Offline</span>}
+                    </h1>
+                    <span className="text-amber-600 dark:text-amber-500 font-bold text-sm tracking-widest uppercase">Autoatendimento</span>
+                  </div>
               </div>
-              <span className={`text-[10px] md:text-xs text-center leading-tight ${activeCategory === cat.id ? 'font-black' : 'font-bold'}`}>{cat.name}</span>
-            </button>
-          ))}
-        </div>
-      </aside>
-
-      <main className="flex-1 flex flex-col relative bg-slate-100">
-        <header className="h-20 bg-white shadow-sm flex items-center px-8 shrink-0 justify-between">
-          <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-             <span>{menu.find(c => c.id === activeCategory) ? getCategoryIcon(menu.find(c => c.id === activeCategory)) : ''}</span>
-             {menu.find(c => c.id === activeCategory)?.name || t.selectCategory}
-             
-             {/* 🔥 INDICADOR DE OFFLINE DO TOTEM */}
-             {!isOnline && <span className="ml-4 bg-red-500 text-white px-3 py-1 rounded-full text-[10px] uppercase tracking-widest font-black animate-pulse">Modo Offline</span>}
-             {pedidosPendentes > 0 && isOnline && <span className="ml-2 bg-amber-500 text-white px-3 py-1 rounded-full text-[10px] uppercase tracking-widest font-black">{pedidosPendentes} Sync</span>}
-          </h1>
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsIdle(true)} className="bg-slate-100 text-slate-400 px-4 py-2 rounded-full font-bold text-sm hover:bg-slate-200">🔙</button>
-            <button onClick={() => { setCart([]); setIsIdle(true); }} className="bg-red-50 text-red-500 border border-red-200 px-4 py-2 rounded-full font-bold text-sm hover:bg-red-100">{t.cancelOrder}</button>
-          </div>
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-6 pb-40">
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-            {menu.find(c => c.id === activeCategory)?.products?.filter(p => p.isActive !== false).map(prod => (
-              <button key={prod.id} onClick={() => handleProductClick(prod)} className="bg-white rounded-3xl p-4 shadow-sm flex flex-col items-center text-center transform transition-transform active:scale-95 border border-slate-200 hover:border-amber-400 relative">
-                {prod.isPizza && <span className="absolute top-2 left-2 bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase shadow-sm">🍕 Pizza</span>}
-                {prod.isCombo && <span className="absolute top-2 left-2 bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase shadow-sm">🍔 Combo</span>}
-                
-                {prod.imageUrl ? <img src={prod.imageUrl} alt={prod.name} className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-2xl mb-4 shadow-sm" /> : <div className="w-32 h-32 md:w-40 md:h-40 bg-slate-100 rounded-2xl mb-4 flex items-center justify-center text-4xl">🍽️</div>}
-                
-                <h3 className="font-black text-slate-800 text-sm md:text-base leading-tight mb-1 line-clamp-2 min-h-[40px]">{prod.name}</h3>
-                {prod.isCombo && <p className="text-[9px] text-slate-400 line-clamp-2 leading-tight mb-2">Combo especial com acompanhamentos.</p>}
-                
-                <span className="mt-auto font-black text-emerald-600 text-lg md:text-xl">R$ {Number(prod.price).toFixed(2)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* RODAPÉ DO CARRINHO */}
-        <div className="absolute bottom-0 left-0 w-full bg-white shadow-[0_-10px_30px_rgba(0,0,0,0.1)] flex items-center justify-between p-4 md:p-6 z-30">
-           <div className="flex-1 overflow-x-auto hide-scrollbar flex items-center gap-4 pr-6">
-             {cart.length === 0 ? <p className="text-slate-400 font-bold italic">{t.emptyCart}</p> : cart.map((item, idx) => (
-                 <div key={idx} className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-2 rounded-2xl shrink-0">
-                   <div className="flex flex-col items-center justify-center bg-white rounded-xl shadow-sm overflow-hidden border border-slate-100">
-                     <button onClick={() => updateQuantity(item.id, 1)} className="w-8 h-6 bg-slate-100 text-slate-700 font-black flex items-center justify-center">+</button>
-                     <span className="w-8 h-8 flex items-center justify-center font-black text-amber-600 text-lg">{item.quantity}</span>
-                     <button onClick={() => updateQuantity(item.id, -1)} className="w-8 h-6 bg-slate-100 text-slate-700 font-black flex items-center justify-center">-</button>
-                   </div>
-                   <div className="pr-2 max-w-[120px]">
-                     <p className="text-xs font-bold text-slate-800 truncate" title={item.name}>{item.name}</p>
-                     <p className="text-[10px] font-black text-emerald-600">R$ {(item.price * item.quantity).toFixed(2)}</p>
-                   </div>
-                 </div>
-               ))}
-           </div>
-
-           <div className="flex items-center gap-6 shrink-0 border-l border-slate-200 pl-6">
-              <div className="text-right">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{t.totalToPay}</p>
-                <p className="text-3xl md:text-4xl font-black text-slate-900 leading-none">R$ {totalCart.toFixed(2)}</p>
+              <div className="flex items-center gap-4 relative z-10">
+                <button onClick={() => toggleTheme()} className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/10 text-xl flex items-center justify-center z-50 transition-colors cursor-pointer">
+                  {isDarkMode ? '☀️' : '🌙'}
+                </button>
+                {cart.length > 0 && (
+                    <button onClick={() => { setCart([]); setTotemName(''); setView('menu'); }} className="bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 text-red-600 dark:text-red-500 border border-red-200 dark:border-red-500/30 px-6 py-3 rounded-2xl font-bold transition-all text-sm shadow-md z-50 cursor-pointer">
+                      Cancelar Pedido
+                    </button>
+                )}
               </div>
-              <button onClick={() => setIsCheckoutOpen(true)} disabled={cart.length === 0} className="bg-emerald-500 disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-emerald-600 text-white px-8 py-5 md:py-6 rounded-[2rem] font-black text-xl md:text-2xl shadow-xl transition-all active:scale-95 flex items-center gap-3">
-                {t.checkout} ➔
-              </button>
-           </div>
-        </div>
-      </main>
+          </div>
+        )}
 
-      {/* 🍕 MODAL: CONSTRUTOR DE PIZZA */}
-      {pizzaBuilderOpen && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-6 animate-fade-in-up">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 w-full max-w-4xl flex flex-col h-[85vh]">
+        <div className={`transition-all duration-300 flex-1 ${(view === 'payment_card' || view === 'payment_pix' || view === 'live_cam') ? 'pt-4' : (isTotemMode ? 'pt-6' : (isScrolled ? 'pt-20' : 'pt-32 md:pt-40'))}`}>
+          <main className={`mx-auto p-4 ${isTotemMode ? 'max-w-5xl' : 'max-w-4xl'}`}>
             
-            <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4 shrink-0">
-              <div>
-                 <h2 className="text-3xl font-black text-slate-800">{t.buildPizza}</h2>
-                 <p className="text-slate-500 font-bold">{pizzaBase?.name}</p>
-              </div>
-              <button onClick={() => setPizzaBuilderOpen(false)} className="bg-slate-100 text-slate-500 w-12 h-12 rounded-full font-black text-xl hover:bg-slate-200">X</button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto pr-2">
-                <h3 className="font-black text-slate-700 mb-3">{t.howManyFlavors}</h3>
-                <div className="flex gap-4 mb-8">
-                    {[1, 2, 3].map(num => {
-                        if (num > (pizzaBase?.maxFlavors || 1)) return null;
-                        return (
-                            <button 
-                                key={num} 
-                                onClick={() => { setPizzaFlavorCount(num); setPizzaSelectedFlavors([pizzaBase]); }}
-                                className={`flex-1 py-4 rounded-2xl font-black text-xl border-4 transition-all ${pizzaFlavorCount === num ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-amber-300'}`}
-                            >
-                                {num} {num === 1 ? 'Sabor' : 'Sabores'}
-                            </button>
-                        );
-                    })}
-                </div>
-
-                <div className="bg-amber-100 text-amber-800 p-4 rounded-2xl mb-6 flex items-center justify-between font-bold border border-amber-200 shadow-inner">
-                    <span>Selecionados ({pizzaSelectedFlavors.length}/{pizzaFlavorCount}):</span>
-                    <span className="text-sm">{pizzaSelectedFlavors.map(f => f.name).join(' + ')}</span>
-                </div>
-
-                <h3 className="font-black text-slate-700 mb-3">{t.chooseFlavors}</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {menu.find(c => c.id === activeCategory)?.products?.filter(p => p.isPizza).map(flavor => {
-                        const isSelected = pizzaSelectedFlavors.find(f => f.id === flavor.id);
-                        const isFull = !isSelected && pizzaSelectedFlavors.length >= pizzaFlavorCount;
-                        
-                        return (
-                            <button 
-                                key={flavor.id}
-                                disabled={isFull}
-                                onClick={() => togglePizzaFlavor(flavor)}
-                                className={`p-4 rounded-2xl border-4 transition-all flex flex-col items-center text-center ${isSelected ? 'border-amber-500 bg-amber-50' : isFull ? 'border-slate-100 bg-slate-100 opacity-50 cursor-not-allowed' : 'border-slate-100 bg-white hover:border-amber-300'}`}
-                            >
-                                {flavor.imageUrl ? <img src={flavor.imageUrl} className="w-20 h-20 object-cover rounded-full mb-2 shadow-sm" /> : <div className="w-20 h-20 bg-slate-200 rounded-full mb-2 flex items-center justify-center text-2xl">🍕</div>}
-                                <span className="font-bold text-slate-800 text-sm leading-tight">{flavor.name}</span>
-                                <span className="text-emerald-600 font-black text-xs mt-1">+ R$ {Number(flavor.price).toFixed(2)}</span>
-                            </button>
-                        )
-                    })}
-                </div>
-            </div>
-
-            <div className="pt-6 border-t border-slate-100 shrink-0 mt-4">
-               <button 
-                  onClick={confirmBuiltPizza}
-                  disabled={pizzaSelectedFlavors.length !== pizzaFlavorCount}
-                  className="w-full bg-amber-500 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed hover:bg-amber-600 text-black py-6 rounded-2xl font-black text-2xl shadow-xl active:scale-95 transition-all flex items-center justify-center gap-4"
-               >
-                  {t.confirmPizza} - R$ {getPizzaPricePreview().toFixed(2)}
-               </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* 🎯 MODAL DE CHECKOUT (NOME E PAGAMENTO) */}
-      {isCheckoutOpen && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fade-in-up">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 md:p-12 w-full max-w-4xl flex flex-col">
-            
-            <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-4">
-              <h2 className="text-3xl font-black text-slate-800">{t.checkout}</h2>
-              <button onClick={() => setIsCheckoutOpen(false)} className="bg-slate-100 text-slate-500 w-12 h-12 rounded-full font-black text-xl hover:bg-slate-200">X</button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              
-              {/* Lado Esquerdo: Nome */}
-              <div>
-                <label className="text-sm font-black text-slate-500 uppercase tracking-widest mb-3 block">{t.namePrompt}</label>
-                <input 
-                  type="text" 
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Ex: João Silva"
-                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl p-6 text-2xl font-bold text-slate-800 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors"
+            {view === 'menu' && (
+              <div className="flex flex-col gap-6">
+                <MenuView 
+                  isStoreOpen={isStoreOpen} storeSettings={isTotemMode ? { ...storeSettings, cashbackPercent: 0, promoBannerUrl: null } : storeSettings} 
+                  highlights={isTotemMode ? highlights.filter(p => !p.name.toLowerCase().includes('costela') && !p.name.toLowerCase().includes('agendado')) : highlights}
+                  currentSlide={currentSlide} setCurrentSlide={setCurrentSlide}
+                  handleOpenProductModal={handleOpenProductModal} 
+                  menu={isTotemMode ? menu.map(cat => ({ ...cat, products: cat.products.filter(p => !p.name.toLowerCase().includes('costela') && !p.name.toLowerCase().includes('agendado'))})).filter(cat => cat.products.length > 0) : menu} 
+                  renderProductBadges={renderProductBadges} isTotemMode={isTotemMode}
                 />
               </div>
+            )}
 
-              {/* Lado Direito: Seleção de Pagamento */}
-              <div>
-                <label className="text-sm font-black text-slate-500 uppercase tracking-widest mb-3 block">{t.payMethodPrompt}</label>
-                <div className="flex flex-col gap-3">
-                  <button 
-                    onClick={() => setPaymentMethod('CREDIT_CARD')} 
-                    className={`p-5 rounded-2xl border-2 font-black text-left transition-all ${paymentMethod === 'CREDIT_CARD' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-amber-300'}`}
-                  >
-                    💳 {t.payMachine}
-                  </button>
-                  
-                  <button 
-                    onClick={() => setPaymentMethod('PIX')} 
-                    className={`p-5 rounded-2xl border-2 font-black text-left transition-all ${paymentMethod === 'PIX' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-amber-300'}`}
-                  >
-                    💠 {t.payPix}
-                  </button>
-                  
-                  <button 
-                    onClick={() => setPaymentMethod('PAGAR_NO_CAIXA')} 
-                    className={`p-5 rounded-2xl border-2 font-black text-left transition-all ${paymentMethod === 'PAGAR_NO_CAIXA' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-emerald-300'}`}
-                  >
-                    💵 {t.payCash}
-                  </button>
+            {view === 'checkout' && (
+              <CheckoutView isStoreOpen={isStoreOpen} cart={cart} setView={setView} removeFromCart={removeFromCart} cep={cep} setCep={setCep} address={address} setAddress={setAddress} observations={observations} setObservations={setObservations} cpfNaNota={cpfNaNota} setCpfNaNota={setCpfNaNota} couponCode={couponCode} setCouponCode={setCouponCode} appliedCoupon={appliedCoupon} handleApplyCoupon={handleApplyCoupon} isValidatingCoupon={isValidatingCoupon} handleRemoveCoupon={handleRemoveCoupon} couponError={couponError} couponDiscount={couponDiscount} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} user={user} availableCashback={availableCashback} useCashback={useCashback} setUseCashback={setUseCashback} cartTotal={cartTotal} deliveryFee={finalDeliveryFee} discount={discount} finalTotal={finalTotal} isSubmittingOrder={isSubmittingOrder} handleCheckoutBtnClick={handleCheckoutBtnClick} isTotemMode={isTotemMode} totemName={totemName} setTotemName={setTotemName} />
+            )}
+
+            {view === 'payment_pix' && pixInfo && (
+              <div className="animate-fade-in-up max-w-md mx-auto text-center py-10">
+                <div className="bg-white dark:bg-[#121212] p-8 rounded-3xl border border-slate-200 dark:border-amber-500/30 shadow-xl relative overflow-hidden transition-colors">
+                  <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2">{isTotemMode ? 'Escaneie para Pagar' : 'Pague seu PIX'}</h2>
+                  <div className="bg-white p-3 rounded-2xl border-4 border-amber-500 inline-block shadow-lg mx-auto w-48 h-48 mb-4">
+                     <img src={`data:image/jpeg;base64,${pixInfo.qr_code_base64}`} alt="QR Code PIX" className="w-full h-full object-contain" />
+                  </div>
+                  <button onClick={() => setView('checkout')} className="w-full bg-slate-100 dark:bg-white/5 py-3.5 rounded-xl font-bold text-sm border border-slate-200 dark:border-white/10 cursor-pointer">⬅ Cancelar</button>
+                </div>
+              </div>
+            )}
+
+            {view === 'auth' && !isTotemMode && (
+              <AuthView authMode={authMode} setAuthMode={setAuthMode} authForm={authForm} setAuthForm={setAuthForm} handleAuth={handleAuth} showPassword={showPassword} setShowPassword={setShowPassword} recoveryEmail={recoveryEmail} setRecoveryEmail={setRecoveryEmail} handleForgotPassword={handleForgotPassword} isSendingCode={isSendingCode} recoveryCode={recoveryCode} setRecoveryCode={setRecoveryCode} newPassword={newPassword} setNewPassword={setNewPassword} handleResetPassword={handleResetPassword} />
+            )}
+
+            {view === 'orders' && !isTotemMode && (
+              <OrdersView clientOrders={clientOrders} setWatchingOrder={setWatchingOrder} setView={setView} translateStatus={translateStatus} setReviewOrder={setReviewOrder} availableCashback={availableCashback} storeSettings={storeSettings} user={user} fetchClientOrders={fetchClientOrders} />
+            )}
+          </main>
+        </div>
+
+        {!isTotemMode && <Footer view={view} getTodayScheduleText={() => "Horários"} storeSettings={storeSettings} />}
+        <FloatingCart cart={cart} view={view} cartTotal={cartTotal} handleVerSacola={handleVerSacola} />
+        
+        <ProductDetailsModal product={selectedProductModal} onClose={() => setSelectedProductModal(null)} onAddToCart={addToCart} renderProductBadges={renderProductBadges} menu={menu} user={user} availableCashback={availableCashback} />
+
+        {/* 🍕 MODAL: CONSTRUTOR DE PIZZA */}
+        {showPizzaModal && pizzaBase && (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in-up">
+            <div className="bg-white dark:bg-[#121212] rounded-[2rem] shadow-2xl p-6 w-full max-w-2xl flex flex-col max-h-[90vh] border border-slate-200 dark:border-white/10">
+              <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-white/10 pb-4 shrink-0">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-800 dark:text-white">Montar Pizza</h2>
+                  <p className="text-slate-500 dark:text-zinc-400 font-bold text-sm">{pizzaBase?.name}</p>
+                </div>
+                <button onClick={() => setShowPizzaModal(false)} className="bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-zinc-300 w-10 h-10 rounded-full font-black text-lg">X</button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-2 hide-scrollbar">
+                <h3 className="font-black text-slate-700 dark:text-zinc-300 mb-2 text-sm uppercase tracking-wider">Quantos sabores?</h3>
+                <div className="flex gap-3 mb-6">
+                  {[1, 2, 3].map(num => {
+                    if (num > (pizzaBase?.maxFlavors || 1)) return null;
+                    return (
+                      <button key={num} onClick={() => { setPizzaFlavorCount(num); setPizzaSelectedFlavors([pizzaBase]); }} className={`flex-1 py-3 rounded-2xl font-black text-base border-2 transition-all ${pizzaFlavorCount === num ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' : 'border-slate-200 bg-slate-50 text-slate-400 dark:border-white/10 dark:bg-black/50 dark:text-zinc-500'}`}>
+                        {num} {num === 1 ? 'Sabor' : 'Sabores'}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="bg-amber-100 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 p-3 rounded-xl mb-6 flex items-center justify-between font-bold border border-amber-200 dark:border-amber-500/20 shadow-inner">
+                  <span className="text-sm">Selecionados ({pizzaSelectedFlavors.length}/{pizzaFlavorCount}):</span>
+                  <span className="text-xs">{pizzaSelectedFlavors.map(f => f.name).join(' + ')}</span>
+                </div>
+
+                <h3 className="font-black text-slate-700 dark:text-zinc-300 mb-3 text-sm uppercase tracking-wider">Escolha as metades</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {menu.flatMap(cat => cat.products).filter(p => p.isPizza).map((flavor, index, self) => {
+                    if (self.findIndex(t => t.id === flavor.id) !== index) return null;
+                    const isSelected = pizzaSelectedFlavors.find(f => f.id === flavor.id);
+                    const isFull = !isSelected && pizzaSelectedFlavors.length >= pizzaFlavorCount;
+                    return (
+                      <button key={flavor.id} disabled={isFull} onClick={() => togglePizzaFlavor(flavor)} className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center text-center ${isSelected ? 'border-amber-500 bg-amber-50 dark:bg-amber-500/10' : isFull ? 'border-slate-100 bg-slate-100 dark:border-white/5 opacity-50 cursor-not-allowed' : 'border-slate-200 bg-white dark:bg-black/50'}`}>
+                        <span className="font-bold text-slate-800 dark:text-zinc-200 text-[10px] leading-tight line-clamp-2 min-h-[28px]">{flavor.name}</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-black text-[10px] mt-1">+ R$ {Number(flavor.price).toFixed(2)}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
+              <div className="pt-4 border-t border-slate-100 dark:border-white/10 shrink-0 mt-4">
+                <button onClick={confirmBuiltPizza} disabled={pizzaSelectedFlavors.length !== pizzaFlavorCount} className="w-full bg-amber-500 disabled:bg-slate-300 text-black py-4 rounded-xl font-black text-xl shadow-md cursor-pointer">
+                  Adicionar Pizza - R$ {getPizzaPricePreview().toFixed(2)}
+                </button>
+              </div>
             </div>
-
-            <button 
-              onClick={handleFinalizeOrder} 
-              disabled={isSubmitting || !customerName.trim() || !paymentMethod}
-              className="w-full mt-10 bg-emerald-500 disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-emerald-600 text-white py-6 rounded-2xl font-black text-2xl shadow-xl active:scale-95 transition-all"
-            >
-              {isSubmitting ? t.insertingOrder : t.payNow}
-            </button>
-
           </div>
-        </div>
+        )}
+
+        <ReviewModal reviewOrder={reviewOrder} setReviewOrder={setReviewOrder} reviewRating={reviewRating} setReviewRating={setReviewRating} reviewComment={reviewComment} setReviewComment={setReviewComment} isSubmittingReview={isSubmittingReview} handleSubmitReview={handleSubmitReview} />
+        <CostelaModal showCostelaModal={showCostelaModal} setShowCostelaModal={setShowCostelaModal} costelaProduct={costelaProduct} costelaSize={costelaSize} setCostelaSize={setCostelaSize} costelaTime={costelaTime} setCostelaTime={setCostelaTime} confirmCostelaOrder={confirmCostelaOrder} />
+        <UpsellModal showUpsellModal={showUpsellModal} upsellItem={upsellItem} handleAcceptUpsell={handleAcceptUpsell} handleDeclineUpsell={handleDeclineUpsell} />
+      </div>
+      
+      {/* 🔥 BOTÃO DE CONFIGURAÇÃO DE IP DO CAIXA (SÓ APARECE NO MODO TOTEM NO CANTO INFERIOR DIREITO) */}
+      {isTotemMode && (
+          <div 
+            onClick={() => {
+              const atual = localStorage.getItem('zenix_print_ip') || '';
+              const novo = prompt("⚙️ Configuração Técnica do Totem\nQual o IP local (Wi-Fi) do Computador do Caixa?", atual);
+              if (novo !== null) { localStorage.setItem('zenix_print_ip', novo); alert("IP Salvo com sucesso: " + novo); }
+            }}
+            className="fixed bottom-2 right-4 text-[10px] text-amber-500 font-bold z-50 cursor-pointer bg-black/80 px-3 py-1.5 rounded-lg border border-amber-500/30 shadow-2xl hover:text-white transition-colors"
+          >
+            ⚙️ Configurar IP Caixa
+          </div>
       )}
     </div>
+  );
+}
+
+export default function StorePage() {
+  const params = useParams();
+  const storeSlug = params.storeSlug; 
+  const [storeStatus, setStoreStatus] = useState('LOADING');
+
+  useEffect(() => {
+    if (!storeSlug) return;
+    const identifyStore = async () => {
+      try {
+        const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
+          ? 'http://localhost:3333' 
+          : 'https://zenixfood-backend.onrender.com';
+
+        const res = await fetch(`${API_URL}/api/settings`, { headers: { 'x-loja-slug': storeSlug } });
+        if (res.status === 402) { window.location.href = `/${storeSlug}/bloqueado`; return; }
+        const data = await res.json();
+        if (data.success || data.isOpen !== undefined) {
+          if (data.store && data.store.id) localStorage.setItem('zenix_store_id', data.store.id);
+          setStoreStatus('FOUND');
+        } else { setStoreStatus('NOT_FOUND'); }
+      } catch (error) { setStoreStatus('NOT_FOUND'); }
+    };
+    identifyStore();
+  }, [storeSlug]);
+
+  if (storeStatus === 'LOADING') return <div className="min-h-screen bg-black flex items-center justify-center text-amber-500 font-black text-xl animate-pulse">Carregando loja...</div>;
+  if (storeStatus === 'NOT_FOUND') return <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6"><span className="text-6xl mb-4">🔍</span><h1 className="text-3xl font-black text-white mb-2">Loja não encontrada</h1></div>;
+
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-amber-500">Iniciando...</div>}>
+      <HomeContent storeSlug={storeSlug} />
+    </Suspense>
   );
 }
