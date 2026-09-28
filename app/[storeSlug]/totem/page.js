@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 
-import { useOfflineSync } from '../hooks/useOfflineSync';
+import { useOfflineSync } from '@/app/hooks/useOfflineSync';
 
 //FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {
