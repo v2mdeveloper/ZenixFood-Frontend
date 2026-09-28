@@ -2,18 +2,21 @@ import withPWAInit from "@ducanh2912/next-pwa";
 
 const withPWA = withPWAInit({
   dest: "public",
-  disable: process.env.NODE_ENV === "development", // Não roda no npm run dev para não atrapalhar
+  disable: process.env.NODE_ENV === "development", // Não roda no modo local para não atrapalhar
   register: true,
- 
-  // Mantém os ficheiros do navegador cacheados
   cacheOnFrontEndNav: true, 
   aggressiveFrontEndNavCaching: true,
+  workboxOptions: {
+    skipWaiting: true,
+  },
 });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Mantenha as configurações que já tinha aqui dentro (se houver alguma)
   reactStrictMode: true,
+  
+  // 🔥 Corrige o erro de conflito do Vercel com o Turbopack
+  turbopack: {},
 };
 
 export default withPWA(nextConfig);
