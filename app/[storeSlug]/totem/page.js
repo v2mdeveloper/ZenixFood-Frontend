@@ -3,25 +3,23 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
-// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
+// IMPORTAÇÃO DO HOOK OFFLINE (Na pasta app/hooks)
 import { useOfflineSync } from '@/app/hooks/useOfflineSync';
 
-import Header from '@/app/components/Header';
-import Footer from '@/app/components/Footer';
-import FloatingCart from '@/app/components/FloatingCart';
+// IMPORTAÇÕES RELATIVAS (Estão dentro da pasta [storeSlug])
+import Header from './components/Header';
+import Footer from './components/Footer';
+import FloatingCart from './components/FloatingCart';
 
-import MenuView from '@/app/components/views/MenuView';
-import AuthView from '@/app/components/views/AuthView';
-import CheckoutView from '@/app/components/views/CheckoutView';
-import OrdersView from '@/app/components/views/OrdersView';
-import ProfileView from '@/app/components/views/ProfileView';
-import LiveCamView from '@/app/components/views/LiveCamView';
+import MenuView from './components/views/MenuView';
+import AuthView from './components/views/AuthView';
+import CheckoutView from './components/views/CheckoutView';
+import OrdersView from './components/views/OrdersView';
 
-import CarrosselAvaliacoes from '@/app/components/CarrosselAvaliacoes';
-import ReviewModal from '@/app/components/modals/ReviewModal';
-import CostelaModal from '@/app/components/modals/CostelaModal';
-import UpsellModal from '@/app/components/modals/UpsellModal';
-import ProductDetailsModal from '@/app/components/modals/ProductDetailsModal';
+import ReviewModal from './components/modals/ReviewModal';
+import CostelaModal from './components/modals/CostelaModal';
+import UpsellModal from './components/modals/UpsellModal';
+import ProductDetailsModal from './components/modals/ProductDetailsModal';
 
 //FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {
