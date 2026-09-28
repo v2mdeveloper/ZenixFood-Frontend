@@ -3,25 +3,21 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
-// 🔥 IMPORTAÇÕES CORRIGIDAS COM O ALIAS ABSOLUTO (@/app)
 import { useOfflineSync } from '@/app/hooks/useOfflineSync';
 
-import Header from '@/app/components/Header';
-import Footer from '@/app/components/Footer';
-import FloatingCart from '@/app/components/FloatingCart';
+import Header from '@/app/[storeSlug]/components/Header';
+import Footer from '@/app/[storeSlug]/components/Footer';
+import FloatingCart from '@/app/[storeSlug]/components/FloatingCart';
 
-import MenuView from '@/app/components/views/MenuView';
-import AuthView from '@/app/components/views/AuthView';
-import CheckoutView from '@/app/components/views/CheckoutView';
-import OrdersView from '@/app/components/views/OrdersView';
-import ProfileView from '@/app/components/views/ProfileView';
-import LiveCamView from '@/app/components/views/LiveCamView';
+import MenuView from '@/app/[storeSlug]/components/views/MenuView';
+import AuthView from '@/app/[storeSlug]/components/views/AuthView';
+import CheckoutView from '@/app/[storeSlug]/components/views/CheckoutView';
+import OrdersView from '@/app/[storeSlug]/components/views/OrdersView';
 
-import CarrosselAvaliacoes from '@/app/components/CarrosselAvaliacoes';
-import ReviewModal from '@/app/components/modals/ReviewModal';
-import CostelaModal from '@/app/components/modals/CostelaModal';
-import UpsellModal from '@/app/components/modals/UpsellModal';
-import ProductDetailsModal from '@/app/components/modals/ProductDetailsModal';
+import ReviewModal from '@/app/[storeSlug]/components/modals/ReviewModal';
+import CostelaModal from '@/app/[storeSlug]/components/modals/CostelaModal';
+import UpsellModal from '@/app/[storeSlug]/components/modals/UpsellModal';
+import ProductDetailsModal from '@/app/[storeSlug]/components/modals/ProductDetailsModal';
 
 //FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {
