@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-// IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
-import { useOfflineSync } from './hooks/useOfflineSync';
+
+import { useOfflineSync } from '../../hooks/useOfflineSync';
 
 //FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {

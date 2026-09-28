@@ -1,14 +1,14 @@
 'use client';
 import { useState, useEffect } from 'react';
 //IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
-import { useOfflineSync } from './hooks/useOfflineSync'; // Ajuste o caminho se necessário
+import { useOfflineSync } from '../../hooks/useOfflineSync';
 
 export default function PdvTab({ employeeUser, allProducts, menu }) {
   const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
   const LOJA_ID = typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '';
   const TOKEN_JWT = typeof window !== 'undefined' ? (localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken')) : '';
 
-  // 🔥 INICIALIZA O MOTOR OFFLINE
+  //INICIALIZA O MOTOR OFFLINE
   const { isOnline, pedidosPendentes, processarPedido } = useOfflineSync(API_URL, LOJA_ID, TOKEN_JWT);
 
   const [registerInfo, setRegisterInfo] = useState(null);
