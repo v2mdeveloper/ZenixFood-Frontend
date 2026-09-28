@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle, XCircle, Search, Filter } from 'lucide-react'; // Novos ícones adicionados
+import { CheckCircle, XCircle, Search, Filter, Store, Eye, FileText } from 'lucide-react'; 
 
 export default function MasterDashboard() {
   const router = useRouter();
@@ -35,6 +35,8 @@ export default function MasterDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showBlocked, setShowBlocked] = useState(false);
 
+  const [isOpeningPdf, setIsOpeningPdf] = useState(false);
+
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
@@ -55,6 +57,30 @@ export default function MasterDashboard() {
       });
     }
   }, [isAuthenticated]);
+
+  // 🔥 FUNÇÃO DE VISUALIZAÇÃO DO CONTRATO
+  const handleViewContract = async (storeId) => {
+    setIsOpeningPdf(true);
+    try {
+      const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
+      const res = await fetch(`${API_URL}/api/master/lojas/${storeId}/contrato`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      
+      if (res.ok && data.contratoUrl) {
+        // Abre o PDF diretamente em uma nova aba do navegador de forma segura
+        const pdfWindow = window.open("");
+        pdfWindow.document.write(`<iframe width='100%' height='100%' style='border:none;margin:0;padding:0;' src='${data.contratoUrl}'></iframe>`);
+      } else {
+        alert("⚠️ O arquivo do contrato não foi encontrado no banco de dados.");
+      }
+    } catch (e) {
+      alert("Erro de conexão ao tentar abrir o contrato.");
+    } finally {
+      setIsOpeningPdf(false);
+    }
+  };
 
   const handleMasterLogin = async (e) => {
     e.preventDefault();
@@ -254,6 +280,14 @@ export default function MasterDashboard() {
     if (editingStore.cpfResponsavel && editingStore.cpfResponsavel.length < 14) return alert('CPF incompleto.');
     if (!editingStore.planoSaaSId) return alert('Por favor, selecione um Plano SaaS para a loja.');
     
+    // 🔥 TRAVA JURÍDICA DA LOJA
+    const lojaOriginal = stores.find(s => s.id === editingStore.id);
+    const jaTinhaContrato = lojaOriginal ? lojaOriginal.contratoAssinado : false;
+
+    if (editingStore.contratoAssinado && !jaTinhaContrato && !contractFile) {
+        return alert("⚠️ TRAVA JURÍDICA:\nVocê marcou que o contrato está assinado, mas não anexou o arquivo PDF. Faça o upload do documento para liberar a loja.");
+    }
+
     try {
       const token = localStorage.getItem('zenix_super_token') || localStorage.getItem('zenix_master_token');
       const fullAddress = `${editingStore.street || ''}, ${editingStore.number || ''} ${editingStore.complement ? `- ${editingStore.complement}` : ''} - ${editingStore.neighborhood || ''}, ${editingStore.city || ''}/${editingStore.state || ''} (CEP: ${editingStore.cep || ''})`;
@@ -261,7 +295,6 @@ export default function MasterDashboard() {
       const planoSelecionado = planos.find(p => p.id === editingStore.planoSaaSId);
       const precoPlano = planoSelecionado ? planoSelecionado.precoBase : 0;
       const valorSup = editingStore.temSuporte ? Number(editingStore.valorSuporte || 0) : 0;
-      const totalFatura = precoPlano + valorSup;
 
       const payload = { 
         slug: editingStore.slug, razaoSocial: editingStore.razaoSocial, cnpj: editingStore.cnpj,
@@ -270,7 +303,7 @@ export default function MasterDashboard() {
         nomeResponsavel: editingStore.nomeResponsavel, cpfResponsavel: editingStore.cpfResponsavel,
         emailResponsavel: editingStore.emailResponsavel, endereco: fullAddress,
         planoSaaSId: editingStore.planoSaaSId, temSuporte: editingStore.temSuporte,
-        valorSuporte: valorSup, monthlyFee: totalFatura, 
+        valorSuporte: valorSup, monthlyFee: (precoPlano + valorSup), 
         adminUserId: editingStore.adminUserId === '' || editingStore.adminUserId === 'null' ? null : editingStore.adminUserId,
         contratoAssinado: editingStore.contratoAssinado 
       };
@@ -285,24 +318,16 @@ export default function MasterDashboard() {
       const data = await res.json();
       
       if (res.ok && data.success) { 
-        
-        if (editingStore.contratoAssinado && contractFile) {
-            const fileData = new FormData();
-            fileData.append('contrato_pdf', contractFile);
-            
-            await fetch(`${API_URL}/api/master/lojas/${editingStore.id}/contrato`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: fileData
+        if (contractFile) {
+            const fileData = new FormData(); fileData.append('contrato_pdf', contractFile);
+            const uploadRes = await fetch(`${API_URL}/api/master/lojas/${editingStore.id}/contrato`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fileData
             });
+            if (!uploadRes.ok) alert("Loja salva, mas ocorreu um erro ao anexar o contrato.");
         }
-
         alert('Loja atualizada com sucesso!'); 
-        setEditingStore(null); 
-        fetchStores(); 
-      } else { 
-        alert(`Erro ao editar: ${data.error || 'Erro desconhecido'}`); 
-      }
+        setEditingStore(null); fetchStores(); 
+      } else { alert(`Erro ao editar: ${data.error || 'Erro desconhecido'}`); }
     } catch (error) { alert('Erro de conexão com o servidor.'); }
   };
 
@@ -323,7 +348,7 @@ export default function MasterDashboard() {
 
   const lojasAtivas = stores.filter(s => s.status === 'ACTIVE' || s.isActive).length;
 
-  // LÓGICA DO FILTRO INTELIGENTE
+  // 🔥 LÓGICA DO FILTRO INTELIGENTE
   const filteredStores = stores.filter(store => {
     const search = searchTerm.toLowerCase();
     
@@ -438,7 +463,7 @@ export default function MasterDashboard() {
               {filteredStores.map(store => {
                 const planoVinculado = planos.find(p => p.id === store.planoSaaSId);
                 return (
-                  <tr key={store.id} className={`transition-colors ${(!store.isActive || store.status === 'BLOCKED') ? 'bg-red-50/30' : 'hover:bg-slate-50'}`}>
+                  <tr key={store.id} className={`transition-colors ${(!store.isActive || store.status === 'BLOCKED' || !store.contratoAssinado) ? 'bg-red-50/30' : 'hover:bg-slate-50'}`}>
                     <td className="px-6 py-5">
                       <p className="font-black text-slate-800 text-base">{store.razaoSocial}</p>
                       <p className="text-[#f58220] font-mono text-xs">/{store.slug}</p>
@@ -586,9 +611,9 @@ export default function MasterDashboard() {
                 </div>
               </div>
 
-              {/*BLOCO JURÍDICO (DOCUMENTAÇÃO NA EDIÇÃO) */}
+              {/* 🔥 BLOCO JURÍDICO (DOCUMENTAÇÃO NA EDIÇÃO) */}
               <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 shadow-sm space-y-4">
-                 <h4 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><span>📄</span> Documentação Jurídica</h4>
+                 <h4 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><FileText className="w-4 h-4"/> Documentação Jurídica</h4>
                  <div className="flex flex-col gap-4">
                    <label className="flex items-center gap-3 cursor-pointer bg-white p-4 rounded-xl border border-emerald-200 hover:border-emerald-300 transition-colors shadow-sm">
                      <input type="checkbox" checked={editingStore.contratoAssinado} onChange={e => setEditingStore({...editingStore, contratoAssinado: e.target.checked})} className="w-5 h-5 accent-emerald-600" />
@@ -598,16 +623,31 @@ export default function MasterDashboard() {
                      </div>
                    </label>
 
-                   <div className="bg-white p-4 rounded-xl border border-emerald-200 shadow-sm">
-                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Anexar PDF do Contrato</label>
+                   <div className="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm flex flex-col gap-3">
+                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Anexar PDF do Contrato</label>
                      <input
                         type="file"
                         accept="application/pdf"
                         onChange={e => setContractFile(e.target.files[0])}
                         className="w-full bg-slate-50 border border-emerald-200 rounded-xl p-2 text-sm font-bold text-slate-700 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-black file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 cursor-pointer focus:outline-none"
                      />
-                     {editingStore.contratoAssinado && !contractFile && (
-                       <p className="text-[10px] text-emerald-600 font-black mt-2 flex items-center gap-1">✅ Um contrato já consta como validado na base de dados.</p>
+                     
+                     {/* 🔥 BOTÃO PARA AUDITORIA (Exibe o Contrato Assinado) */}
+                     {editingStore.contratoAssinado && (
+                       <div className="mt-2 pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                           <p className="text-[10px] text-emerald-600 font-black flex items-center gap-1"><CheckCircle className="w-3 h-3"/> Documento validado na base de dados.</p>
+                           {!contractFile && (
+                               <button 
+                                 type="button" 
+                                 onClick={() => handleViewContract(editingStore.id)}
+                                 disabled={isOpeningPdf}
+                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-black shadow-md flex items-center gap-2 cursor-pointer transition-colors w-full sm:w-auto justify-center"
+                               >
+                                 {isOpeningPdf ? <span className="animate-spin">⏳</span> : <Eye className="w-4 h-4"/>} 
+                                 {isOpeningPdf ? 'Abrindo...' : 'Ver Contrato Assinado'}
+                               </button>
+                           )}
+                       </div>
                      )}
                    </div>
                  </div>

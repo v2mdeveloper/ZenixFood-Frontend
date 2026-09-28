@@ -8,7 +8,7 @@ export default function MasterNewStorePage() {
   const [loading, setLoading] = useState(false);
   const [isSuperMaster, setIsSuperMaster] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
-  const [planos, setPlanos] = useState([]); // 🔥 Planos dinâmicos
+  const [planos, setPlanos] = useState([]); 
   const [contractFile, setContractFile] = useState(null); 
   
   const [form, setForm] = useState({
@@ -112,6 +112,11 @@ export default function MasterNewStorePage() {
     if (form.cpfResponsavel.length < 14) return alert('Por favor, preencha o CPF completo.');
     if (!form.planoSaaSId) return alert('Por favor, selecione um Plano SaaS para a loja.');
     
+    // 🔥 TRAVA JURÍDICA: Se marcar que o contrato está assinado, é obrigatório enviar o PDF
+    if (form.contratoAssinado && !contractFile) {
+        return alert("⚠️ TRAVA JURÍDICA:\nVocê marcou que o contrato da loja está assinado, mas não anexou o arquivo PDF. Faça o upload do documento para criar e liberar a loja.");
+    }
+
     setLoading(true);
     try {
       const fullAddress = `${form.street}, ${form.number} ${form.complement ? `- ${form.complement}` : ''} - ${form.neighborhood}, ${form.city}/${form.state} (CEP: ${form.cep})`;
@@ -156,11 +161,15 @@ export default function MasterNewStorePage() {
             const fileData = new FormData();
             fileData.append('contrato_pdf', contractFile);
             
-            await fetch(`${API_URL}/api/master/lojas/${novaLojaId}/contrato`, {
+            const uploadRes = await fetch(`${API_URL}/api/master/lojas/${novaLojaId}/contrato`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
+                headers: { 'Authorization': `Bearer ${token}` }, // Form-data não precisa de content-type manual
                 body: fileData
             });
+
+            if (!uploadRes.ok) {
+                alert("Restaurante salvo, mas ocorreu um erro ao anexar o PDF do contrato.");
+            }
         }
 
         alert(`✅ Empresa "${form.razaoSocial}" cadastrada com sucesso!`);
@@ -282,7 +291,7 @@ export default function MasterNewStorePage() {
             </div>
           </div>
 
-          {/* 🔥 NOVO: BLOCO JURÍDICO (DOCUMENTAÇÃO) */}
+          {/* 🔥 NOVO: BLOCO JURÍDICO COM TRAVA (DOCUMENTAÇÃO) */}
           <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 shadow-sm space-y-4">
              <h4 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><FileText className="w-4 h-4"/> Documentação Jurídica</h4>
              <div className="flex flex-col gap-4">
@@ -290,12 +299,12 @@ export default function MasterNewStorePage() {
                  <input type="checkbox" checked={form.contratoAssinado} onChange={e => setForm({...form, contratoAssinado: e.target.checked})} className="w-5 h-5 accent-emerald-600" />
                  <div>
                    <span className="text-sm font-black text-slate-800 block">Contrato de Licenciamento Assinado pelo Restaurante</span>
-                   <span className="text-[10px] text-slate-500 font-bold">Se desmarcado, a loja será gerada mas o acesso ao painel ficará bloqueado.</span>
+                   <span className="text-[10px] text-slate-500 font-bold">Se marcado, é obrigatório anexar o PDF. Se desmarcado, a loja será gerada mas o acesso ao painel ficará bloqueado.</span>
                  </div>
                </label>
 
                <div className="bg-white p-4 rounded-xl border border-emerald-200 shadow-sm">
-                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Anexar PDF do Contrato (Opcional)</label>
+                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Anexar PDF do Contrato</label>
                  <input
                     type="file"
                     accept="application/pdf"

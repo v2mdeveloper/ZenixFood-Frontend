@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Edit2, Shield, Store, Search, Download, Filter, Calendar, ArrowLeft, CheckCircle, XCircle, FileText } from 'lucide-react';
+import { Plus, Edit2, Shield, Store, Search, Download, Filter, Calendar, ArrowLeft, CheckCircle, XCircle, FileText, Eye } from 'lucide-react';
 
 export default function MasterUsersTab({ API_URL }) {
   const router = useRouter();
@@ -18,9 +18,10 @@ export default function MasterUsersTab({ API_URL }) {
   const [editingUser, setEditingUser] = useState(null);
   
   const [contractFile, setContractFile] = useState(null);
+  const [isOpeningPdf, setIsOpeningPdf] = useState(false); // Carregamento do PDF
   
   const [formData, setFormData] = useState({
-    name: '', cpf: '', email: '', password: '', // O campo 'cpf' agora guarda o CNPJ para o backend
+    name: '', cpf: '', email: '', password: '', 
     cep: '', address: '', neighborhood: '', city: '', uf: '',
     role: 'MASTER',
     contratoAssinado: false,
@@ -33,9 +34,7 @@ export default function MasterUsersTab({ API_URL }) {
     return fetch(url, { ...options, headers });
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -46,16 +45,11 @@ export default function MasterUsersTab({ API_URL }) {
       const resStores = await fetchWithToken(`${API_URL}/api/super/stores`);
       if (resStores.ok) setStores(await resStores.json());
       
-    } catch (error) {
-      console.error("Erro ao buscar dados:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (error) { console.error(error); } finally { setIsLoading(false); }
   };
 
   const openModal = (user = null) => {
     setContractFile(null); 
-    
     if (user) {
       setEditingUser(user);
       setFormData({
@@ -75,7 +69,6 @@ export default function MasterUsersTab({ API_URL }) {
     setIsModalOpen(true);
   };
 
-  // 🔥 MÁSCARA ATUALIZADA PARA CNPJ (Mantendo a chave 'cpf' para o backend)
   const handleCnpjChange = (e) => {
     let val = e.target.value.replace(/\D/g, '');
     if (val.length > 14) val = val.slice(0, 14);
@@ -87,33 +80,48 @@ export default function MasterUsersTab({ API_URL }) {
   };
 
   const handleCepSearch = async (e) => {
-    let cepVal = e.target.value.replace(/\D/g, '');
-    if (cepVal.length > 8) cepVal = cepVal.slice(0, 8);
-    const maskedCep = cepVal.replace(/^(\d{5})(\d)/, '$1-$2');
-    setFormData(prev => ({ ...prev, cep: maskedCep }));
-    
+    let cepVal = e.target.value.replace(/\D/g, ''); if (cepVal.length > 8) cepVal = cepVal.slice(0, 8);
+    const maskedCep = cepVal.replace(/^(\d{5})(\d)/, '$1-$2'); setFormData(prev => ({ ...prev, cep: maskedCep }));
     if (cepVal.length === 8) {
       try {
-        const res = await fetch(`https://viacep.com.br/ws/${cepVal}/json/`);
-        const data = await res.json();
-        if (!data.erro) {
-          setFormData(prev => ({
-            ...prev, 
-            address: data.logradouro || prev.address, 
-            neighborhood: data.bairro || prev.neighborhood,
-            city: data.localidade || prev.city, 
-            uf: data.uf || prev.uf
-          }));
-        }
+        const res = await fetch(`https://viacep.com.br/ws/${cepVal}/json/`); const data = await res.json();
+        if (!data.erro) { setFormData(prev => ({ ...prev, address: data.logradouro || prev.address, neighborhood: data.bairro || prev.neighborhood, city: data.localidade || prev.city, uf: data.uf || prev.uf })); }
       } catch (err) {}
+    }
+  };
+
+  // FUNÇÃO DE VISUALIZAÇÃO DO CONTRATO
+  const handleViewContract = async (userId) => {
+    setIsOpeningPdf(true);
+    try {
+      const res = await fetchWithToken(`${API_URL}/api/super/users/${userId}/contrato`);
+      const data = await res.json();
+      
+      if (res.ok && data.contratoUrl) {
+        // Abre o PDF diretamente em uma nova aba do navegador de forma segura
+        const pdfWindow = window.open("");
+        pdfWindow.document.write(`<iframe width='100%' height='100%' style='border:none;margin:0;padding:0;' src='${data.contratoUrl}'></iframe>`);
+      } else {
+        alert("⚠️ O arquivo do contrato não foi encontrado no banco de dados.");
+      }
+    } catch (e) {
+      alert("Erro de conexão ao tentar abrir o contrato.");
+    } finally {
+      setIsOpeningPdf(false);
     }
   };
 
   const handleSaveUser = async (e) => {
     e.preventDefault();
-    // 🔥 Validação atualizada para 18 caracteres (tamanho do CNPJ formatado)
     if (formData.cpf && formData.cpf.length > 0 && formData.cpf.length < 18) {
       return alert('Por favor, preencha o CNPJ completo.');
+    }
+
+    // TRAVA DE SEGURANÇA: Obriga o upload se marcou a caixa e ainda não tem contrato salvo
+    const jaTinhaContrato = editingUser ? editingUser.contratoAssinado : false;
+    
+    if (formData.contratoAssinado && !jaTinhaContrato && !contractFile) {
+        return alert("⚠️ TRAVA JURÍDICA:\nVocê marcou que o contrato está assinado, mas não anexou o arquivo PDF. Faça o upload do documento para liberar o sistema.");
     }
 
     const url = editingUser ? `${API_URL}/api/super/users/${editingUser.id}` : `${API_URL}/api/super/users`;
@@ -121,65 +129,42 @@ export default function MasterUsersTab({ API_URL }) {
 
     try {
       const res = await fetchWithToken(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData)
       });
-      
       const data = await res.json();
       
       if (res.ok) {
         const userId = editingUser ? editingUser.id : data.user?.id;
         
+        // Faz o upload apenas se escolheu um arquivo
         if (contractFile && userId) {
             const fileData = new FormData();
             fileData.append('contrato_pdf', contractFile);
-            
-            const uploadRes = await fetchWithToken(`${API_URL}/api/super/users/${userId}/contrato`, {
-                method: 'POST',
-                body: fileData
-            });
-            
-            if (!uploadRes.ok) {
-                alert("Usuário salvo, mas ocorreu um erro ao anexar o PDF do contrato.");
-            }
+            const uploadRes = await fetchWithToken(`${API_URL}/api/super/users/${userId}/contrato`, { method: 'POST', body: fileData });
+            if (!uploadRes.ok) alert("Usuário salvo, mas ocorreu um erro ao anexar o PDF do contrato.");
         }
 
         alert(editingUser ? 'Franqueado atualizado com sucesso!' : 'Franqueado cadastrado com sucesso!');
-        setIsModalOpen(false);
-        fetchData();
-      } else {
-        alert(`Erro: ${data.error}`);
-      }
-    } catch (error) {
-      alert("Erro de conexão ao salvar usuário.");
-    }
+        setIsModalOpen(false); fetchData();
+      } else { alert(`Erro: ${data.error}`); }
+    } catch (error) { alert("Erro de conexão ao salvar usuário."); }
   };
 
   const toggleUserStatus = async (user) => {
     if (!confirm(`Deseja realmente ${user.isActive ? 'DESATIVAR' : 'ATIVAR'} o acesso deste usuário?`)) return;
-    
     try {
       const res = await fetchWithToken(`${API_URL}/api/super/users/${user.id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !user.isActive })
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !user.isActive })
       });
-      if (res.ok) fetchData();
-      else alert("Erro ao alterar status.");
-    } catch (error) {
-      alert("Erro de conexão.");
-    }
+      if (res.ok) fetchData(); else alert("Erro ao alterar status.");
+    } catch (error) { alert("Erro de conexão."); }
   };
 
   const toggleStoreAssociation = (storeId) => {
     setFormData(prev => {
       const isLinked = prev.managedStoreIds.includes(storeId);
-      if (isLinked) {
-        return { ...prev, managedStoreIds: prev.managedStoreIds.filter(id => id !== storeId) };
-      } else {
-        return { ...prev, managedStoreIds: [...prev.managedStoreIds, storeId] };
-      }
+      if (isLinked) return { ...prev, managedStoreIds: prev.managedStoreIds.filter(id => id !== storeId) };
+      else return { ...prev, managedStoreIds: [...prev.managedStoreIds, storeId] };
     });
   };
 
@@ -187,18 +172,16 @@ export default function MasterUsersTab({ API_URL }) {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
       (u.name && u.name.toLowerCase().includes(searchLower)) ||
-      (u.cpf && u.cpf.toLowerCase().includes(searchLower)) || // u.cpf guarda o CNPJ na DB
+      (u.cpf && u.cpf.toLowerCase().includes(searchLower)) ||
       (u.email && u.email.toLowerCase().includes(searchLower)) ||
       (u.managedStores && u.managedStores.some(st => (st.razaoSocial || st.name || '').toLowerCase().includes(searchLower)));
 
     const matchesRole = filterRole === 'ALL' || u.role === filterRole;
-
     let matchesDate = true;
     if (filterDate && u.createdAt) {
       const userDate = new Date(u.createdAt).toISOString().split('T')[0];
       matchesDate = userDate === filterDate;
     }
-
     return matchesSearch && matchesRole && matchesDate;
   });
 
@@ -254,31 +237,20 @@ export default function MasterUsersTab({ API_URL }) {
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
-                  type="text" 
-                  placeholder="Buscar por nome, CNPJ, e-mail ou loja..." 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  type="text" placeholder="Buscar por nome, CNPJ, e-mail ou loja..." 
+                  value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0e4a56] font-medium"
                 />
               </div>
 
               <div className="relative flex-1 max-w-[200px]">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type="date" 
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#0e4a56] font-medium"
-                />
+                <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#0e4a56] font-medium" />
               </div>
 
               <div className="relative flex-1 max-w-[200px]">
                 <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <select 
-                  value={filterRole}
-                  onChange={(e) => setFilterRole(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#0e4a56] font-bold appearance-none cursor-pointer"
-                >
+                <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#0e4a56] font-bold appearance-none cursor-pointer">
                   <option value="ALL">Todos os Níveis</option>
                   <option value="MASTER">Franqueados (Master)</option>
                   <option value="SUPER_MASTER">Acesso Global (Super)</option>
@@ -305,7 +277,7 @@ export default function MasterUsersTab({ API_URL }) {
                   <tr>
                     <th className="px-6 py-5">Usuário & Contato</th>
                     <th className="px-6 py-5">Nível de Acesso</th>
-                    <th className="px-6 py-5">Carteira de Clientes (Lojas)</th>
+                    <th className="px-6 py-5">Carteira de Clientes</th>
                     <th className="px-6 py-5">Situação Legal</th>
                     <th className="px-6 py-5">Status</th>
                     <th className="px-6 py-5 text-right">Ações</th>
@@ -314,38 +286,27 @@ export default function MasterUsersTab({ API_URL }) {
                 <tbody className="divide-y divide-slate-100">
                   {filteredUsers.map(u => (
                     <tr key={u.id} className={`hover:bg-slate-50 transition-colors ${!u.isActive ? 'opacity-70 bg-red-50/20' : ''}`}>
-                      
                       <td className="px-6 py-5">
                         <p className="font-black text-slate-900 text-base">{u.name}</p>
                         <p className="text-xs font-bold text-slate-500 mt-1">{u.email}</p>
-                        {/* 🔥 Exibição alterada para CNPJ */}
                         <p className="text-[10px] text-slate-400 font-mono mt-0.5">CNPJ: {u.cpf || 'Não informado'}</p>
                       </td>
-                      
                       <td className="px-6 py-5">
                         <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase border ${u.role === 'SUPER_MASTER' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-sky-50 text-sky-700 border-sky-200'}`}>
                           {u.role === 'SUPER_MASTER' ? '👑 SUPER MASTER' : '💼 FRANQUEADO'}
                         </span>
                       </td>
-                      
                       <td className="px-6 py-5">
                         {u.role === 'SUPER_MASTER' ? (
                           <span className="text-xs font-bold text-slate-400 italic">Acesso total às lojas</span>
                         ) : (
                           <div className="flex flex-col gap-1">
                             <span className="flex items-center gap-1.5 font-bold text-slate-700 text-sm">
-                              <Store className="w-4 h-4 text-amber-500" /> 
-                              {u.managedStores?.length || 0} Restaurante(s)
+                              <Store className="w-4 h-4 text-amber-500" /> {u.managedStores?.length || 0} Restaurante(s)
                             </span>
-                            {u.managedStores && u.managedStores.length > 0 && (
-                              <span className="text-[10px] text-slate-400 font-medium truncate max-w-[200px] inline-block" title={u.managedStores.map(st => st.razaoSocial).join(', ')}>
-                                {u.managedStores.map(st => st.razaoSocial || st.name).join(', ')}
-                              </span>
-                            )}
                           </div>
                         )}
                       </td>
-
                       <td className="px-6 py-5">
                         {u.contratoAssinado ? (
                           <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center w-fit gap-1.5">
@@ -353,17 +314,15 @@ export default function MasterUsersTab({ API_URL }) {
                           </span>
                         ) : (
                           <span className="bg-red-50 text-red-700 border border-red-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center w-fit gap-1.5" title="Não poderá cadastrar novas lojas">
-                             <XCircle className="w-3.5 h-3.5"/> Bloqueado
+                             <XCircle className="w-3.5 h-3.5"/> Pendente
                           </span>
                         )}
                       </td>
-
                       <td className="px-6 py-5">
-                        <button onClick={() => toggleUserStatus(u)} className={`text-[10px] font-black px-3 py-1.5 rounded-lg border uppercase tracking-widest transition-colors cursor-pointer ${u.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200' : 'bg-red-50 text-red-600 border-red-200 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200'}`}>
+                        <button onClick={() => toggleUserStatus(u)} className={`text-[10px] font-black px-3 py-1.5 rounded-lg border uppercase tracking-widest transition-colors cursor-pointer ${u.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
                           {u.isActive ? 'Permitido' : 'Desativado'}
                         </button>
                       </td>
-
                       <td className="px-6 py-5 text-right">
                         <button onClick={() => openModal(u)} className="bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-700 border border-slate-200 hover:border-amber-300 px-4 py-2 rounded-xl transition-all inline-flex items-center gap-2 text-xs font-bold cursor-pointer">
                           <Edit2 className="w-4 h-4" /> Editar
@@ -371,13 +330,11 @@ export default function MasterUsersTab({ API_URL }) {
                       </td>
                     </tr>
                   ))}
-                  
                   {filteredUsers.length === 0 && !isLoading && (
                     <tr>
                       <td colSpan={6} className="text-center py-16">
                         <span className="text-5xl block mb-4">🕵️‍♂️</span>
                         <p className="text-slate-500 font-bold text-lg">Nenhum usuário encontrado.</p>
-                        <p className="text-slate-400 text-sm mt-1">Tente limpar os filtros ou adicionar um novo franqueado.</p>
                       </td>
                     </tr>
                   )}
@@ -391,7 +348,6 @@ export default function MasterUsersTab({ API_URL }) {
       {isModalOpen && (
         <div className="fixed inset-0 z-[999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-fade-in-up">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl flex flex-col max-h-full overflow-hidden border border-slate-200">
-            
             <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center bg-white z-10 shrink-0">
               <h3 className="text-2xl font-black text-slate-800 flex items-center gap-3">
                 {editingUser ? <span className="text-amber-500">✏️</span> : <span className="text-[#0e4a56]">✨</span>}
@@ -405,22 +361,10 @@ export default function MasterUsersTab({ API_URL }) {
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                 <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><span>👤</span> Dados da Empresa (Franquia) e Acesso</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Razão Social / Nome</label>
-                    <input type="text" required value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0e4a56] font-bold" placeholder="Nome da empresa" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CNPJ</label>
-                    <input type="text" value={formData.cpf} onChange={handleCnpjChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0e4a56] font-mono" placeholder="00.000.000/0000-00" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">E-mail (Usado para Login)</label>
-                    <input type="email" required value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0e4a56] font-bold" placeholder="email@exemplo.com" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">{editingUser ? 'Nova Senha (opcional)' : 'Senha Inicial de Acesso'}</label>
-                    <input type="password" required={!editingUser} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0e4a56]" placeholder={editingUser ? 'Deixe em branco para não alterar' : '••••••••'} />
-                  </div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Razão Social / Nome</label><input type="text" required value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-[#0e4a56] font-bold" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CNPJ</label><input type="text" value={formData.cpf} onChange={handleCnpjChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-[#0e4a56] font-mono" placeholder="00.000.000/0000-00" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">E-mail (Usado para Login)</label><input type="email" required value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-[#0e4a56] font-bold" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">{editingUser ? 'Nova Senha (opcional)' : 'Senha Inicial de Acesso'}</label><input type="password" required={!editingUser} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-[#0e4a56]" placeholder={editingUser ? 'Deixe em branco para não alterar' : '••••••••'} /></div>
                   <div className="md:col-span-2">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Nível de Permissão na Plataforma</label>
                     <select value={formData.role} onChange={e=>setFormData({...formData, role: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm text-slate-900 focus:outline-none focus:border-[#0e4a56] font-black cursor-pointer">
@@ -431,6 +375,7 @@ export default function MasterUsersTab({ API_URL }) {
                 </div>
               </div>
 
+              {/*BLOCO JURÍDICO COM BOTÃO DE AUDITORIA */}
               <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 shadow-sm space-y-4">
                  <h4 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><span>📄</span> Documentação Jurídica</h4>
                  <div className="flex flex-col gap-4">
@@ -438,20 +383,35 @@ export default function MasterUsersTab({ API_URL }) {
                      <input type="checkbox" checked={formData.contratoAssinado} onChange={e => setFormData({...formData, contratoAssinado: e.target.checked})} className="w-5 h-5 accent-emerald-600" />
                      <div>
                        <span className="text-sm font-black text-slate-800 block">Contrato de Franquia Assinado e Validado</span>
-                       <span className="text-[10px] text-slate-500 font-bold">Obrigatório para que este usuário possa cadastrar novas lojas no sistema.</span>
+                       <span className="text-[10px] text-slate-500 font-bold">Obrigatório para que este usuário possa cadastrar novas lojas no sistema. Se marcado sem anexo existente, um PDF será exigido.</span>
                      </div>
                    </label>
 
-                   <div className="bg-white p-4 rounded-xl border border-emerald-100">
-                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Anexar PDF do Contrato (Opcional/Upload)</label>
+                   <div className="bg-white p-5 rounded-xl border border-emerald-100 flex flex-col gap-3">
+                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Anexar PDF do Contrato</label>
                      <input
                         type="file"
                         accept="application/pdf"
                         onChange={e => setContractFile(e.target.files[0])}
                         className="w-full bg-slate-50 border border-emerald-200 rounded-xl p-2 text-sm font-bold text-slate-700 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-black file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 cursor-pointer"
                      />
-                     {editingUser && editingUser.contratoAssinado && !contractFile && (
-                       <p className="text-[10px] text-emerald-600 font-black mt-2 flex items-center gap-1"><CheckCircle className="w-3 h-3"/> Um contrato em formato digital já consta na base de dados.</p>
+                     
+                     {/*BOTÃO PARA AUDITORIA (Exibe o Contrato Assinado) */}
+                     {editingUser && editingUser.contratoAssinado && (
+                       <div className="mt-2 pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                           <p className="text-[10px] text-emerald-600 font-black flex items-center gap-1"><CheckCircle className="w-3 h-3"/> Documento validado na base de dados.</p>
+                           {!contractFile && (
+                               <button 
+                                 type="button" 
+                                 onClick={() => handleViewContract(editingUser.id)}
+                                 disabled={isOpeningPdf}
+                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-black shadow-md flex items-center gap-2 cursor-pointer transition-colors w-full sm:w-auto justify-center"
+                               >
+                                 {isOpeningPdf ? <span className="animate-spin">⏳</span> : <Eye className="w-4 h-4"/>} 
+                                 {isOpeningPdf ? 'Abrindo...' : 'Ver Contrato Assinado'}
+                               </button>
+                           )}
+                       </div>
                      )}
                    </div>
                  </div>
@@ -460,62 +420,27 @@ export default function MasterUsersTab({ API_URL }) {
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                 <h4 className="text-xs font-black text-sky-600 uppercase tracking-widest mb-4 flex items-center gap-2"><span>📍</span> Endereço</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CEP</label>
-                    <input type="text" value={formData.cep} onChange={handleCepSearch} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-500 font-mono" placeholder="00000-000" />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Rua / Logradouro</label>
-                    <input type="text" value={formData.address} onChange={e=>setFormData({...formData, address: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-500" placeholder="Nome da rua" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Bairro</label>
-                    <input type="text" value={formData.neighborhood} onChange={e=>setFormData({...formData, neighborhood: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-500" placeholder="Bairro" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Cidade</label>
-                    <input type="text" value={formData.city} onChange={e=>setFormData({...formData, city: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-500" placeholder="Cidade" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">UF</label>
-                    <input type="text" maxLength="2" value={formData.uf} onChange={e=>setFormData({...formData, uf: e.target.value.toUpperCase()})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-500 uppercase font-mono text-center" placeholder="SP" />
-                  </div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">CEP</label><input type="text" value={formData.cep} onChange={handleCepSearch} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-sky-500 font-mono" placeholder="00000-000" /></div>
+                  <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Rua / Logradouro</label><input type="text" value={formData.address} onChange={e=>setFormData({...formData, address: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-sky-500" placeholder="Nome da rua" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Bairro</label><input type="text" value={formData.neighborhood} onChange={e=>setFormData({...formData, neighborhood: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-sky-500" placeholder="Bairro" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Cidade</label><input type="text" value={formData.city} onChange={e=>setFormData({...formData, city: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-sky-500" placeholder="Cidade" /></div>
+                  <div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">UF</label><input type="text" maxLength="2" value={formData.uf} onChange={e=>setFormData({...formData, uf: e.target.value.toUpperCase()})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:border-sky-500 uppercase font-mono text-center" placeholder="SP" /></div>
                 </div>
               </div>
 
               {formData.role === 'MASTER' && (
                 <div className="bg-sky-50/50 p-6 rounded-3xl border border-sky-100 shadow-sm">
-                  <h4 className="text-sm font-black text-sky-800 flex items-center gap-2 mb-2">
-                    <Store className="w-5 h-5" /> Quais restaurantes este franqueado irá gerenciar?
-                  </h4>
-                  <p className="text-xs text-sky-600 mb-4 font-medium">Ao logar, o Franqueado terá acesso administrativo exclusivo apenas às lojas selecionadas abaixo.</p>
-                  
+                  <h4 className="text-sm font-black text-sky-800 flex items-center gap-2 mb-2"><Store className="w-5 h-5" /> Quais restaurantes este franqueado irá gerenciar?</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2 hide-scrollbar">
                     {stores.map(store => (
-                      <label key={store.id} className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${formData.managedStoreIds.includes(store.id) ? 'bg-white border-sky-500 shadow-md' : 'bg-white border-slate-200 hover:border-sky-300'}`}>
-                        <input 
-                          type="checkbox" 
-                          checked={formData.managedStoreIds.includes(store.id)} 
-                          onChange={() => toggleStoreAssociation(store.id)}
-                          className="w-5 h-5 accent-sky-600"
-                        />
+                      <label key={store.id} className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${formData.managedStoreIds.includes(store.id) ? 'bg-white border-sky-500 shadow-md' : 'bg-white border-slate-200'}`}>
+                        <input type="checkbox" checked={formData.managedStoreIds.includes(store.id)} onChange={() => toggleStoreAssociation(store.id)} className="w-5 h-5 accent-sky-600" />
                         <div>
                           <p className="font-bold text-slate-800 text-sm leading-tight">{store.razaoSocial || store.name || 'Loja Sem Nome'}</p>
                           <p className="text-[10px] text-slate-500 font-mono mt-0.5">/{store.slug}</p>
                         </div>
                       </label>
                     ))}
-                    {stores.length === 0 && <p className="text-sm text-slate-500 italic">Nenhum restaurante cadastrado no sistema ainda.</p>}
-                  </div>
-                </div>
-              )}
-              
-              {formData.role === 'SUPER_MASTER' && (
-                <div className="bg-purple-50 p-5 rounded-3xl border border-purple-200 flex items-start gap-4 shadow-sm">
-                  <span className="text-3xl drop-shadow-sm">👑</span>
-                  <div>
-                    <h4 className="font-black text-purple-800 mb-1">Acesso Global Liberado</h4>
-                    <p className="text-xs text-purple-700 font-medium">Usuários com nível Super Master têm acesso irrestrito a todos os restaurantes e configurações globais da plataforma. Não é necessário vincular lojas específicas.</p>
                   </div>
                 </div>
               )}
