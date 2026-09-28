@@ -1,7 +1,7 @@
 export const metadata = {
   title: 'Instalador do Totem',
   description: 'Instalação do Autoatendimento',
-  manifest: '/manifest-totem.json',
+  manifest: '/manifest.json',
 };
 
 export const viewport = {

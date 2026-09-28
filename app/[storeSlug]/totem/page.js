@@ -5,8 +5,21 @@ import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
 import { useOfflineSync } from '@/app/hooks/useOfflineSync';
 
+import Header from '../components/Header';
+import Footer from '../components/Footer';
+import FloatingCart from '../components/FloatingCart';
 
-//FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
+import MenuView from '../components/views/MenuView';
+import AuthView from '../components/views/AuthView';
+import CheckoutView from '../components/views/CheckoutView';
+import OrdersView from '../components/views/OrdersView';
+
+import ReviewModal from '../components/modals/ReviewModal';
+import CostelaModal from '../components/modals/CostelaModal';
+import UpsellModal from '../components/modals/UpsellModal';
+import ProductDetailsModal from '../components/modals/ProductDetailsModal';
+
+// FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {
   const textToSearch = `${category.name || ''} ${category.description || ''}`.toLowerCase();
   
@@ -27,10 +40,9 @@ function HomeContent({ storeSlug }) {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [selectedProductModal, setSelectedProductModal] = useState(null);
 
-  // 🔥 RESTAURADO: ESTADO ESSENCIAL DA LOJA
   const [storeData, setStoreData] = useState(null);
-
   const [menu, setMenu] = useState([]);
+  const [activeCategory, setActiveCategory] = useState(null); // 🔥 RESTAURADO
   const [highlights, setHighlights] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [upsells, setUpsells] = useState([]); 
@@ -135,7 +147,7 @@ function HomeContent({ storeSlug }) {
       checkout: "FINALIZAR PEDIDO", selectCategory: "Selecciona una categoría",
       namePrompt: "¿Cómo te llamas?", payMethodPrompt: "¿Cómo prefieres pagar?", payNow: "Confirmar Pedido",
       payMachine: "Tarjeta en el Totem", payPix: "Pix", payCash: "Pagar en la Caja", insertingOrder: "Enviando...",
-      orderSuccessTitle: "¡Pedido Confirmado!", orderSuccessSub: "Espera tu nombre o número en la pantalla.", passwordIs: "Tu Contraseña:",
+      orderSuccessTitle: "¡Pedido Confirmado!", orderSuccessSub: "Espera tu nombre ou número en la pantalla.", passwordIs: "Tu Contraseña:",
       buildPizza: "Armar Pizza", howManyFlavors: "¿Cuántos sabores?", chooseFlavors: "Elige tus sabores", confirmPizza: "Confirmar Pizza"
     }
   };
@@ -155,7 +167,6 @@ function HomeContent({ storeSlug }) {
     return response;
   };
 
-  // 🔥 RESTAURADO: Busca dados públicos da loja e cardápio principal
   useEffect(() => {
     if (!storeSlug) return;
     const fetchStoreAndMenu = async () => {
@@ -661,7 +672,8 @@ function HomeContent({ storeSlug }) {
     <div className={isDarkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 font-sans pb-28 selection:bg-amber-500 selection:text-zinc-950 transition-colors duration-500 flex flex-col justify-between">
         
-        {!isTotemMode && <Header view={view} setView={setView} isScrolled={isScrolled} user={user} availableCashback={availableCashback} setAuthMode={setAuthMode} isDarkMode={isDarkMode} toggleTheme={toggleTheme} storeSettings={storeSettings} />}
+        {/* 🔥 VERIFICAÇÃO DE SEGURANÇA: Só renderiza o Header se ele estiver importado e disponível */}
+        {!isTotemMode && typeof Header !== 'undefined' && <Header view={view} setView={setView} isScrolled={isScrolled} user={user} availableCashback={availableCashback} setAuthMode={setAuthMode} isDarkMode={isDarkMode} toggleTheme={toggleTheme} storeSettings={storeSettings} />}
         
         {isTotemMode && (
           <div className="relative bg-white dark:bg-gradient-to-b dark:from-black dark:to-[#0a0a0a] border-b border-slate-200 dark:border-white/5 p-6 md:p-8 flex justify-between items-center sticky top-0 z-40 shadow-xl transition-colors overflow-hidden">
@@ -745,10 +757,10 @@ function HomeContent({ storeSlug }) {
           </main>
         </div>
 
-        {!isTotemMode && <Footer view={view} getTodayScheduleText={() => "Horários"} storeSettings={storeSettings} />}
-        <FloatingCart cart={cart} view={view} cartTotal={cartTotal} handleVerSacola={handleVerSacola} />
+        {!isTotemMode && typeof Footer !== 'undefined' && <Footer view={view} getTodayScheduleText={() => "Horários"} storeSettings={storeSettings} />}
+        {!isTotemMode && typeof FloatingCart !== 'undefined' && <FloatingCart cart={cart} view={view} cartTotal={cartTotal} handleVerSacola={handleVerSacola} />}
         
-        <ProductDetailsModal product={selectedProductModal} onClose={() => setSelectedProductModal(null)} onAddToCart={addToCart} renderProductBadges={renderProductBadges} menu={menu} user={user} availableCashback={availableCashback} />
+        {typeof ProductDetailsModal !== 'undefined' && <ProductDetailsModal product={selectedProductModal} onClose={() => setSelectedProductModal(null)} onAddToCart={addToCart} renderProductBadges={renderProductBadges} menu={menu} user={user} availableCashback={availableCashback} />}
 
         {/* 🍕 MODAL: CONSTRUTOR DE PIZZA */}
         {showPizzaModal && pizzaBase && (
@@ -804,7 +816,24 @@ function HomeContent({ storeSlug }) {
             </div>
           </div>
         )}
+
+        {typeof ReviewModal !== 'undefined' && <ReviewModal reviewOrder={reviewOrder} setReviewOrder={setReviewOrder} reviewRating={reviewRating} setReviewRating={setReviewRating} reviewComment={reviewComment} setReviewComment={setReviewComment} isSubmittingReview={isSubmittingReview} handleSubmitReview={handleSubmitReview} />}
+        {typeof CostelaModal !== 'undefined' && <CostelaModal showCostelaModal={showCostelaModal} setShowCostelaModal={setShowCostelaModal} costelaProduct={costelaProduct} costelaSize={costelaSize} setCostelaSize={setCostelaSize} costelaTime={costelaTime} setCostelaTime={setCostelaTime} confirmCostelaOrder={confirmCostelaOrder} />}
+        {typeof UpsellModal !== 'undefined' && <UpsellModal showUpsellModal={showUpsellModal} upsellItem={upsellItem} handleAcceptUpsell={handleAcceptUpsell} handleDeclineUpsell={handleDeclineUpsell} />}
       </div>
+      
+      {isTotemMode && (
+          <div 
+            onClick={() => {
+              const atual = localStorage.getItem('zenix_print_ip') || '';
+              const novo = prompt("⚙️ Configuração Técnica do Totem\nQual o IP local (Wi-Fi) do Computador do Caixa?", atual);
+              if (novo !== null) { localStorage.setItem('zenix_print_ip', novo); alert("IP Salvo com sucesso: " + novo); }
+            }}
+            className="fixed bottom-2 right-4 text-[10px] text-amber-500 font-bold z-50 cursor-pointer bg-black/80 px-3 py-1.5 rounded-lg border border-amber-500/30 shadow-2xl hover:text-white transition-colors"
+          >
+            ⚙️ Configurar IP Caixa
+          </div>
+      )}
     </div>
   );
 }
