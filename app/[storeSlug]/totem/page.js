@@ -3,23 +3,25 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
-// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
+// 🔥 IMPORTAÇÕES CORRIGIDAS COM O ALIAS ABSOLUTO (@/app)
 import { useOfflineSync } from '@/app/hooks/useOfflineSync';
 
-import Header from './components/Header';
-import Footer from './components/Footer';
-import FloatingCart from './components/FloatingCart';
+import Header from '@/app/components/Header';
+import Footer from '@/app/components/Footer';
+import FloatingCart from '@/app/components/FloatingCart';
 
-import MenuView from './components/views/MenuView';
-import AuthView from './components/views/AuthView';
-import CheckoutView from './components/views/CheckoutView';
-import OrdersView from './components/views/OrdersView';
+import MenuView from '@/app/components/views/MenuView';
+import AuthView from '@/app/components/views/AuthView';
+import CheckoutView from '@/app/components/views/CheckoutView';
+import OrdersView from '@/app/components/views/OrdersView';
+import ProfileView from '@/app/components/views/ProfileView';
+import LiveCamView from '@/app/components/views/LiveCamView';
 
-
-import ReviewModal from './components/modals/ReviewModal';
-import CostelaModal from './components/modals/CostelaModal';
-import UpsellModal from './components/modals/UpsellModal';
-import ProductDetailsModal from './components/modals/ProductDetailsModal';
+import CarrosselAvaliacoes from '@/app/components/CarrosselAvaliacoes';
+import ReviewModal from '@/app/components/modals/ReviewModal';
+import CostelaModal from '@/app/components/modals/CostelaModal';
+import UpsellModal from '@/app/components/modals/UpsellModal';
+import ProductDetailsModal from '@/app/components/modals/ProductDetailsModal';
 
 //FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {
@@ -227,7 +229,6 @@ function HomeContent({ storeSlug }) {
      if (searchParams.get('totem') === 'true') setIsTotemMode(true);
   }, [searchParams]);
 
-  // Temporizador de inatividade se for Totem
   useEffect(() => {
     if (!isTotemMode) return;
     let timeout;
@@ -464,9 +465,6 @@ function HomeContent({ storeSlug }) {
       flavors: item.flavors ? JSON.stringify(item.flavors) : undefined
   }));
 
-  // =========================================================================
-  // 🔥 FINALIZAÇÃO DE PEDIDO (DELIVERY E TOTEM OFFLINE)
-  // =========================================================================
   const handleCheckoutBtnClick = async (e, customFullAddress) => {
     if (e) e.preventDefault();
     if (isSubmittingOrder) return;
@@ -512,7 +510,6 @@ function HomeContent({ storeSlug }) {
             }
           } else alert(data.error);
       } else if (isTotemMode) {
-          // MODO OFFLINE PARA TOTEM
           const shortIdRandom = Math.floor(1000 + Math.random() * 9000);
           const offlineRes = await processarPedido(payloadParams);
           
@@ -557,9 +554,6 @@ function HomeContent({ storeSlug }) {
   if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-[#0a0a0a] text-amber-500 font-bold"><div className="animate-pulse flex flex-col items-center"><span className="text-4xl mb-4">⚡</span><p>Carregando sistema...</p></div></div>;
   if (!storeData) return <div className="h-screen bg-slate-50 flex items-center justify-center text-2xl font-bold text-red-500">Loja não encontrada.</div>;
 
-  // ==========================================
-  // MODO TOTEM: TELA DE DESCANSO
-  // ==========================================
   if (isIdle && isTotemMode) {
     return (
       <div className="relative w-screen h-screen flex flex-col items-center justify-end pb-32 bg-slate-900 animate-fade-in-up overflow-hidden">
@@ -574,7 +568,6 @@ function HomeContent({ storeSlug }) {
            <button onClick={() => handleStart('es')} className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-2xl hover:scale-105 transition-transform bg-white focus:outline-none"><img src="https://flagcdn.com/w320/es.png" alt="ES" className="w-full h-full object-cover" /></button>
         </div>
 
-        {/* 🔥 BOTÃO VISÍVEL DE CONFIGURAÇÃO DO IP NO RODAPÉ DO TOTEM */}
         <div 
           onClick={() => {
             const atual = localStorage.getItem('zenix_print_ip') || '';
@@ -589,14 +582,8 @@ function HomeContent({ storeSlug }) {
     );
   }
 
-  // Se não for totem, a tela de descanso é ignorada e vai direto para o cardápio
-  if (isIdle && !isTotemMode) {
-      setIsIdle(false);
-  }
+  if (isIdle && !isTotemMode) { setIsIdle(false); }
 
-  // ==========================================
-  // MODO TOTEM: TELA DE SUCESSO
-  // ==========================================
   if (orderSuccessData && isTotemMode) {
     return (
       <div className="relative w-screen h-screen flex flex-col items-center justify-center bg-emerald-600 animate-fade-in-up">
@@ -619,9 +606,6 @@ function HomeContent({ storeSlug }) {
     );
   }
 
-  // ==========================================
-  // TELA PRINCIPAL (CARDÁPIO DIGITAL / TOTEM)
-  // ==========================================
   return (
     <div className={isDarkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 font-sans pb-28 selection:bg-amber-500 selection:text-zinc-950 transition-colors duration-500 flex flex-col justify-between">
@@ -704,7 +688,6 @@ function HomeContent({ storeSlug }) {
         
         <ProductDetailsModal product={selectedProductModal} onClose={() => setSelectedProductModal(null)} onAddToCart={addToCart} renderProductBadges={renderProductBadges} menu={menu} user={user} availableCashback={availableCashback} />
 
-        {/* 🍕 MODAL: CONSTRUTOR DE PIZZA */}
         {showPizzaModal && pizzaBase && (
           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in-up">
             <div className="bg-white dark:bg-[#121212] rounded-[2rem] shadow-2xl p-6 w-full max-w-2xl flex flex-col max-h-[90vh] border border-slate-200 dark:border-white/10">
@@ -764,7 +747,6 @@ function HomeContent({ storeSlug }) {
         <UpsellModal showUpsellModal={showUpsellModal} upsellItem={upsellItem} handleAcceptUpsell={handleAcceptUpsell} handleDeclineUpsell={handleDeclineUpsell} />
       </div>
       
-      {/* 🔥 BOTÃO DE CONFIGURAÇÃO DE IP DO CAIXA (SÓ APARECE NO MODO TOTEM NO CANTO INFERIOR DIREITO) */}
       {isTotemMode && (
           <div 
             onClick={() => {
