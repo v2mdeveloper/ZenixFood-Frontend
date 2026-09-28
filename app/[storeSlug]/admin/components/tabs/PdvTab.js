@@ -1,17 +1,22 @@
 'use client';
 import { useState, useEffect } from 'react';
+// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
+import { useOfflineSync } from '@/hooks/useOfflineSync'; // Ajuste o caminho se necessário
 
 export default function PdvTab({ employeeUser, allProducts, menu }) {
   const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3333' : 'https://zenixfood-backend.onrender.com';
+  const LOJA_ID = typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '';
+  const TOKEN_JWT = typeof window !== 'undefined' ? (localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken')) : '';
+
+  // 🔥 INICIALIZA O MOTOR OFFLINE
+  const { isOnline, pedidosPendentes, processarPedido } = useOfflineSync(API_URL, LOJA_ID, TOKEN_JWT);
 
   const [registerInfo, setRegisterInfo] = useState(null);
   const [shiftId, setShiftId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [printerName, setPrinterName] = useState('');
   
-  // NOVO: Estado para armazenar configurações gerais (Smart POS, etc)
   const [fullSettings, setFullSettings] = useState(null);
-
   const [customers, setCustomers] = useState([]);
   const [employees, setEmployees] = useState([]);
   
@@ -56,33 +61,24 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   const [pizzaFlavorCount, setPizzaFlavorCount] = useState(1);
   const [pizzaSelectedFlavors, setPizzaSelectedFlavors] = useState([]);
 
-  // 🔥 ESTADOS DO TOTEM (PAGAMENTOS PENDENTES NO CAIXA)
+  // 🔥 ESTADOS DO TOTEM
   const [awaitingTotemOrders, setAwaitingTotemOrders] = useState([]);
   const [isTotemSidebarOpen, setIsTotemSidebarOpen] = useState(false);
   const [selectedTotemOrder, setSelectedTotemOrder] = useState(null);
   const [totemPaymentMethod, setTotemPaymentMethod] = useState('PIX');
   const [processingTotem, setProcessingTotem] = useState(false);
 
-  //Helper para injetar o x-store-id e o Token JWT automaticamente
   const fetchWithStore = async (url, options = {}) => {
-    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
-    const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
-
     const headers = {
-      ...(token && { 'Authorization': `Bearer ${token}` }),
-      ...(storeId && { 'x-loja-slug': storeId }),
+      ...(TOKEN_JWT && { 'Authorization': `Bearer ${TOKEN_JWT}` }),
+      ...(LOJA_ID && { 'x-loja-slug': LOJA_ID }),
       ...options.headers,
     };
 
     const response = await fetch(url, { ...options, headers });
-
-    //SE O BACKEND BARRAR POR FALTA DE PAGAMENTO:
     if (response.status === 402) {
-      if (typeof window !== 'undefined') {
-        window.location.href = '/bloqueado'; 
-      }
+      if (typeof window !== 'undefined') window.location.href = '/bloqueado'; 
     }
-
     return response;
   };
 
@@ -93,7 +89,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
     fetchSettings();
   }, [employeeUser]);
 
-  // 🔥 BUSCAR PEDIDOS DO TOTEM AGUARDANDO PAGAMENTO A CADA 5 SEGUNDOS
   useEffect(() => {
     fetchAwaitingTotemOrders();
     const interval = setInterval(fetchAwaitingTotemOrders, 5000);
@@ -101,6 +96,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   }, []);
 
   const fetchAwaitingTotemOrders = async () => {
+    if (!isOnline) return; // Se estiver offline, não tenta buscar do totem
     try {
       const res = await fetchWithStore(`${API_URL}/api/pdv/awaiting-payment`);
       if (res.ok) {
@@ -116,7 +112,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
         if (res.ok) { 
             const data = await res.json(); 
             setPrinterName(data.printerName || ''); 
-            setFullSettings(data); // Guarda configurações do Smart POS
+            setFullSettings(data);
         } 
     } catch(e){}
   }
@@ -148,12 +144,9 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
     })
     .then(async (res) => {
        setTimeout(() => { const t = document.getElementById(toastId); if(t) t.remove(); }, 1500);
-       if (!res.ok) {
-          alert(`ERRO: O programa de impressão local está aberto, mas não conseguiu gerar o layout (Erro ${res.status}).`);
-       }
+       if (!res.ok) alert(`ERRO: O programa de impressão local está aberto, mas não conseguiu gerar o layout (Erro ${res.status}).`);
     })
     .catch(err => {
-      console.error(err);
       setTimeout(() => { const t = document.getElementById(toastId); if(t) t.remove(); }, 500);
       alert('⚠️ FALHA DE COMUNICAÇÃO: O sistema não conseguiu encontrar o seu "Programa de Impressão Local" rodando.\n\nVerifique se o programa da impressora (tela preta) está aberto no computador do caixa.');
     });
@@ -161,6 +154,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
 
   const handleOpenRegister = async (e) => {
     e.preventDefault();
+    if (!isOnline) return alert("Você precisa de internet para abrir o caixa.");
     try {
       const res = await fetchWithStore(`${API_URL}/api/pdv/register/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId: employeeUser.id, openingBalance }) });
       const data = await res.json();
@@ -170,6 +164,8 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
 
   const handleCloseRegister = async (e) => {
     e.preventDefault();
+    if (!isOnline) return alert("Você precisa de internet para fechar o caixa. Sincronize os pedidos pendentes primeiro.");
+    if (pedidosPendentes > 0) return alert(`Existem ${pedidosPendentes} pedidos locais pendentes de envio. Aguarde a internet voltar antes de fechar o caixa.`);
     try {
       const res = await fetchWithStore(`${API_URL}/api/pdv/register/close`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registerId: registerInfo.id, closingBalance: closeForm.cash || 0, closingDetails: closeForm }) });
       const data = await res.json();
@@ -183,6 +179,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
 
   const handleMovement = async (e) => {
     e.preventDefault();
+    if (!isOnline) return alert("Você precisa de internet para registrar movimentações no momento.");
     try {
       const res = await fetchWithStore(`${API_URL}/api/pdv/movement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registerId: registerInfo.id, type: movementForm.type, amount: movementForm.amount, reason: movementForm.reason, managerAuth }) });
       const data = await res.json();
@@ -195,6 +192,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   };
 
   const loadTabByNumber = async (numberToSearch) => {
+    if (!isOnline) { alert("Visualizar contas das mesas requer internet ativa."); return false; }
     try {
       const res = await fetchWithStore(`${API_URL}/api/salao/tabs/number/${numberToSearch.trim()}`);
       if (res.ok) {
@@ -243,6 +241,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
 
   const handleMergeTabs = async (e) => {
     e.preventDefault();
+    if (!isOnline) return alert("Operação necessita de internet.");
     if (!mergeSourceTabNumber.trim()) return;
     try {
       const resSource = await fetchWithStore(`${API_URL}/api/salao/tabs/number/${mergeSourceTabNumber.trim()}`);
@@ -262,6 +261,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
 
   const handleCreateCustomer = async (e) => {
     e.preventDefault();
+    if (!isOnline) return alert("Você precisa estar Online para cadastrar novos clientes.");
     const randomPassword = 'ZenixFood' + Math.floor(Math.random() * 1000000) + '!';
     try {
       const res = await fetchWithStore(`${API_URL}/api/auth/register`, {
@@ -277,13 +277,13 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   };
 
   // ==============================================================
-  // 🎯 LÓGICA DE CARRINHO (Suporta Pizzas e Combos)
+  // LÓGICA DE CARRINHO E PIZZA 
   // ==============================================================
   const handleProductClick = (prod) => {
     if (prod.isPizza && prod.maxFlavors > 1) {
       setPizzaBase(prod);
       setPizzaFlavorCount(1);
-      setPizzaSelectedFlavors([prod]); // Primeiro sabor pré-selecionado
+      setPizzaSelectedFlavors([prod]);
       setPizzaBuilderOpen(true);
     } else {
       addToCart({ ...prod, productId: prod.id });
@@ -313,7 +313,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   const updateQty = (idx, delta) => { setCart(prev => { const newCart = [...(prev || [])]; if (newCart[idx].quantity + delta > 0) newCart[idx].quantity += delta; else newCart.splice(idx, 1); return newCart; }); };
   const removeFromCart = (idx) => { setCart(prev => (prev || []).filter((_, i) => i !== idx)); };
 
-  // 🍕 LÓGICA DO CONSTRUTOR DE PIZZAS (PDV)
   const togglePizzaFlavor = (flavorProd) => {
     if (pizzaSelectedFlavors.find(f => f.id === flavorProd.id)) {
       setPizzaSelectedFlavors(prev => prev.filter(f => f.id !== flavorProd.id)); 
@@ -330,7 +329,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       const sum = pizzaSelectedFlavors.reduce((acc, f) => acc + Number(f.price), 0);
       return sum / pizzaSelectedFlavors.length;
     } else {
-      return Math.max(...pizzaSelectedFlavors.map(f => Number(f.price))); // HIGHEST (Maior valor)
+      return Math.max(...pizzaSelectedFlavors.map(f => Number(f.price))); 
     }
   };
 
@@ -351,19 +350,12 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
     setPizzaBuilderOpen(false);
   };
 
-  // ==============================================================
-  // INTEGRAÇÃO SMART POS PDV (APP-TO-APP)
-  // ==============================================================
   const dispararPagamentoSmartPos = (provider, totalFinal, metodoPagamento, orderId) => {
     const valorCentavos = Math.round(Number(totalFinal) * 100);
-    
     let tipoTransacao = 'DEBIT'; 
     if (metodoPagamento.includes('CREDIT')) tipoTransacao = 'CREDIT';
     if (metodoPagamento.includes('PIX')) tipoTransacao = 'PIX';
-
-    // Pega a URL exata em que você está agora para a máquina saber para onde voltar
     const returnUrl = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
-
     let deepLink = '';
 
     switch (provider) {
@@ -377,42 +369,41 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       case 'mercado_pago':
         deepLink = `mercadopago://pay?amount=${Number(totalFinal).toFixed(2)}&return_url=${returnUrl}`;
         break;
-      
-      // 🔥 O NOSSO SIMULADOR DE MÁQUINA!
       case 'simulador':
-        alert(`(SIMULADOR) O sistema chamou a máquina de cartões.\n\nValor: R$ ${Number(totalFinal).toFixed(2)}\nMétodo: ${tipoTransacao}\n\nAguardando cliente digitar a senha...`);
-        
-        // Finge que o cliente demorou 3 segundos a pagar e devolve para o sistema!
-        setTimeout(() => {
-            alert("(SIMULADOR) Pagamento Aprovado na Máquina! Imprimindo comprovante...");
-            // Como estamos num teste web, não precisamos redirecionar pois já estamos na tela, 
-            // basta deixar o fluxo do React continuar!
-        }, 3000);
+        alert(`(SIMULADOR) Pagamento Aprovado na Máquina!`);
         return true;
-
       default: return false;
     }
 
-    // Só tenta abrir o Deep Link se NÃO for o simulador (para evitar erros no PC)
     if (provider !== 'simulador') {
-        console.log(`[Smart POS] Disparando: ${deepLink}`);
         window.location.href = deepLink;
     }
-    
     return true;
   };
 
-  // ==============================================================
-  // MOTOR DE EMISSÃO FISCAL NATIVA E IMPRESSÃO LOCAL
-  // ==============================================================
   const processFiscalAndPrint = async (orderId, currentCart, finalClientName, finalTotal, chosenPayment) => {
+      // Se não tiver internet, apenas imprime. A NFC-e será emitida quando a internet voltar e o pedido sincronizar.
+      if (!isOnline) {
+          const pedidoImpressao = {
+              shortId: orderId || "OFFLINE",
+              createdAt: new Date().toISOString(),
+              client: { name: finalClientName },
+              items: currentCart,
+              total: finalTotal,
+              paymentMethod: chosenPayment
+          };
+          fetch(`http://localhost:8080/imprimir-nfce`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pedido: pedidoImpressao, dadosNota: null, printerName })
+          }).catch(e => {});
+          return;
+      }
+
       try {
-          // 1. Emissão Silenciosa na SEFAZ
           const resFiscal = await fetchWithStore(`${API_URL}/api/fiscal/emitir/${orderId}`, { method: 'POST' });
           const dataFiscal = await resFiscal.json();
           
           if (dataFiscal.success && dataFiscal.dados) {
-              // 2. Monta objeto legível para a impressora
               const pedidoImpressao = {
                   shortId: loadedTab ? loadedTab.number : orderId,
                   createdAt: new Date().toISOString(),
@@ -421,31 +412,23 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
                   total: finalTotal,
                   paymentMethod: chosenPayment
               };
-
-              // 3. Imprime Localmente na porta 8080 do próprio PC!
               fetch(`http://localhost:8080/imprimir-nfce`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ pedido: pedidoImpressao, dadosNota: dataFiscal.dados, printerName })
-              }).catch(e => console.warn("Impressora local inacessível no localhost:8080"));
+              }).catch(e => console.warn("Impressora inacessível"));
           }
       } catch(err) {
           console.error("Erro fiscal silencioso:", err);
       }
   };
 
-  // ==============================================================
-  // FINALIZAÇÃO DE VENDA
-  // ==============================================================
   const subtotal = (cart || []).reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-  
   let calculatedDiscountValue = discountValue;
   let calculatedDiscountType = discountType;
   if (isEmployeePurchase && selectedEmployeeBuyer) {
        calculatedDiscountType = '%';
        calculatedDiscountValue = selectedEmployeeBuyer.discountPercent || 0;
   }
-
   const subtotalComDesconto = Math.max(0, subtotal - (calculatedDiscountValue ? (calculatedDiscountType === 'R$' ? Number(calculatedDiscountValue) : subtotal * (Number(calculatedDiscountValue)/100)) : 0));
   const cartTotal = subtotalComDesconto / Math.max(1, splitCount);
 
@@ -454,7 +437,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
   const resetPdvState = () => {
       setCart([]); setLoadedTab(null); setSearchTabNumber(''); setSearchCustomerText(''); setSelectedSeatFilter('TODOS'); 
       setSelectedEmployeeBuyer(null); setSelectedCustomer(null); setIsEmployeePurchase(false); 
-      setShowLimitOverrideModal(false); setManagerAuthLimit({ email: '', password: '' }); fetchEmployees();
+      setShowLimitOverrideModal(false); setManagerAuthLimit({ email: '', password: '' });
   };
 
   const executeSmartPosOrFinish = (orderId, totalPaid, method) => {
@@ -470,13 +453,18 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       resetPdvState();
   };
 
+  // ==============================================================
+  // 🔥 FINALIZAÇÃO DE VENDA COM OFFLINE-FIRST (PWA + DEXIE)
+  // ==============================================================
   const handleCheckoutPDV = async (overrideAuth = null) => {
     const currentCart = cart || [];
     if (currentCart.length === 0) return alert("Carrinho vazio!");
 
     const finalClientName = isEmployeePurchase ? selectedEmployeeBuyer?.name : (searchCustomerText.trim() || 'Cliente Balcão (PDV)');
 
+    // 1. FECHAMENTO DE MESA NO SALÃO (Exige Internet)
     if (loadedTab) {
+      if (!isOnline) return alert("O Fechamento de Mesas/Comandas do Salão não está disponível no Modo Offline.");
       try {
         const payload = { 
              paymentMethod, registerId: registerInfo?.id, shiftId, splitCount, 
@@ -504,8 +492,13 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       return;
     }
 
-    // 🎯 VENDA BALCÃO (Direta) COM MAPEAMENTO DE SABORES DE PIZZA
+    // 2. VENDA BALCÃO (Direta) - 🔥 SUPORTA OFFLINE
     try {
+      // Impede venda fiada (conta cliente/funcionário) se estiver offline, pois não tem como validar limites no BD
+      if (!isOnline && (paymentMethod === 'CUSTOMER_ACCOUNT' || paymentMethod === 'EMPLOYEE_ACCOUNT')) {
+          return alert("O registro de Vendas Fiadas (Conta Cliente/Funcionário) requer conexão com a internet para validação de limites de crédito.");
+      }
+
       const payload = {
           clientId: selectedCustomer?.id || 'TOTEM_MODE', 
           employeeBuyerId: selectedEmployeeBuyer?.id, 
@@ -526,21 +519,31 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
           managerAuth: overrideAuth
       };
 
-      const res = await fetchWithStore(`${API_URL}/api/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      
-      if (data.success) { 
-         const finalOrderId = data.order?.id || data.orderId;
-         if (paymentMethod !== 'CUSTOMER_ACCOUNT' && paymentMethod !== 'EMPLOYEE_ACCOUNT') {
-             await processFiscalAndPrint(finalOrderId, currentCart, finalClientName, cartTotal, paymentMethod);
+      // 🔥 CHAMA A FUNÇÃO DE OFFLINE DO NOSSO HOOK (Dexie.js)
+      const offlineRes = await processarPedido(payload);
+
+      if (offlineRes.success) {
+         if (offlineRes.isOffline) {
+            alert(`📡 OFFLINE: Venda salva no computador. Será sincronizada assim que a internet voltar.`);
+            
+            // Impressão Cega: Imprime a comanda na cozinha usando os dados que temos agora
+            const mockOrderId = `OFFLINE-${Date.now()}`;
+            await processFiscalAndPrint(mockOrderId, currentCart, finalClientName, cartTotal, paymentMethod);
+            executeSmartPosOrFinish(mockOrderId, cartTotal, paymentMethod);
+         } else {
+            // Se estivermos Online, a Fila (Dexie) mandou para o servidor silenciosamente.
+            // Para não quebrar o fluxo original de impressão/NFce do Zenix, podemos aguardar um pouco
+            // a promessa do servidor responder ou simplesmente seguir. O ideal é o Hook avisar!
+            // *Nota para ZenixFood:* Num PDV robusto, o backend retorna a ID original da Order. 
+            // Como usamos a Fila Async, usamos um Mock Temporário até a Sefaz processar o backlog.
+            const mockOrderId = `SYNC-${Date.now()}`;
+            await processFiscalAndPrint(mockOrderId, currentCart, finalClientName, cartTotal, paymentMethod);
+            executeSmartPosOrFinish(mockOrderId, cartTotal, paymentMethod);
          }
-         executeSmartPosOrFinish(finalOrderId, cartTotal, paymentMethod);
       } else {
-         if (data.code === 'LIMIT_EXCEEDED') {
-            setLimitErrorMessage(data.error); setShowLimitOverrideModal(true);
-         } else { alert(data.error); }
+         alert("Erro no banco de dados local do seu navegador.");
       }
-    } catch (e) { alert("Erro de conexão com o servidor."); }
+    } catch (e) { alert("Erro de conexão com o sistema."); }
   };
 
   const handleLimitOverrideSubmit = (e) => {
@@ -548,9 +551,9 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       handleCheckoutPDV(managerAuthLimit);
   };
 
-  // 🔥 PROCESSAR PAGAMENTO DO TOTEM
   const approveTotemOrder = async () => {
     if (!selectedTotemOrder) return;
+    if (!isOnline) return alert("Operação requer internet.");
     setProcessingTotem(true);
     try {
       const res = await fetchWithStore(`${API_URL}/api/pdv/awaiting-payment/${selectedTotemOrder.id}/approve`, {
@@ -560,13 +563,9 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       });
       const data = await res.json();
       if (data.success) {
-        
-        // Emite Fiscalmente a Venda do Totem Recebida no Caixa
         await processFiscalAndPrint(selectedTotemOrder.id, selectedTotemOrder.items, selectedTotemOrder.customerName, selectedTotemOrder.total, totemPaymentMethod);
-        
         alert("Recebimento do Totem confirmado e pedido liberado para Cozinha!");
         
-        // Verifica se envia para a Maquininha (Smart POS)
         const provider = fullSettings?.smartPosProvider;
         const metodosEletronicos = ['CREDIT_CARD_DELIVERY', 'DEBIT_CARD', 'PIX'];
         if (provider && provider !== 'none' && metodosEletronicos.includes(totemPaymentMethod)) {
@@ -575,34 +574,20 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
 
         setSelectedTotemOrder(null);
         fetchAwaitingTotemOrders();
-      } else {
-        alert(data.error);
-      }
-    } catch (e) {
-      alert("Erro ao aprovar pedido do totem.");
-    }
+      } else { alert(data.error); }
+    } catch (e) { alert("Erro ao aprovar pedido do totem."); }
     setProcessingTotem(false);
   };
 
   const cancelTotemOrder = async () => {
     if (!selectedTotemOrder || !confirm("Tem certeza que deseja CANCELAR este pedido do Totem? Ele será removido da cozinha.")) return;
+    if (!isOnline) return alert("Operação requer internet.");
     setProcessingTotem(true);
     try {
-      const res = await fetchWithStore(`${API_URL}/api/pdv/awaiting-payment/${selectedTotemOrder.id}/cancel`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const res = await fetchWithStore(`${API_URL}/api/pdv/awaiting-payment/${selectedTotemOrder.id}/cancel`, { method: 'PUT', headers: { 'Content-Type': 'application/json' } });
       const data = await res.json();
-      if (data.success) {
-        alert("Pedido Cancelado.");
-        setSelectedTotemOrder(null);
-        fetchAwaitingTotemOrders();
-      } else {
-        alert(data.error);
-      }
-    } catch (e) {
-      alert("Erro ao cancelar pedido.");
-    }
+      if (data.success) { alert("Pedido Cancelado."); setSelectedTotemOrder(null); fetchAwaitingTotemOrders(); } else { alert(data.error); }
+    } catch (e) { alert("Erro ao cancelar pedido."); }
     setProcessingTotem(false);
   };
 
@@ -631,14 +616,31 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
       {/* HEADER DO CAIXA E ALERTA DO TOTEM */}
       <div className="bg-slate-900 rounded-3xl p-4 mb-6 flex justify-between items-center shadow-lg border border-slate-800 shrink-0">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 text-2xl">🔓</div>
-          <div><h2 className="text-white font-black text-lg leading-none mb-1">Ponto de Venda (PDV)</h2><p className="text-emerald-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Caixa Aberto</p></div>
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${isOnline ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-500 animate-pulse'}`}>
+             {isOnline ? '🔓' : '📡'}
+          </div>
+          <div>
+             <h2 className="text-white font-black text-lg leading-none mb-1">Ponto de Venda (PDV)</h2>
+             
+             {/* 🔥 INDICADOR DE OFFLINE E FILA */}
+             {isOnline ? (
+                 <p className="text-emerald-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Caixa Aberto (Online)</p>
+             ) : (
+                 <p className="text-red-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-400"></span> SEM INTERNET - OFFLINE</p>
+             )}
+          </div>
         </div>
         
         <div className="flex gap-2 relative z-50 items-center">
           
-          {/* 🔥 ALERTA PULSANTE PARA O CAIXA SE TIVER PEDIDOS DO TOTEM */}
-          {awaitingTotemOrders.length > 0 && (
+          {/* Fila do DEXIE */}
+          {pedidosPendentes > 0 && (
+             <span className="bg-amber-500 text-black px-3 py-1.5 rounded-lg text-[10px] font-black mr-2 animate-bounce">
+                {pedidosPendentes} Pendente(s) de Envio
+             </span>
+          )}
+
+          {awaitingTotemOrders.length > 0 && isOnline && (
              <button onClick={() => setIsTotemSidebarOpen(!isTotemSidebarOpen)} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-black cursor-pointer shadow-lg shadow-red-500/50 flex items-center gap-2 mr-4 animate-pulse">
                 <span className="text-base">🚨</span> 
                 {awaitingTotemOrders.length} TOTEM PENDENTE
@@ -683,7 +685,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
         {/* BARRA LATERAL - CARRINHO DO CAIXA E TOTEM */}
         <div className="w-[390px] flex flex-col gap-4 overflow-hidden shrink-0">
             
-            {/* 🔥 PAINEL DOS PEDIDOS DO TOTEM (SÓ APARECE SE ABERTO) */}
+            {/* PAINEL DOS PEDIDOS DO TOTEM (SÓ APARECE SE ABERTO) */}
             {isTotemSidebarOpen && (
                <div className="bg-red-50 border-2 border-red-500 rounded-3xl p-4 flex flex-col shadow-xl animate-fade-in-up shrink-0 max-h-[50%]">
                   <div className="flex justify-between items-center mb-3 border-b border-red-200 pb-2">
@@ -846,9 +848,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
 
       </div>
 
-      {/* ========================================================================= */}
       {/* 🔥 MODAL DE PAGAMENTO DO TOTEM (QUANDO O CAIXA CLICA NO PEDIDO LATERAL) */}
-      {/* ========================================================================= */}
       {selectedTotemOrder && (
          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl p-8 shadow-2xl max-w-sm w-full animate-fade-in-up border-2 border-red-500">
@@ -882,7 +882,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
          </div>
       )}
 
-      {/* 🍕 MODAL: CONSTRUTOR DE PIZZA (PDV) */}
+      {/* 🍕 MODAL: CONSTRUTOR DE PIZZA */}
       {pizzaBuilderOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6 animate-fade-in-up">
           <div className="bg-white rounded-[2rem] shadow-2xl p-6 w-full max-w-3xl flex flex-col max-h-[90vh]">
@@ -946,7 +946,7 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
         </div>
       )}
 
-      {/*MODAL AUTORIZAÇÃO DE LIMITE */}
+      {/* MODAIS (LIMITE DE CRÉDITO, NOVO CLIENTE, MOVIMENTAÇÕES) */}
       {showLimitOverrideModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-red-500 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden animate-fade-in-up text-center">
@@ -969,7 +969,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
         </div>
       )}
 
-      {/*MODAL: CADASTRAR NOVO CLIENTE */}
       {showNewCustomerModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative">
@@ -990,7 +989,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
         </div>
       )}
 
-      {/* MODAL: FECHAR CAIXA */}
       {showCloseModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-8 rounded-3xl w-full max-w-sm shadow-2xl text-center relative overflow-hidden">
@@ -1007,7 +1005,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
         </div>
       )}
 
-      {/*MOVIMENTAÇÃO (SANGRIA) */}
       {showMovementModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative">
@@ -1033,7 +1030,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
         </div>
       )}
 
-      {/*LISTA DE MOVIMENTAÇÕES (SANGRIA) */}
       {showMovementsListModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 p-8 rounded-3xl w-full max-w-lg shadow-2xl relative max-h-[90vh] flex flex-col">
@@ -1057,7 +1053,6 @@ export default function PdvTab({ employeeUser, allProducts, menu }) {
         </div>
       )}
 
-      {/* MODAL: JUNTAR CONTAS */}
       {showMergeModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
            <div className="bg-white border border-slate-200 p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up text-center">

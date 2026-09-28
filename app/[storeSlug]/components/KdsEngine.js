@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 
-// 🎯 Renderizador Inteligente "Rastreador Agressivo" (Busca sabores em qualquer campo possível)
+// Renderizador Inteligente "Rastreador Agressivo" (Busca sabores em qualquer campo possível)
 const FormattedItemName = ({ item, baseClassName }) => {
   const quantity = item.quantity || 1;
   const baseProductName = item.product?.name || item.name || 'Item Sem Nome';
@@ -331,7 +331,7 @@ export default function KdsEngine({ mode }) { // mode: 'COZINHA' | 'DELIVERY' | 
   
   const totemAwaitingPayment = filteredTotemOrders.filter(o => o.status === 'PENDING' && o.paymentMethod === 'PAGAR_NO_CAIXA');
 
-  // 🔥 LÓGICA DE LIMPEZA DE CONCLUÍDOS (12 HORAS E LIMITE DE 20 ITENS)
+  //LÓGICA DE LIMPEZA DE CONCLUÍDOS (12 HORAS E LIMITE DE 20 ITENS)
   const shiftCutoff = now - (12 * 60 * 60 * 1000); 
 
   const deliveryCompleted = appOrders

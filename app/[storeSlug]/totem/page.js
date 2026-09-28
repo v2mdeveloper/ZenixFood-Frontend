@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 
 //FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {
@@ -26,6 +28,11 @@ export default function TotemModerno() {
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
+
+  const TOKEN_JWT = typeof window !== 'undefined' ? localStorage.getItem('zenix_token') : '';
+
+  // 🔥 INICIALIZA O MOTOR OFFLINE
+  const { isOnline, pedidosPendentes, processarPedido } = useOfflineSync(API_URL, storeSlug, TOKEN_JWT);
 
   const [storeData, setStoreData] = useState(null);
   const [menu, setMenu] = useState([]);
@@ -236,15 +243,12 @@ export default function TotemModerno() {
         // Finge que o cliente demorou 3 segundos a pagar e devolve para o sistema!
         setTimeout(() => {
             alert("(SIMULADOR) Pagamento Aprovado na Máquina! Imprimindo comprovante...");
-            // Como estamos num teste web, não precisamos redirecionar pois já estamos na tela, 
-            // basta deixar o fluxo do React continuar!
         }, 3000);
         return true;
 
       default: return false;
     }
 
-    // Só tenta abrir o Deep Link se NÃO for o simulador (para evitar erros no PC)
     if (provider !== 'simulador') {
         console.log(`[Smart POS] Disparando: ${deepLink}`);
         window.location.href = deepLink;
@@ -252,62 +256,108 @@ export default function TotemModerno() {
     
     return true;
   };
+
   // ==========================================
-  // FINALIZAÇÃO DE PEDIDO COM INTERCEPTAÇÃO SMART POS
+  // 🔥 FINALIZAÇÃO DE PEDIDO COM SUPORTE OFFLINE
   // ==========================================
   const handleFinalizeOrder = async () => {
     if (!customerName.trim() || !paymentMethod) return alert(t.namePrompt);
     setIsSubmitting(true);
     
+    const payload = {
+      clientId: "TOTEM_MODE", 
+      origin: "TOTEM",
+      customerName: customerName,
+      address: `Cliente: ${customerName}`, 
+      paymentMethod: paymentMethod, 
+      total: totalCart,
+      items: cart.map(item => ({ 
+        productId: item.productId || item.id, 
+        quantity: item.quantity, 
+        price: item.price,
+        name: item.name,
+        flavors: item.flavors ? JSON.stringify(item.flavors) : null 
+      }))
+    };
+
     try {
-      const payload = {
-        clientId: "TOTEM_MODE", 
-        origin: "TOTEM",
-        customerName: customerName,
-        address: `Cliente: ${customerName}`, 
-        paymentMethod: paymentMethod, 
-        total: totalCart,
-        items: cart.map(item => ({ 
-          productId: item.productId || item.id, 
-          quantity: item.quantity, 
-          price: item.price,
-          name: item.name,
-          flavors: item.flavors ? JSON.stringify(item.flavors) : null 
-        }))
-      };
+      // 1. TENTA ENVIAR PARA A NUVEM (SE TIVER INTERNET)
+      if (isOnline) {
+          const res = await fetch(`${API_URL}/api/orders`, {
+            method: 'POST',
+            headers: { 
+               'Content-Type': 'application/json',
+               'x-loja-slug': storeSlug 
+            },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          
+          if (res.ok && data.success) {
+            const orderId = data.order.id;
 
-      const res = await fetch(`${API_URL}/api/orders`, {
-        method: 'POST',
-        headers: { 
-           'Content-Type': 'application/json',
-           'x-loja-slug': storeSlug 
-        },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      
-      if (res.ok && data.success) {
-        const orderId = data.order.id;
+            setOrderSuccessData(data.order);
+            setCart([]); setCustomerName(''); setPaymentMethod(''); setIsCheckoutOpen(false);
 
-        // 1. Exibe a Tela de Sucesso Imediatamente para o Cliente
-        setOrderSuccessData(data.order);
-        setCart([]); setCustomerName(''); setPaymentMethod(''); setIsCheckoutOpen(false);
+            const provider = storeData?.smartPosProvider || storeData?.settings?.smartPosProvider;
+            const metodosEletronicos = ['CREDIT_CARD', 'PIX'];
+            
+            if (provider && provider !== 'none' && metodosEletronicos.includes(paymentMethod)) {
+                setTimeout(() => { dispararPagamentoSmartPos(provider, totalCart, paymentMethod, orderId); }, 1500);
+            }
+          } else {
+            alert(`Erro:\n\n${data.details || data.error}`);
+          }
+      } 
+      // 2. MODO OFFLINE (GUARDA NO DEXIE E MANDA PRO CAIXA VIA WI-FI)
+      else {
+          const shortIdRandom = Math.floor(1000 + Math.random() * 9000);
+          
+          // Salva no banco de dados do navegador (para sincronizar com a nuvem quando a net voltar)
+          const offlineRes = await processarPedido(payload);
+          
+          if (offlineRes.success) {
+              const mockOrder = {
+                  id: `OFF-${Date.now()}`,
+                  shortId: shortIdRandom,
+                  customerName: customerName,
+                  paymentMethod: paymentMethod,
+                  total: totalCart,
+                  items: cart
+              };
 
-        // 2. Lê se a Loja tem a Máquina Smart POS configurada
-        const provider = storeData?.smartPosProvider || storeData?.settings?.smartPosProvider;
-        const metodosEletronicos = ['CREDIT_CARD', 'PIX'];
-        
-        // 3. Se for Totem com POS nativa (Stone, PagSeguro) e o cliente escolheu Cartão/Pix
-        if (provider && provider !== 'none' && metodosEletronicos.includes(paymentMethod)) {
-            // Dá 1,5 segundos para o cliente ver o Ecrã Verde de Sucesso e a Senha
-            // E depois aciona o navegador para chamar a App de Pagamento
-            setTimeout(() => {
-                dispararPagamentoSmartPos(provider, totalCart, paymentMethod, orderId);
-            }, 1500);
-        }
+              // Dispara imediatamente para o Computador do Caixa via Rede Local (Para a Cozinha começar a fazer)
+              const printIp = localStorage.getItem('zenix_print_ip');
+              if (printIp) {
+                  const payloadOffline = {
+                      tabId: `TOTEM-${shortIdRandom}`,
+                      tabNumber: `TOTEM-${shortIdRandom}`,
+                      employeeName: 'Totem de Autoatendimento',
+                      items: payload.items,
+                      paymentMethod: paymentMethod,
+                      total: totalCart,
+                      customerName: customerName
+                  };
+                  fetch(`http://${printIp}:8080/pedido-local`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(payloadOffline)
+                  }).catch(() => console.warn("Caixa local inacessível."));
+              }
 
-      } else {
-        alert(`Erro:\n\n${data.details || data.error}`);
+              // Tela de Sucesso
+              setOrderSuccessData(mockOrder);
+              setCart([]); setCustomerName(''); setPaymentMethod(''); setIsCheckoutOpen(false);
+
+              // Dispara a maquininha Smart POS (se tiver)
+              const provider = storeData?.smartPosProvider || storeData?.settings?.smartPosProvider;
+              const metodosEletronicos = ['CREDIT_CARD', 'PIX'];
+              if (provider && provider !== 'none' && metodosEletronicos.includes(paymentMethod)) {
+                  setTimeout(() => { dispararPagamentoSmartPos(provider, totalCart, paymentMethod, mockOrder.id); }, 1500);
+              }
+          } else {
+              alert("Erro ao gravar pedido offline.");
+          }
       }
     } catch (e) { alert("Erro de conexão."); }
     setIsSubmitting(false);
@@ -334,6 +384,18 @@ export default function TotemModerno() {
            <button onClick={() => handleStart('pt')} className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-2xl hover:scale-105 transition-transform bg-white focus:outline-none"><img src="https://flagcdn.com/w320/br.png" alt="BR" className="w-full h-full object-cover" /></button>
            <button onClick={() => handleStart('en')} className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-2xl hover:scale-105 transition-transform bg-white focus:outline-none"><img src="https://flagcdn.com/w320/us.png" alt="US" className="w-full h-full object-cover" /></button>
            <button onClick={() => handleStart('es')} className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-2xl hover:scale-105 transition-transform bg-white focus:outline-none"><img src="https://flagcdn.com/w320/es.png" alt="ES" className="w-full h-full object-cover" /></button>
+        </div>
+
+        {/* 🔥 BOTÃO SECRETO PARA CONFIGURAR IP DO CAIXA (RODAPÉ) */}
+        <div 
+          onClick={() => {
+            const atual = localStorage.getItem('zenix_print_ip') || '';
+            const novo = prompt("⚙️ Configuração Técnica\nQual o IP local (Wi-Fi) do Computador do Caixa?", atual);
+            if (novo !== null) { localStorage.setItem('zenix_print_ip', novo); alert("IP Salvo: " + novo); }
+          }}
+          className="absolute bottom-2 right-4 text-[10px] text-slate-400 font-bold z-50 cursor-pointer hover:text-white"
+        >
+          Desenvolvido por V2M Commercial Automation & Software Developer
         </div>
       </div>
     );
@@ -408,6 +470,10 @@ export default function TotemModerno() {
           <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
              <span>{menu.find(c => c.id === activeCategory) ? getCategoryIcon(menu.find(c => c.id === activeCategory)) : ''}</span>
              {menu.find(c => c.id === activeCategory)?.name || t.selectCategory}
+             
+             {/* 🔥 INDICADOR DE OFFLINE DO TOTEM */}
+             {!isOnline && <span className="ml-4 bg-red-500 text-white px-3 py-1 rounded-full text-[10px] uppercase tracking-widest font-black animate-pulse">Modo Offline</span>}
+             {pedidosPendentes > 0 && isOnline && <span className="ml-2 bg-amber-500 text-white px-3 py-1 rounded-full text-[10px] uppercase tracking-widest font-black">{pedidosPendentes} Sync</span>}
           </h1>
           <div className="flex items-center gap-4">
             <button onClick={() => setIsIdle(true)} className="bg-slate-100 text-slate-400 px-4 py-2 rounded-full font-bold text-sm hover:bg-slate-200">🔙</button>
@@ -598,11 +664,6 @@ export default function TotemModerno() {
           </div>
         </div>
       )}
-
-      {/* DEV FOOTER ABSOLUTO */}
-      <div className="absolute top-2 right-4 text-[10px] text-slate-400 font-bold z-50 mix-blend-multiply pointer-events-none">
-        Desenvolvido por V2M Commercial Automation & Software Developer
-      </div>
     </div>
   );
 }

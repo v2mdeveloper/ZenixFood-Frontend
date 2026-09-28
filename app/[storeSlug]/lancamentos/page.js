@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 
 export default function LancamentosPage() {
   const params = useParams();
@@ -10,6 +12,12 @@ export default function LancamentosPage() {
   const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))) 
     ? 'http://localhost:3333' 
     : 'https://zenixfood-backend.onrender.com';
+
+  const LOJA_ID = typeof window !== 'undefined' ? localStorage.getItem('zenix_store_id') : '';
+  const TOKEN_JWT = typeof window !== 'undefined' ? (localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@ZenixFood:employeeToken')) : '';
+
+  // 🔥 INICIALIZA O MOTOR OFFLINE
+  const { isOnline, pedidosPendentes, processarPedido } = useOfflineSync(API_URL, LOJA_ID, TOKEN_JWT);
 
   const [storeStatus, setStoreStatus] = useState('LOADING');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -87,16 +95,11 @@ export default function LancamentosPage() {
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [movementForm, setMovementForm] = useState({ type: 'OUT', amount: '', reason: '' });
 
-  // ESTADO PARA ARMAZENAR CONFIGURAÇÕES DA LOJA
   const [fullSettings, setFullSettings] = useState(null);
 
-  // =========================================================================
-  // ESTADOS PARA PONTE NATIVA SMART POS (ANDROID WEBVIEW)
-  // =========================================================================
   const [isSmartPOS, setIsSmartPOS] = useState(false);
-  const [posProvider, setPosProvider] = useState(null); // 'pagseguro' ou 'stone'
+  const [posProvider, setPosProvider] = useState(null);
 
-  // Identifica e valida a loja pelo slug da URL
   useEffect(() => {
     if (!storeSlug) return;
     const identifyStore = async () => {
@@ -114,51 +117,28 @@ export default function LancamentosPage() {
     identifyStore();
   }, [storeSlug]);
 
-  // =========================================================================
-  // ESCUTADORES DA PONTE NATIVA (PAGBANK / STONE)
-  // =========================================================================
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Verifica se o App Android injetou alguma das interfaces no navegador
-      if (window.ZenixPagBankPOS) {
-        setIsSmartPOS(true);
-        setPosProvider('pagseguro');
-      } else if (window.ZenixStonePOS) {
-        setIsSmartPOS(true);
-        setPosProvider('stone');
-      }
+      if (window.ZenixPagBankPOS) { setIsSmartPOS(true); setPosProvider('pagseguro'); } 
+      else if (window.ZenixStonePOS) { setIsSmartPOS(true); setPosProvider('stone'); }
 
-      // O Android chamará esta função quando o cartão for aprovado
       window.pagamentoAprovado = (transacaoId, orderId) => {
         alert(`✅ Pagamento Aprovado na Máquina!\nTransação: ${transacaoId}`);
-        // Limpa a tela após sucesso na maquininha
-        setShowCheckoutModal(false); 
-        setPagamentos([]); 
-        setSelectedTab(null);
-        fetchTabs(); 
-        fetchMeuCaixa();
-        setCaixaLoading(false);
+        setShowCheckoutModal(false); setPagamentos([]); setSelectedTab(null);
+        fetchTabs(); fetchMeuCaixa(); setCaixaLoading(false);
       };
 
-      // O Android chamará esta função em caso de erro, senha inválida, etc.
       window.pagamentoRecusado = (motivo) => {
         alert(`❌ Erro no cartão: ${motivo}`);
         setCaixaLoading(false);
       };
     }
-
-    return () => {
-      if (typeof window !== 'undefined') {
-        delete window.pagamentoAprovado;
-        delete window.pagamentoRecusado;
-      }
-    };
+    return () => { if (typeof window !== 'undefined') { delete window.pagamentoAprovado; delete window.pagamentoRecusado; } };
   }, []);
 
   const fetchWithStore = async (url, options = {}) => {
-    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token') || localStorage.getItem('@ZenixFood:employeeToken');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
-    const headers = { ...(token && { 'Authorization': `Bearer ${token}` }), ...(storeId && { 'x-loja-slug': storeId }), ...options.headers };
+    const headers = { ...(TOKEN_JWT && { 'Authorization': `Bearer ${TOKEN_JWT}` }), ...(storeId && { 'x-loja-slug': storeId }), ...options.headers };
     const response = await fetch(url, { ...options, headers });
     if (response.status === 402 && typeof window !== 'undefined') window.location.href = `/${storeSlug}/bloqueado`;
     return response;
@@ -194,11 +174,13 @@ export default function LancamentosPage() {
   useEffect(() => {
     if (isAuthenticated && storeStatus === 'FOUND' && employeeUser) {
       fetchTabs(); fetchMenu(); fetchUpsells(); fetchPeople(); fetchMeuCaixa();
-      const interval = setInterval(() => { fetchTabs(); fetchMeuCaixa(); }, 5000);
+      
+      // Só busca atualização da nuvem se tiver online. Se estiver offline, foca na tela atual.
+      const interval = setInterval(() => { if(isOnline) { fetchTabs(); fetchMeuCaixa(); } }, 5000);
       const clock = setInterval(() => setCurrentTime(Date.now()), 1000);
       return () => { clearInterval(interval); clearInterval(clock); };
     }
-  }, [isAuthenticated, storeStatus, employeeUser]);
+  }, [isAuthenticated, storeStatus, employeeUser, isOnline]);
 
   useEffect(() => {
     if (!tabs.length || !employeeUser) return;
@@ -242,7 +224,7 @@ export default function LancamentosPage() {
   };
 
   const logEmployeeAction = async (actionDesc) => {
-    if (!employeeUser) return;
+    if (!employeeUser || !isOnline) return;
     try { await fetchWithStore(`${API_URL}/api/rh/logs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId: employeeUser.id, action: actionDesc }) }); } catch (e) {}
   };
 
@@ -253,6 +235,7 @@ export default function LancamentosPage() {
   };
 
   const fetchPeople = async () => {
+    if (!isOnline) return;
     try {
       const [resC, resE, resAcc] = await Promise.all([ fetchWithStore(`${API_URL}/api/customers`), fetchWithStore(`${API_URL}/api/rh/employees`), fetchWithStore(`${API_URL}/api/rh/employee-accounts`) ]);
       let clients = []; let emps = [];
@@ -265,6 +248,7 @@ export default function LancamentosPage() {
   };
 
   const fetchTabs = async () => {
+    if (!isOnline) return;
     try {
       const res = await fetchWithStore(`${API_URL}/api/salao/tabs`);
       if (res.ok) {
@@ -299,6 +283,7 @@ export default function LancamentosPage() {
 
   // 💰 LÓGICA DO CAIXA AMBULANTE E MOVIMENTOS (SANGRIA/SUPRIMENTO)
   const fetchMeuCaixa = async () => {
+    if (!isOnline) return;
     try {
       const res = await fetchWithStore(`${API_URL}/api/mobile-pos/meu-caixa`, { headers: { 'x-employee-name': employeeUser.name } });
       if (res.ok) { const data = await res.json(); setMeuCaixa(data.caixa); }
@@ -306,7 +291,9 @@ export default function LancamentosPage() {
   };
 
   const handleAbrirCaixa = async (e) => {
-    e.preventDefault(); setCaixaLoading(true);
+    e.preventDefault(); 
+    if (!isOnline) return alert("Você precisa de internet para abrir o caixa ambulante.");
+    setCaixaLoading(true);
     try {
       const res = await fetchWithStore(`${API_URL}/api/mobile-pos/abrir`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -319,7 +306,9 @@ export default function LancamentosPage() {
   };
 
   const handleFecharCaixa = async (e) => {
-    e.preventDefault(); setCaixaLoading(true);
+    e.preventDefault(); 
+    if (!isOnline) return alert("Você precisa de internet para fechar o caixa. Certifique-se de que a maquininha está online.");
+    setCaixaLoading(true);
     try {
       const res = await fetchWithStore(`${API_URL}/api/mobile-pos/fechar`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-employee-name': employeeUser.name },
@@ -337,6 +326,7 @@ export default function LancamentosPage() {
   const handleCashMovement = async (e) => {
     e.preventDefault();
     if (Number(movementForm.amount) <= 0) return alert('Digite um valor válido.');
+    if (!isOnline) return alert("Você precisa de internet para fazer movimentações financeiras.");
     setCaixaLoading(true);
     try {
       const res = await fetchWithStore(`${API_URL}/api/mobile-pos/movimento`, {
@@ -354,8 +344,6 @@ export default function LancamentosPage() {
   const handleAdicionarPagamento = () => {
     const val = Number(pagamentoAtual.valor);
     if (val <= 0) return alert("Digite um valor válido.");
-    
-    // Mapeamento visual para interno
     let internalMethod = pagamentoAtual.metodo;
     if (pagamentoAtual.metodo === 'CREDITO') internalMethod = 'CREDIT_CARD';
     if (pagamentoAtual.metodo === 'DEBITO') internalMethod = 'DEBIT_CARD';
@@ -367,17 +355,14 @@ export default function LancamentosPage() {
 
   const handleRemoverPagamento = (index) => { setPagamentos(pagamentos.filter((_, i) => i !== index)); };
 
-  // ============================================================================
-  // INTEGRAÇÃO SMART POS: PONTE NATIVA (WEBVIEW) OU DEEP LINK (APP-TO-APP)
-  // ============================================================================
   const dispararPagamentoSmartPos = (provider, totalFinal, metodoPagamento, orderId) => {
     const valorCentavos = Math.round(Number(totalFinal) * 100);
-    
     let tipoTransacao = 'DEBIT'; 
     if (metodoPagamento.includes('CREDIT')) tipoTransacao = 'CREDIT';
     if (metodoPagamento.includes('PIX')) tipoTransacao = 'PIX';
+    const returnUrl = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
+    let deepLink = '';
 
-    // 1. TENTA ACIONAR A PONTE NATIVA (WEBVIEW ANDROID DA ZENIX)
     if (isSmartPOS) {
         if (posProvider === 'pagseguro' && window.ZenixPagBankPOS) {
             window.ZenixPagBankPOS.iniciarPagamento(valorCentavos, tipoTransacao, orderId);
@@ -387,10 +372,6 @@ export default function LancamentosPage() {
             return true;
         }
     }
-
-    // 2. FALLBACK: APP-TO-APP (DEEP LINK) PARA NAVEGADORES NORMAIS NO ANDROID
-    const returnUrl = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
-    let deepLink = '';
 
     switch (provider) {
       case 'stone':
@@ -403,38 +384,28 @@ export default function LancamentosPage() {
       case 'mercado_pago':
         deepLink = `mercadopago://pay?amount=${Number(totalFinal).toFixed(2)}&return_url=${returnUrl}`;
         break;
-      
       case 'simulador':
-        alert(`(SIMULADOR) O sistema chamou a máquina de cartões.\n\nValor: R$ ${Number(totalFinal).toFixed(2)}\nMétodo: ${tipoTransacao}\n\nAguardando cliente digitar a senha...`);
+        alert(`(SIMULADOR) Pagamento Aprovado na Máquina! Imprimindo comprovante...`);
         setTimeout(() => {
-            alert("(SIMULADOR) Pagamento Aprovado na Máquina! Imprimindo comprovante...");
-            // Limpa a tela localmente no simulador
-            setShowCheckoutModal(false); 
-            setPagamentos([]); 
-            setSelectedTab(null);
-            fetchTabs(); 
-            fetchMeuCaixa();
-            setCaixaLoading(false);
+            setShowCheckoutModal(false); setPagamentos([]); setSelectedTab(null);
+            fetchTabs(); fetchMeuCaixa(); setCaixaLoading(false);
         }, 3000);
         return true;
-
       default: return false;
     }
 
     if (provider !== 'simulador') {
-        console.log(`[Smart POS] Disparando App-to-App: ${deepLink}`);
         window.location.href = deepLink;
     }
-    
     return true;
   };
 
   const handleConfirmarPagamento = async () => {
     if (pagamentos.length === 0) return alert("Adicione pelo menos um método de pagamento.");
+    if (!isOnline) return alert("Você precisa de internet para encerrar comandas e registrar o pagamento.");
+
     setCaixaLoading(true);
-    
     try {
-      // 1. Regista o pagamento e fecha a conta no Backend
       const res = await fetchWithStore(`${API_URL}/api/mobile-pos/pagar-conta`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-employee-name': employeeUser.name },
         body: JSON.stringify({ tabId: selectedTab.id, pagamentos })
@@ -442,12 +413,8 @@ export default function LancamentosPage() {
       const data = await res.json();
       
       if (res.ok && data.success) {
-         
          const orderId = data.orderId; 
          
-         // =================================================================
-         // INTEGRAÇÃO FISCAL E IMPRESSÃO REMOTA (WI-FI)
-         // =================================================================
          if (orderId) {
              try {
                  const resFiscal = await fetchWithStore(`${API_URL}/api/fiscal/emitir/${orderId}`, { method: 'POST' });
@@ -456,70 +423,42 @@ export default function LancamentosPage() {
                  if (dataFiscal.success && dataFiscal.dados) {
                      let printIp = localStorage.getItem('zenix_print_ip');
                      if (!printIp) {
-                         printIp = prompt("Primeira Venda! Digite o IP do computador do Caixa Principal para imprimir os Cupons (ex: 192.168.1.15):");
+                         printIp = prompt("Digite o IP do computador do Caixa Principal para imprimir (ex: 192.168.1.15):");
                          if (printIp) localStorage.setItem('zenix_print_ip', printIp);
                      }
-
                      if (printIp) {
                          const pedidoParaImpressao = {
-                             shortId: selectedTab.number,
-                             createdAt: new Date().toISOString(),
+                             shortId: selectedTab.number, createdAt: new Date().toISOString(),
                              client: { name: selectedTab.customerName || 'Consumidor', cpf: selectedTab.customerCpf || '' },
                              items: selectedTab.items.map(i => ({ name: i.name, quantity: i.quantity, price: i.price, product: { name: i.name } })),
-                             total: totalDevido,
-                             paymentMethod: pagamentos.map(p => p.metodo).join(', ')
+                             total: totalDevido, paymentMethod: pagamentos.map(p => p.metodo).join(', ')
                          };
-
                          fetch(`http://${printIp}:8080/imprimir-nfce`, {
-                             method: 'POST',
-                             headers: { 'Content-Type': 'application/json' },
+                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                              body: JSON.stringify({ pedido: pedidoParaImpressao, dadosNota: dataFiscal.dados })
-                         }).catch(e => console.warn("Impressora local inacessível no IP:", printIp));
+                         }).catch(e => console.warn("Impressora inacessível"));
                      }
                  }
-             } catch (err) {
-                 console.error("Erro na emissão fiscal silenciosa:", err);
-             }
+             } catch (err) {}
          }
-         // =================================================================
 
-         // 2. INTEGRAÇÃO SMART POS
          const provider = fullSettings?.smartPosProvider;
          const metodosEletronicos = ['CREDIT_CARD', 'DEBIT_CARD', 'PIX'];
          const pagamentoEletronico = pagamentos.find(p => metodosEletronicos.includes(p.internalMethod));
 
          if (provider && provider !== 'none' && pagamentoEletronico) {
-             alert("Enviando valor para a máquina de cartões...");
              dispararPagamentoSmartPos(provider, pagamentoEletronico.valor, pagamentoEletronico.internalMethod, orderId);
-             
-             // Se NÃO for WebView nativo, limpamos a UI na hora, pois o App-to-App 
-             // redireciona o navegador ou a gente já finalizou o fallback.
-             // Se for WebView Nativo, esperamos o window.pagamentoAprovado limpar a tela!
              if (!isSmartPOS && provider !== 'simulador') {
-               setShowCheckoutModal(false); 
-               setPagamentos([]); 
-               setSelectedTab(null);
-               fetchTabs(); 
-               fetchMeuCaixa();
+               setShowCheckoutModal(false); setPagamentos([]); setSelectedTab(null);
+               fetchTabs(); fetchMeuCaixa();
              }
-
          } else {
              alert("Conta Paga e Encerrada com Sucesso!");
-             setShowCheckoutModal(false); 
-             setPagamentos([]); 
-             setSelectedTab(null);
-             fetchTabs(); 
-             fetchMeuCaixa();
+             setShowCheckoutModal(false); setPagamentos([]); setSelectedTab(null);
+             fetchTabs(); fetchMeuCaixa();
          }
-
-      } else {
-          alert(data.error || "Falha ao registrar pagamento.");
-          setCaixaLoading(false);
-      }
-    } catch (e) { 
-        alert("Erro ao processar pagamento."); 
-        setCaixaLoading(false);
-    }
+      } else { alert(data.error || "Falha ao registrar pagamento."); setCaixaLoading(false); }
+    } catch (e) { alert("Erro ao processar pagamento."); setCaixaLoading(false); }
   };
 
   const handleCpfChange = (e) => {
@@ -549,6 +488,7 @@ export default function LancamentosPage() {
 
   const handleOpenTab = async (e, overrideAuth = null) => {
     if (e) e.preventDefault();
+    if (!isOnline) return alert("Você precisa estar online para ABRIR uma nova mesa ou comanda.");
     const numVal = Number(openForm.number);
     if (!numVal || numVal <= 0) return alert('Digite um número válido para a Mesa ou Comanda.');
     if (numVal >= 1000 && (!openForm.customerName || openForm.customerName.trim() === '')) return alert('Para abrir uma Comanda Individual, o Nome Completo é obrigatório!');
@@ -565,6 +505,7 @@ export default function LancamentosPage() {
 
   const handleCancelTab = async (tabId) => {
     if (!confirm('Deseja cancelar esta mesa vazia?')) return;
+    if (!isOnline) return alert("Operação requer internet.");
     try {
       const res = await fetchWithStore(`${API_URL}/api/salao/tabs/${tabId}/cancel`, { method: 'POST' });
       const data = await res.json();
@@ -573,6 +514,7 @@ export default function LancamentosPage() {
   };
 
   const handleUndoItem = async (itemId) => {
+    if (!isOnline) return alert("Operação requer internet.");
     try {
       const res = await fetchWithStore(`${API_URL}/api/salao/items/${itemId}`, { method: 'DELETE' });
       const data = await res.json();
@@ -581,6 +523,7 @@ export default function LancamentosPage() {
   };
 
   const updateTabItemStatus = async (itemId, newStatus) => {
+    if (!isOnline) return alert("Operação requer internet.");
     try {
       const res = await fetchWithStore(`${API_URL}/api/salao/items/${itemId}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) });
       if (res.ok) { fetchTabs(); logEmployeeAction(`Retirou e Entregou um item do Balcão`); } else alert('Erro ao processar retirada.');
@@ -588,6 +531,7 @@ export default function LancamentosPage() {
   };
 
   const handleLinkTab = async (tabId, mesaNum) => {
+    if (!isOnline) return alert("Operação requer internet.");
     try {
       const res = await fetchWithStore(`${API_URL}/api/salao/tabs/${tabId}/link`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ linkedTable: mesaNum }) });
       const data = await res.json();
@@ -597,6 +541,7 @@ export default function LancamentosPage() {
 
   const handleMergeTabs = async (e) => {
     e.preventDefault();
+    if (!isOnline) return alert("Operação requer internet.");
     if (!mergeSourceTabNumber.trim()) return;
     try {
       const resSource = await fetchWithStore(`${API_URL}/api/salao/tabs/number/${mergeSourceTabNumber.trim()}`);
@@ -610,6 +555,7 @@ export default function LancamentosPage() {
 
   const handleTransferSubmit = async (e) => {
     e.preventDefault();
+    if (!isOnline) return alert("Operação requer internet.");
     if (!transferSourceId || !transferItemId || !transferTargetId) return alert('Preencha todos os campos da transferência.');
     try {
       const res = await fetchWithStore(`${API_URL}/api/salao/items/transfer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId: transferItemId, targetTabId: transferTargetId }) });
@@ -618,7 +564,6 @@ export default function LancamentosPage() {
     } catch (e) { alert('Erro na transferência.'); }
   };
 
-  // 🍕 LÓGICA DO CONSTRUTOR DE PIZZAS E INTERCEPTAÇÃO DE CLIQUES
   const handleProductInteraction = (product) => {
     if (product.isPizza && product.maxFlavors > 1) { setPizzaBase(product); setPizzaFlavorCount(1); setPizzaSelectedFlavors([product]); setPizzaBuilderOpen(true); return; }
     if (clickTimeout.current) {
@@ -666,22 +611,61 @@ export default function LancamentosPage() {
   const declineUpsell = () => { setCart(prev => [...(prev || []), { ...pendingUpsellItem, upsold: true }]); setShowUpsellModal(false); setPendingUpsellItem(null); setActiveUpsellRule(null); };
   const removeCartItem = (index) => { setCart(prev => (prev || []).filter((_, i) => i !== index)); };
 
+  // ==============================================================
+  // 🔥 ENVIAR PARA COZINHA (COM MOTOR OFFLINE / WI-FI LOCAL)
+  // ==============================================================
   const handleSendToKitchen = async (overrideAuth = null) => {
     if ((cart || []).length === 0 || !selectedTab) return;
     setLoadingData(true);
+    
     try {
-      const grouped = cart.reduce((acc, item) => { const tId = item.targetTabId || selectedTab.id; acc[tId] = acc[tId] || []; acc[tId].push(item); return acc; }, {});
-      for (const [tId, itemsOfTab] of Object.entries(grouped)) {
-         const payloadItems = itemsOfTab.map(i => ({ ...i, flavors: i.flavors ? JSON.stringify(i.flavors) : undefined }));
-         const res = await fetchWithStore(`${API_URL}/api/salao/tabs/${tId}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: payloadItems, managerAuth: overrideAuth }) });
-         const data = await res.json();
-         if (!data.success) {
-            if (data.code === 'LIMIT_EXCEEDED' || data.code === 'INVALID_MANAGER') { setLimitErrorMessage(data.error); setShowLimitOverrideModal(true); setLoadingData(false); return; }
-            throw new Error(data.error || 'Erro.');
-         }
+      // 1. TENTATIVA NORMAL (NUVEM)
+      if (isOnline) {
+          const grouped = cart.reduce((acc, item) => { const tId = item.targetTabId || selectedTab.id; acc[tId] = acc[tId] || []; acc[tId].push(item); return acc; }, {});
+          
+          for (const [tId, itemsOfTab] of Object.entries(grouped)) {
+             const payloadItems = itemsOfTab.map(i => ({ ...i, flavors: i.flavors ? JSON.stringify(i.flavors) : undefined }));
+             const res = await fetchWithStore(`${API_URL}/api/salao/tabs/${tId}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: payloadItems, managerAuth: overrideAuth }) });
+             const data = await res.json();
+             if (!data.success) {
+                if (data.code === 'LIMIT_EXCEEDED' || data.code === 'INVALID_MANAGER') { setLimitErrorMessage(data.error); setShowLimitOverrideModal(true); setLoadingData(false); return; }
+                throw new Error(data.error || 'Erro.');
+             }
+          }
+          alert('🚀 Pedidos enviados para a cozinha!');
+      } 
+      // 2. MODO OFFLINE (GUARDA NO DEXIE E TENTA MANDAR PARA O PC DO CAIXA)
+      else {
+          alert("📡 ATENÇÃO: Dispositivo sem internet.\nO pedido foi salvo localmente e será enviado assim que a rede estabilizar.");
+          
+          const payloadOffline = {
+             tabId: selectedTab.id,
+             tabNumber: selectedTab.number,
+             items: cart.map(i => ({ ...i, flavors: i.flavors ? JSON.stringify(i.flavors) : undefined })),
+             managerAuth: overrideAuth,
+             employeeName: employeeUser?.name
+          };
+
+          // Salva no IndexedDB
+          await processarPedido(payloadOffline);
+
+          // Tenta disparar o pedido direto para o IP Local do Caixa (Para a Cozinha não parar)
+          let printIp = localStorage.getItem('zenix_print_ip');
+          if (printIp) {
+              fetch(`http://${printIp}:8080/pedido-local`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payloadOffline)
+              }).catch(e => console.warn("Caixa local indisponível no IP", printIp));
+          }
       }
-      setCart([]); fetchTabs(); setSelectedTab(null); setShowLimitOverrideModal(false); setManagerAuthLimit({ email: '', password: '' }); alert('🚀 Pedidos enviados para a cozinha!');
-    } catch (e) { alert('Erro de comunicação: ' + e.message); } finally { setLoadingData(false); }
+
+      setCart([]); fetchTabs(); setSelectedTab(null); setShowLimitOverrideModal(false); setManagerAuthLimit({ email: '', password: '' });
+    } catch (e) { 
+       alert('Erro de comunicação: ' + e.message); 
+    } finally { 
+       setLoadingData(false); 
+    }
   };
 
   const handleLimitOverrideSubmit = (e) => { e.preventDefault(); handleSendToKitchen(managerAuthLimit); };
@@ -700,7 +684,6 @@ export default function LancamentosPage() {
     return currentCat ? currentCat.products || [] : [];
   };
 
-  // CÁLCULOS DO CAIXA E CHECKOUT
   const totalDevido = selectedTab ? calculateTotal(selectedTab.items) : 0;
   const totalPagoCheckout = pagamentos.reduce((acc, p) => acc + p.valor, 0);
   const valorRestante = Math.max(0, totalDevido - totalPagoCheckout);
@@ -748,12 +731,24 @@ export default function LancamentosPage() {
   return (
     <div className={`min-h-screen ${bgBase} ${textMain} font-sans flex flex-col md:flex-row selection:bg-amber-500 selection:text-slate-950 transition-colors`}>
       
+      {/* ALERTAS DA COZINHA (Pronto) */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex flex-col items-center gap-2 pointer-events-none w-full px-4">
         {readyAlerts.map((alert) => (
           <div key={alert.id} className="bg-emerald-500 text-white font-black px-6 py-3 rounded-2xl shadow-2xl animate-fade-in-up flex items-center gap-3 border border-emerald-400 pointer-events-auto">
             <span className="text-2xl">🔔</span><p className="text-sm">{alert.message}</p>
           </div>
         ))}
+        {/* 🔥 AVISO DE OFFLINE E FILA (VISUAL PARA O GARÇOM SABER) */}
+        {!isOnline && (
+            <div className="bg-red-500 text-white font-black px-6 py-2 rounded-xl shadow-lg flex items-center gap-2 border border-red-400 pointer-events-auto animate-pulse">
+                <span className="text-lg">📡</span><p className="text-xs uppercase tracking-widest">Sem Internet</p>
+            </div>
+        )}
+        {pedidosPendentes > 0 && isOnline && (
+            <div className="bg-amber-500 text-black font-black px-6 py-2 rounded-xl shadow-lg flex items-center gap-2 border border-amber-600 pointer-events-auto">
+                <span className="text-lg">⏳</span><p className="text-xs uppercase tracking-widest">Sincronizando {pedidosPendentes} Pedido(s)...</p>
+            </div>
+        )}
       </div>
 
       <aside className={`${bgSidebar} border-r ${borderSidebar} w-full md:w-64 flex-shrink-0 flex flex-row md:flex-col justify-between transition-colors z-40 fixed md:sticky bottom-0 md:top-0 h-[80px] md:h-screen shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] md:shadow-none`}>
@@ -786,6 +781,16 @@ export default function LancamentosPage() {
          <div className={`hidden md:flex p-4 border-t ${borderSidebar} flex-col gap-2`}>
             <button onClick={handleFullscreen} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-colors cursor-pointer ${textMenuUnselected}`}><span className="text-base">🔲</span> Tela Cheia</button>
             <button onClick={toggleTheme} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-colors cursor-pointer ${textMenuUnselected}`}><span className="text-base">{isDarkMode ? '☀️' : '🌙'}</span> Trocar Tema</button>
+            <button onClick={() => {
+                const atual = localStorage.getItem('zenix_print_ip') || '';
+                const novo = prompt("Qual o IP local (Wi-Fi) do Computador do Caixa?", atual);
+                if (novo !== null) {
+                    localStorage.setItem('zenix_print_ip', novo);
+                    alert("IP de Conexão Local salvo: " + novo);
+                }
+            }} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-colors cursor-pointer ${textMenuUnselected}`}>
+               <span className="text-base">⚙️</span> Rede Local (Caixa)
+            </button>
             <button onClick={handleLogout} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-black text-xs transition-colors cursor-pointer ${isDarkMode ? 'text-red-400 hover:bg-red-500/10' : 'text-red-500 hover:bg-red-50'}`}><span className="text-base">🚪</span> Sair</button>
          </div>
       </aside>
@@ -868,17 +873,6 @@ export default function LancamentosPage() {
                        <button onClick={() => setShowCloseCaixaModal(true)} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-4 rounded-2xl shadow-lg cursor-pointer transition-colors flex items-center justify-center gap-2 mt-4">
                           🔒 Encerrar Turno (Fechar Caixa)
                        </button>
-                       <button onClick={() => {
-                               const atual = localStorage.getItem('zenix_print_ip') || '';
-                               const novo = prompt("Qual o IP local (Wi-Fi) do Computador do Caixa?", atual);
-                                    if (novo !== null) {
-          localStorage.setItem('zenix_print_ip', novo);
-          alert("IP da Impressora Remota atualizado para: " + novo);
-      }
-   }} 
-   className="w-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold py-3 rounded-2xl transition-colors mt-2 text-xs uppercase tracking-widest cursor-pointer border border-slate-200">
-   ⚙️ Configurar IP da Impressora (Caixa)
-</button>
                     </div>
                  )}
               </div>
@@ -1124,39 +1118,8 @@ export default function LancamentosPage() {
       </main>
 
       {/* ========================================================================= */}
-      {/* (MOVIMENTOS, PIZZA, CAIXA, CHECKOUT...) */}
+      {/* MODAIS (PIZZA E PRODUTO) */}
       {/* ========================================================================= */}
-
-      {/*MODAL DE SANGRIA E SUPRIMENTO */}
-      {showMovementModal && (
-         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-            <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 md:p-8 w-full max-w-sm animate-fade-in-up text-center`}>
-               <h2 className={`text-2xl font-black mb-2 ${movementForm.type === 'IN' ? 'text-blue-500' : 'text-red-500'}`}>
-                  {movementForm.type === 'IN' ? 'Suprimento (Entrada)' : 'Sangria (Saída)'}
-               </h2>
-               <p className={`text-xs ${textMuted} mb-6`}>
-                  {movementForm.type === 'IN' ? 'Adicionar troco extra ao caixa.' : 'Retirar dinheiro em excesso para o cofre.'}
-               </p>
-               
-               <form onSubmit={handleCashMovement} className="space-y-4 text-left">
-                  <div>
-                     <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Valor (R$)</label>
-                     <input type="number" required step="0.01" min="0.01" value={movementForm.amount} onChange={e => setMovementForm({...movementForm, amount: e.target.value})} className={`w-full border rounded-xl p-4 text-2xl font-black text-center focus:outline-none focus:border-${movementForm.type === 'IN' ? 'blue' : 'red'}-500 ${bgInput}`} placeholder="0.00" />
-                  </div>
-                  <div>
-                     <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Motivo / Observação</label>
-                     <input type="text" value={movementForm.reason} onChange={e => setMovementForm({...movementForm, reason: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-${movementForm.type === 'IN' ? 'blue' : 'red'}-500 ${bgInput}`} placeholder="Ex: Moedas para troco..." />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                     <button type="button" onClick={() => setShowMovementModal(false)} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-bold cursor-pointer transition-colors`}>Cancelar</button>
-                     <button type="submit" disabled={caixaLoading} className={`flex-1 ${movementForm.type === 'IN' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'} text-white font-black py-3 rounded-xl shadow-lg transition-all cursor-pointer`}>Confirmar</button>
-                  </div>
-               </form>
-            </div>
-         </div>
-      )}
-
-      {/*MODAL DO PRODUTO SIMPLES */}
       {selectedProduct && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className={`${bgCard} border p-6 rounded-t-[2rem] sm:rounded-3xl w-full max-w-md shadow-2xl space-y-4 animate-fade-in-up transition-colors`}>
@@ -1195,15 +1158,11 @@ export default function LancamentosPage() {
         </div>
       )}
 
-      {/*MODAL: CONSTRUTOR DE PIZZA */}
       {pizzaBuilderOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 w-full max-w-3xl flex flex-col max-h-[90vh] animate-fade-in-up`}>
             <div className={`flex justify-between items-center mb-6 border-b pb-4 shrink-0 ${borderSidebar}`}>
-              <div>
-                 <h2 className={`text-2xl font-black ${textMain}`}>Montar Pizza</h2>
-                 <p className={`${textMuted} font-bold text-sm`}>{pizzaBase?.name}</p>
-              </div>
+              <div><h2 className={`text-2xl font-black ${textMain}`}>Montar Pizza</h2><p className={`${textMuted} font-bold text-sm`}>{pizzaBase?.name}</p></div>
               <button onClick={() => setPizzaBuilderOpen(false)} className={`w-10 h-10 rounded-full ${bgInput} font-black text-lg hover:text-red-500 transition-colors cursor-pointer`}>✕</button>
             </div>
             <div className="flex-1 overflow-y-auto pr-2 hide-scrollbar">
@@ -1245,8 +1204,66 @@ export default function LancamentosPage() {
           </div>
         </div>
       )}
+      
+      {/* MODAIS (DÍVIDA, LIMITE, UPSELL, PAGAMENTO) */}
+      {showManagerDebtModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className={`${bgCard} border border-red-500 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden animate-fade-in-up text-center`}>
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-500 to-red-700"></div>
+            <span className="text-5xl mb-4 inline-block">⚠️</span>
+            <h3 className={`text-xl font-black mb-2 ${textMain}`}>Cliente com Pendências!</h3>
+            <p className="text-xs text-red-500 font-bold mb-6">{debtAmountMsg} <br/><br/>Deseja que o gerente autorize e puxe essa dívida para esta nova comanda?</p>
+            <form onSubmit={handleDebtOverrideSubmit} className="space-y-4 text-left">
+              <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Autenticação do Gerente</p>
+                <input type="text" required value={managerAuthDebt.email} onChange={e => setManagerAuthDebt({...managerAuthDebt, email: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 mb-2 ${bgInput}`} placeholder="E-mail ou CPF do Gerente" />
+                <input type="password" required value={managerAuthDebt.password} onChange={e => setManagerAuthDebt({...managerAuthDebt, password: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 ${bgInput}`} placeholder="Senha" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                 <button type="button" onClick={() => setShowManagerDebtModal(false)} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-bold cursor-pointer`}>Cancelar</button>
+                 <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black py-3 rounded-xl shadow-lg transition-all cursor-pointer">Autorizar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-      {/*MODAL DE CHECKOUT (SMART POS) */}
+      {showLimitOverrideModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className={`${bgCard} border border-red-500 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden animate-fade-in-up text-center`}>
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-500 to-red-700"></div>
+            <span className="text-5xl mb-4 inline-block">⚠️</span>
+            <h3 className={`text-xl font-black mb-2 ${textMain}`}>Limite Excedido!</h3>
+            <p className="text-xs text-red-500 font-bold mb-6">{limitErrorMessage}</p>
+            <form onSubmit={handleLimitOverrideSubmit} className="space-y-4 text-left">
+              <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Autenticação do Gerente</p>
+                <input type="text" required value={managerAuthLimit.email} onChange={e => setManagerAuthLimit({...managerAuthLimit, email: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 mb-2 ${bgInput}`} placeholder="E-mail ou CPF" />
+                <input type="password" required value={managerAuthLimit.password} onChange={e => setManagerAuthLimit({...managerAuthLimit, password: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 ${bgInput}`} placeholder="Senha" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                 <button type="button" onClick={() => { setShowLimitOverrideModal(false); setLoadingData(false); }} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-bold cursor-pointer`}>Cancelar</button>
+                 <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black py-3 rounded-xl shadow-lg transition-all cursor-pointer">Autorizar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showUpsellModal && pendingUpsellItem && activeUpsellRule && (
+         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+            <div className={`${bgCard} border p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up text-center`}>
+               <span className="text-6xl mb-4 inline-block">✨🎁</span>
+               <h3 className={`text-xl font-black mb-2 ${textMain}`}>Completar o Pedido?</h3>
+               <p className={`text-sm ${textMuted} font-medium mb-6`}>Deseja adicionar <strong className="text-amber-500">{activeUpsellRule.offerProductName}</strong> por apenas <strong>R$ {Number(activeUpsellRule.offerPrice).toFixed(2)}</strong>?</p>
+               <div className="flex gap-3">
+                  <button onClick={declineUpsell} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-black cursor-pointer`}>Não, Obrigado</button>
+                  <button onClick={acceptUpsell} className="flex-1 bg-amber-500 text-slate-950 py-3 rounded-xl font-black cursor-pointer shadow-lg">Sim, Adicionar!</button>
+               </div>
+            </div>
+         </div>
+      )}
+
       {showCheckoutModal && (
          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
             <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 md:p-8 w-full max-w-lg animate-fade-in-up`}>
@@ -1262,9 +1279,7 @@ export default function LancamentosPage() {
                   </div>
                   <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                      <p className={`text-[10px] font-black uppercase tracking-widest ${textMuted}`}>Restante</p>
-                     <p className={`text-2xl font-black mt-1 ${valorRestante > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
-                        R$ {valorRestante.toFixed(2)}
-                     </p>
+                     <p className={`text-2xl font-black mt-1 ${valorRestante > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>R$ {valorRestante.toFixed(2)}</p>
                   </div>
                </div>
 
@@ -1309,111 +1324,6 @@ export default function LancamentosPage() {
             </div>
          </div>
       )}
-
-      {/*MODAL: FECHAR CAIXA */}
-      {showCloseCaixaModal && meuCaixa && (
-         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-            <div className={`${bgCard} border rounded-3xl shadow-2xl p-6 md:p-8 w-full max-w-md animate-fade-in-up text-center`}>
-               <span className="text-6xl mb-4 inline-block">🔒</span>
-               <h2 className={`text-2xl font-black mb-2 ${textMain}`}>Fechar Meu Caixa</h2>
-               <p className={`text-xs ${textMuted} mb-6`}>Conte as notas e comprovantes, e informe o valor final encontrado no seu caixa (incluindo o troco inicial de R$ {Number(meuCaixa.openingBalance).toFixed(2)}).</p>
-               
-               <form onSubmit={handleFecharCaixa} className="space-y-4 text-left">
-                  <div>
-                     <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Dinheiro Contado (R$)</label>
-                     <input type="number" required step="0.01" min="0" value={closingForm.balance} onChange={e => setClosingForm({...closingForm, balance: e.target.value})} className={`w-full border rounded-xl p-4 text-2xl font-black text-center focus:outline-none focus:border-red-500 ${bgInput}`} />
-                  </div>
-                  <div>
-                     <label className={`text-[10px] font-black ${textMuted} uppercase tracking-widest block mb-2`}>Observações (Faltou ou sobrou dinheiro?)</label>
-                     <input type="text" value={closingForm.details} onChange={e => setClosingForm({...closingForm, details: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 ${bgInput}`} placeholder="Opcional..." />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                     <button type="button" onClick={() => setShowCloseCaixaModal(false)} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-bold cursor-pointer transition-colors`}>Cancelar</button>
-                     <button type="submit" disabled={caixaLoading} className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black py-3 rounded-xl shadow-lg transition-all cursor-pointer">Confirmar Fecho</button>
-                  </div>
-               </form>
-            </div>
-         </div>
-      )}
-
-      {/*MODAL: DÍVIDA DO CLIENTE (GERENTE) */}
-      {showManagerDebtModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className={`${bgCard} border border-red-500 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden animate-fade-in-up text-center`}>
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-500 to-red-700"></div>
-            <span className="text-5xl mb-4 inline-block">⚠️</span>
-            <h3 className={`text-xl font-black mb-2 ${textMain}`}>Cliente com Pendências!</h3>
-            <p className="text-xs text-red-500 font-bold mb-6">{debtAmountMsg} <br/><br/>Deseja que o gerente autorize e puxe essa dívida para esta nova comanda?</p>
-            <form onSubmit={handleDebtOverrideSubmit} className="space-y-4 text-left">
-              <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Autenticação do Gerente</p>
-                <input type="text" required value={managerAuthDebt.email} onChange={e => setManagerAuthDebt({...managerAuthDebt, email: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 mb-2 ${bgInput}`} placeholder="E-mail ou CPF do Gerente" />
-                <input type="password" required value={managerAuthDebt.password} onChange={e => setManagerAuthDebt({...managerAuthDebt, password: e.target.value})} className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 ${bgInput}`} placeholder="Senha" />
-              </div>
-              <div className="flex gap-3 pt-2">
-                 <button type="button" onClick={() => setShowManagerDebtModal(false)} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-bold cursor-pointer`}>Cancelar</button>
-                 <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black py-3 rounded-xl shadow-lg transition-all cursor-pointer">Autorizar</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: LIMITE DE CRÉDITO (GERENTE) */}
-      {showLimitOverrideModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white border border-red-500 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden animate-fade-in-up text-center">
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-500 to-red-700"></div>
-            <span className="text-5xl mb-4 inline-block">⚠️</span>
-            <h3 className="text-xl font-black text-slate-800 mb-2">Limite Excedido!</h3>
-            <p className="text-xs text-red-600 font-bold mb-6">{limitErrorMessage}</p>
-            <form onSubmit={handleLimitOverrideSubmit} className="space-y-4 text-left">
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Autenticação do Gerente</p>
-                <input type="text" required value={managerAuthLimit.email} onChange={e => setManagerAuthLimit({...managerAuthLimit, email: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 mb-2 text-slate-900" placeholder="E-mail ou CPF" />
-                <input type="password" required value={managerAuthLimit.password} onChange={e => setManagerAuthLimit({...managerAuthLimit, password: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 text-slate-900" placeholder="Senha" />
-              </div>
-              <div className="flex gap-3 pt-2">
-                 <button type="button" onClick={() => { setShowLimitOverrideModal(false); setLoadingData(false); }} className="flex-1 bg-slate-100 hover:bg-slate-200 py-3 rounded-xl font-bold text-slate-700 cursor-pointer">Cancelar</button>
-                 <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black py-3 rounded-xl shadow-lg transition-all cursor-pointer">Autorizar</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/*MODAL: JUNTAR CONTAS */}
-      {showMergeModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-           <div className={`${bgCard} border p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up text-center`}>
-              <h3 className="text-xl font-black mb-2">Juntar Contas</h3>
-              <p className={`text-xs ${textMuted} font-medium mb-6`}>Digite o número da Mesa ou Comanda que será ENCERRADA e transferida para a atual.</p>
-              <form onSubmit={handleMergeTabs} className="space-y-4">
-                 <input type="number" required min="1" value={mergeSourceTabNumber} onChange={e => setMergeSourceTabNumber(e.target.value)} className={`w-full border rounded-xl p-4 text-2xl text-center font-black focus:outline-none focus:border-blue-500 ${bgInput}`} placeholder="Nº Origem" />
-                 <div className="flex gap-3 pt-2">
-                    <button type="button" onClick={() => setShowMergeModal(false)} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-bold cursor-pointer`}>Cancelar</button>
-                    <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-black cursor-pointer shadow-lg">Juntar Agora</button>
-                 </div>
-              </form>
-           </div>
-        </div>
-      )}
-
-      {/*MODAL: UPSELL */}
-      {showUpsellModal && pendingUpsellItem && activeUpsellRule && (
-         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-            <div className={`${bgCard} border p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-fade-in-up text-center`}>
-               <span className="text-6xl mb-4 inline-block">✨🎁</span>
-               <h3 className="text-xl font-black mb-2">Completar o Pedido?</h3>
-               <p className={`text-sm ${textMuted} font-medium mb-6`}>Deseja adicionar <strong className="text-amber-500">{activeUpsellRule.offerProductName}</strong> por apenas <strong>R$ {Number(activeUpsellRule.offerPrice).toFixed(2)}</strong>?</p>
-               <div className="flex gap-3">
-                  <button onClick={declineUpsell} className={`flex-1 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'} py-3 rounded-xl font-black cursor-pointer`}>Não, Obrigado</button>
-                  <button onClick={acceptUpsell} className="flex-1 bg-amber-500 text-slate-950 py-3 rounded-xl font-black cursor-pointer shadow-lg">Sim, Adicionar!</button>
-               </div>
-            </div>
-         </div>
-      )}
-
     </div>
   );
 }

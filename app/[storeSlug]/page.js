@@ -3,6 +3,9 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
+// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
+import { useOfflineSync } from '@/hooks/useOfflineSync';
+
 import Header from './components/Header';
 import Footer from './components/Footer';
 import FloatingCart from './components/FloatingCart';
@@ -91,31 +94,26 @@ function HomeContent({ storeSlug }) {
 
   const API_URL = 'https://zenixfood-backend.onrender.com';
   const searchParams = useSearchParams();
+  const TOKEN_JWT = typeof window !== 'undefined' ? (localStorage.getItem('@Zenix:token') || localStorage.getItem('zenix_token')) : '';
+
+  // 🔥 INICIALIZA O MOTOR OFFLINE
+  const { isOnline, pedidosPendentes, processarPedido } = useOfflineSync(API_URL, storeSlug, TOKEN_JWT);
 
   // Helper local que intercepta o cache nativo
   const fetchWithStore = async (url, options = {}) => {
-    const token = localStorage.getItem('zenix_token') || localStorage.getItem('zenix_employeeToken') || localStorage.getItem('@Zenix:token');
     const storeId = (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '');
 
     const headers = {
-      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(TOKEN_JWT && { 'Authorization': `Bearer ${TOKEN_JWT}` }),
       ...(storeId && { 'x-loja-slug': storeId }),
       ...options.headers,
     };
 
-    // Força o navegador e a Vercel a ignorarem o cache
-    const finalOptions = {
-      ...options,
-      headers,
-      cache: 'no-store' 
-    };
-
+    const finalOptions = { ...options, headers, cache: 'no-store' };
     const response = await fetch(url, finalOptions);
 
-    if (response.status === 402) {
-      if (typeof window !== 'undefined') {
+    if (response.status === 402 && typeof window !== 'undefined') {
         window.location.href = `/${storeSlug}/bloqueado`; 
-      }
     }
     return response;
   };
@@ -207,19 +205,13 @@ function HomeContent({ storeSlug }) {
     }
   }, [isTotemMode]);
 
-  // 🚀 FETCH SETTINGS COM QUEBRADOR DE CACHE FORÇADO
   const fetchSystemSettings = () => {
-    const timestamp = Date.now(); // Quebra o cache da Vercel
+    const timestamp = Date.now(); 
     fetchWithStore(`${API_URL}/api/settings?_=${timestamp}`)
       .then((res) => res.json())
       .then((data) => {
-        // Resolve o bug do "Sempre Fechado": O backend tem que enviar isOpen: true/false.
-        // Se o backend ainda for antigo, assumimos aberto até atualizar
         const openStatus = data.isOpen !== undefined ? data.isOpen : true; 
-        
-        // Garante que respeita o fechamento manual também
         setIsStoreOpen(openStatus && !data.isManualFechado);
-        
         setDeliveryFee(Number(data.deliveryFee) || 0);
         setCashbackPercent(Number(data.cashbackPercent) || 0);
         setStoreSettings(data);
@@ -229,13 +221,14 @@ function HomeContent({ storeSlug }) {
 
   useEffect(() => {
     fetchSystemSettings();
-    const settingsInterval = setInterval(fetchSystemSettings, 20000);
+    // Aumentei o intervalo para 30s no app do cliente
+    const settingsInterval = setInterval(() => { if(isOnline) fetchSystemSettings(); }, 30000);
     return () => clearInterval(settingsInterval);
-  }, []);
+  }, [isOnline]);
 
   useEffect(() => {
     const registerVisit = async () => {
-      if (sessionStorage.getItem('@Zenix:visitLogged') || isTotemMode) return;
+      if (sessionStorage.getItem('@Zenix:visitLogged') || isTotemMode || !isOnline) return;
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       try {
         await fetchWithStore(`${API_URL}/api/analytics/visit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user?.id || null, device: isMobile ? 'Celular' : 'Computador' }) });
@@ -244,7 +237,7 @@ function HomeContent({ storeSlug }) {
     };
     const timer = setTimeout(registerVisit, 2000);
     return () => clearTimeout(timer);
-  }, [user, isTotemMode, API_URL]);
+  }, [user, isTotemMode, API_URL, isOnline]);
 
   useEffect(() => {
     if (view === 'payment_card' || view === 'payment_pix' || view === 'live_cam' || isTotemMode) return;
@@ -257,6 +250,7 @@ function HomeContent({ storeSlug }) {
     let intervalId;
     if (view === 'payment_pix' && pixInfo && pixInfo.orderId) {
       intervalId = setInterval(async () => {
+        if(!isOnline) return;
         try {
           const res = await fetchWithStore(`${API_URL}/api/orders/${pixInfo.orderId}/status?_=${Date.now()}`);
           if (res.ok) {
@@ -276,9 +270,8 @@ function HomeContent({ storeSlug }) {
       }, 5000);
     }
     return () => clearInterval(intervalId);
-  }, [view, pixInfo, isTotemMode, API_URL]);
+  }, [view, pixInfo, isTotemMode, API_URL, isOnline]);
 
-  // 🚀 BUSCA O CARDÁPIO COMPLETO IGNORANDO CACHES DA VERCEL
   useEffect(() => {
     const timestamp = Date.now();
     Promise.all([
@@ -312,12 +305,12 @@ function HomeContent({ storeSlug }) {
   }, [highlights, view]);
 
   useEffect(() => {
-    if (user && !isTotemMode && (view === 'orders' || view === 'live_cam')) {
+    if (user && !isTotemMode && (view === 'orders' || view === 'live_cam') && isOnline) {
       fetchClientOrders();
-      const interval = setInterval(fetchClientOrders, 8000);
+      const interval = setInterval(() => { if(isOnline) fetchClientOrders(); }, 8000);
       return () => clearInterval(interval);
     }
-  }, [user, view, isTotemMode]);
+  }, [user, view, isTotemMode, isOnline]);
 
   const fetchClientOrders = async () => {
     try {
@@ -496,6 +489,7 @@ function HomeContent({ storeSlug }) {
   };
 
   const handleApplyCoupon = async () => {
+    if (!isOnline) { alert("Sem internet. Não é possível validar cupom agora."); return; }
     if (useCashback) { alert("⚠️ Desmarque o saldo de Cashback primeiro para poder aplicar o cupom."); return; }
     if (!couponCode.trim()) return;
     setIsValidatingCoupon(true); setCouponError('');
@@ -511,6 +505,7 @@ function HomeContent({ storeSlug }) {
 
   const handleAuth = async (e) => {
     e.preventDefault();
+    if (!isOnline) return alert("Você precisa de internet para fazer Login ou Cadastro.");
     const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
     
     try {
@@ -531,14 +526,9 @@ function HomeContent({ storeSlug }) {
         if (match) { extCep = match[1]; extRua = match[2]; }
 
         setProfileForm({ 
-          name: data.user.name, 
-          email: data.user.email, 
-          phone: data.user.phone || '', 
-          cpf: data.user.cpf || '', 
-          birthDate: data.user.birthDate || '', 
-          address: extRua, 
-          cep: extCep,
-          password: '' 
+          name: data.user.name, email: data.user.email, phone: data.user.phone || '', 
+          cpf: data.user.cpf || '', birthDate: data.user.birthDate || '', 
+          address: extRua, cep: extCep, password: '' 
         });
         
         localStorage.setItem('@Zenix:token', data.token);
@@ -556,6 +546,7 @@ function HomeContent({ storeSlug }) {
 
   const handleForgotPassword = async (e) => {
     e.preventDefault(); setIsSendingCode(true);
+    if (!isOnline) return alert("Operação requer internet.");
     try {
       const res = await fetchWithStore(`${API_URL}/api/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: recoveryEmail }) });
       const data = JSON.parse(await res.text());
@@ -565,6 +556,7 @@ function HomeContent({ storeSlug }) {
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
+    if (!isOnline) return alert("Operação requer internet.");
     try {
       const res = await fetchWithStore(`${API_URL}/api/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: recoveryEmail, code: recoveryCode, newPassword }) });
       const data = await res.json();
@@ -574,6 +566,7 @@ function HomeContent({ storeSlug }) {
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
+    if (!isOnline) return alert("Operação requer internet.");
     try {
       const payload = { ...profileForm, address: `CEP: ${profileForm.cep || ''} - ${profileForm.address || ''}` };
       const res = await fetchWithStore(`${API_URL}/api/users/${user.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -592,9 +585,13 @@ function HomeContent({ storeSlug }) {
       quantity: item.quantity,
       price: item.price,
       observation: item.observation,
+      name: item.name,
       flavors: item.flavors ? JSON.stringify(item.flavors) : undefined
   }));
 
+  // =========================================================================
+  // 🔥 FINALIZAÇÃO DE PEDIDO (DELIVERY E TOTEM OFFLINE)
+  // =========================================================================
   const handleCheckoutBtnClick = async (e, customFullAddress) => {
     if (e) e.preventDefault();
     if (isSubmittingOrder) return;
@@ -605,22 +602,69 @@ function HomeContent({ storeSlug }) {
     if (!isStoreOpen && !hasScheduledItem && !isTotemMode) { alert('A loja está fechada agora.'); return; }
     if (paymentMethod === 'CREDIT_CARD_ONLINE') { setView('payment_card'); return; }
 
+    // 🛑 BLOQUEIO DELIVERY OFFLINE
+    if (!isOnline && !isTotemMode) {
+        alert("⚠️ Sem conexão com a internet. Verifique sua rede (Wi-Fi ou 4G) e tente novamente.");
+        return;
+    }
+
     setIsSubmittingOrder(true);
     try {
-      const res = await fetchWithStore(`${API_URL}/api/orders`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: isTotemMode ? 'TOTEM_MODE' : user.id, items: buildItemsPayload(), address: customFullAddress, paymentMethod, total: cartTotal, useCashback, couponCode: appliedCoupon?.code || null, client: { name: isTotemMode ? totemName : user?.name, cpf: cpfNaNota } })
-      });
-      const data = await res.json();
-      if (data.success) {
-        if (!isTotemMode) setUser({ ...user, cashback: { balance: data.newBalance } });
-        if (data.pix) { setPixInfo(data.pix); setView('payment_pix'); } 
-        else {
-          if (isTotemMode) { alert(`✅ Pedido realizado!\nDirija-se ao caixa para pagamento.`); setCart([]); setTotemName(''); setView('menu'); } 
-          else { alert(`Pedido realizado!`); setCart([]); setUseCashback(false); setObservations(''); setCouponCode(''); setAppliedCoupon(null); setView('orders'); }
-        }
-      } else alert(data.error);
-    } catch (error) {} finally { setIsSubmittingOrder(false); }
+      const payloadParams = {
+          clientId: isTotemMode ? 'TOTEM_MODE' : user.id,
+          items: buildItemsPayload(),
+          address: isTotemMode ? `Cliente Totem: ${totemName}` : customFullAddress,
+          paymentMethod,
+          total: cartTotal,
+          useCashback,
+          couponCode: appliedCoupon?.code || null,
+          client: { name: isTotemMode ? totemName : user?.name, cpf: cpfNaNota }
+      };
+
+      if (isOnline) {
+          const res = await fetchWithStore(`${API_URL}/api/orders`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payloadParams)
+          });
+          const data = await res.json();
+          if (data.success) {
+            if (!isTotemMode) setUser({ ...user, cashback: { balance: data.newBalance } });
+            if (data.pix) { setPixInfo(data.pix); setView('payment_pix'); } 
+            else {
+              if (isTotemMode) { alert(`✅ Pedido realizado!\nDirija-se ao caixa para pagamento.`); setCart([]); setTotemName(''); setView('menu'); } 
+              else { alert(`Pedido realizado!`); setCart([]); setUseCashback(false); setObservations(''); setCouponCode(''); setAppliedCoupon(null); setView('orders'); }
+            }
+          } else alert(data.error);
+      } else if (isTotemMode) {
+          // 🔥 MODO OFFLINE PARA TOTEM (Grava no Dexie e manda pro Caixa)
+          const shortIdRandom = Math.floor(1000 + Math.random() * 9000);
+          const offlineRes = await processarPedido(payloadParams);
+          
+          if (offlineRes.success) {
+              const printIp = localStorage.getItem('zenix_print_ip');
+              if (printIp) {
+                  const payloadOffline = {
+                      tabId: `TOTEM-${shortIdRandom}`,
+                      tabNumber: `TOTEM-${shortIdRandom}`,
+                      employeeName: 'Totem de Autoatendimento',
+                      items: payloadParams.items,
+                      paymentMethod: paymentMethod,
+                      total: cartTotal,
+                      customerName: totemName
+                  };
+                  fetch(`http://${printIp}:8080/pedido-local`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(payloadOffline)
+                  }).catch(() => console.warn("Caixa local inacessível."));
+              }
+              alert(`📡 MODO REDE LOCAL: Pedido salvo!\nDirija-se ao caixa para pagamento e informe seu nome: ${totemName}.`);
+              setCart([]); setTotemName(''); setView('menu');
+          } else {
+              alert("Erro ao gravar pedido offline no Totem.");
+          }
+      }
+    } catch (error) { alert("Erro de comunicação com o sistema."); } finally { setIsSubmittingOrder(false); }
   };
 
   const copyPixToClipboard = () => {
@@ -647,6 +691,11 @@ function HomeContent({ storeSlug }) {
   };
 
   const onSubmitCard = async ({ selectedPaymentMethod, formData }) => {
+    if (!isOnline) {
+        alert('Pagamento via Cartão Online requer conexão com a internet.');
+        return Promise.reject();
+    }
+    
     const hasScheduledItem = cart.some(i => i.isScheduled);
     const obsTratada = hasScheduledItem ? `[AGENDADO DOM: ${cart.find(i => i.isScheduled)?.time || ''}] ${observations}`.trim() : observations;
     const fullAddress = `CEP: ${cep} - ${address}${obsTratada ? ` | OBS: ${obsTratada}` : ''}`;
@@ -670,6 +719,7 @@ function HomeContent({ storeSlug }) {
 
   const handleSubmitReview = async (e) => {
     e.preventDefault();
+    if (!isOnline) return alert("Operação requer internet.");
     setIsSubmittingReview(true);
     try {
       const res = await fetchWithStore(`${API_URL}/api/avaliacoes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clienteNome: user.name, nota: reviewRating, comentario: reviewComment }) });
@@ -716,8 +766,17 @@ function HomeContent({ storeSlug }) {
     <div className={isDarkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 font-sans pb-28 selection:bg-amber-500 selection:text-zinc-950 transition-colors duration-500 flex flex-col justify-between">
         
-        {/* 🎯 HEADER A RECEBER AS IMAGENS DO BANCO DE DADOS */}
-        {!isTotemMode && <Header view={view} setView={setView} isScrolled={isScrolled} user={user} availableCashback={availableCashback} setAuthMode={setAuthMode} isDarkMode={isDarkMode} toggleTheme={toggleTheme} storeSettings={storeSettings} />}
+        {/* 🎯 HEADER */}
+        {!isTotemMode && (
+           <>
+              {!isOnline && (
+                 <div className="bg-red-500 text-white text-center py-1.5 text-[10px] font-black uppercase tracking-widest fixed top-0 w-full z-[100]">
+                    Você está sem conexão de rede
+                 </div>
+              )}
+              <Header view={view} setView={setView} isScrolled={isScrolled} user={user} availableCashback={availableCashback} setAuthMode={setAuthMode} isDarkMode={isDarkMode} toggleTheme={toggleTheme} storeSettings={storeSettings} />
+           </>
+        )}
         
         {isTotemMode && (
           <div className="relative bg-white dark:bg-gradient-to-b dark:from-black dark:to-[#0a0a0a] border-b border-slate-200 dark:border-white/5 p-6 md:p-8 flex justify-between items-center sticky top-0 z-40 shadow-xl cursor-pointer transition-colors overflow-hidden" onClick={handleFullscreen}>
@@ -733,7 +792,11 @@ function HomeContent({ storeSlug }) {
               <div className="flex items-center gap-4 relative z-10">
                   <span className="text-4xl animate-bounce">⚡</span>
                   <div>
-                    <h1 className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tight">{storeSettings?.store?.name || 'Zenix'}</h1>
+                    <h1 className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tight flex items-center gap-3">
+                        {storeSettings?.store?.name || 'Zenix'}
+                        {!isOnline && <span className="bg-red-500 text-white px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest font-black animate-pulse shadow-sm">Offline</span>}
+                        {pedidosPendentes > 0 && isOnline && <span className="bg-amber-500 text-white px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest font-black shadow-sm">{pedidosPendentes} Sync</span>}
+                    </h1>
                     <span className="text-amber-600 dark:text-amber-500 font-bold text-sm tracking-widest uppercase">Autoatendimento</span>
                   </div>
               </div>
@@ -981,6 +1044,20 @@ function HomeContent({ storeSlug }) {
         <CostelaModal showCostelaModal={showCostelaModal} setShowCostelaModal={setShowCostelaModal} costelaProduct={costelaProduct} costelaSize={costelaSize} setCostelaSize={setCostelaSize} costelaTime={costelaTime} setCostelaTime={setCostelaTime} confirmCostelaOrder={confirmCostelaOrder} />
         <UpsellModal showUpsellModal={showUpsellModal} upsellItem={upsellItem} handleAcceptUpsell={handleAcceptUpsell} handleDeclineUpsell={handleDeclineUpsell} />
       </div>
+      
+      {/* 🔥 BOTÃO SECRETO PARA CONFIGURAR IP DO CAIXA (SÓ NO MODO TOTEM) */}
+      {isTotemMode && (
+          <div 
+            onClick={() => {
+              const atual = localStorage.getItem('zenix_print_ip') || '';
+              const novo = prompt("⚙️ Configuração Técnica\nQual o IP local (Wi-Fi) do Computador do Caixa?", atual);
+              if (novo !== null) { localStorage.setItem('zenix_print_ip', novo); alert("IP Salvo: " + novo); }
+            }}
+            className="fixed bottom-2 right-4 text-[10px] text-slate-400 font-bold z-50 cursor-pointer hover:text-white mix-blend-difference"
+          >
+            Desenvolvido por V2M Commercial Automation
+          </div>
+      )}
     </div>
   );
 }
