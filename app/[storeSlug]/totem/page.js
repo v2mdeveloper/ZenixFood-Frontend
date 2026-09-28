@@ -3,25 +3,8 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
-// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
 import { useOfflineSync } from '@/app/hooks/useOfflineSync';
 
-import Header from '../components/Header';
-import Footer from '../components/Footer';
-import FloatingCart from '../components/FloatingCart';
-
-import MenuView from '../components/views/MenuView';
-import AuthView from '../components/views/AuthView';
-import CheckoutView from '../components/views/CheckoutView';
-import OrdersView from '../components/views/OrdersView';
-import ProfileView from '../components/views/ProfileView';
-import LiveCamView from '../components/views/LiveCamView';
-
-import CarrosselAvaliacoes from '../components/CarrosselAvaliacoes';
-import ReviewModal from '../components/modals/ReviewModal';
-import CostelaModal from '../components/modals/CostelaModal';
-import UpsellModal from '../components/modals/UpsellModal';
-import ProductDetailsModal from '../components/modals/ProductDetailsModal';
 
 //FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {
