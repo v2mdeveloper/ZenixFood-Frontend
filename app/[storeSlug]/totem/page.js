@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
+// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
 import { useOfflineSync } from '@/app/hooks/useOfflineSync';
 
 import Header from '../components/Header';
@@ -13,7 +14,10 @@ import MenuView from '../components/views/MenuView';
 import AuthView from '../components/views/AuthView';
 import CheckoutView from '../components/views/CheckoutView';
 import OrdersView from '../components/views/OrdersView';
+import ProfileView from '../components/views/ProfileView';
+import LiveCamView from '../components/views/LiveCamView';
 
+import CarrosselAvaliacoes from '../components/CarrosselAvaliacoes';
 import ReviewModal from '../components/modals/ReviewModal';
 import CostelaModal from '../components/modals/CostelaModal';
 import UpsellModal from '../components/modals/UpsellModal';
@@ -40,7 +44,9 @@ function HomeContent({ storeSlug }) {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [selectedProductModal, setSelectedProductModal] = useState(null);
 
-  const [storeData, setStoreData] = useState(null); // 🔥 RESTAURADO
+  // 🔥 RESTAURADO: ESTADO ESSENCIAL DA LOJA
+  const [storeData, setStoreData] = useState(null);
+
   const [menu, setMenu] = useState([]);
   const [highlights, setHighlights] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -101,7 +107,7 @@ function HomeContent({ storeSlug }) {
   const [isTotemMode, setIsTotemMode] = useState(false);
   const [totemName, setTotemName] = useState('');
 
-  // Estados específicos do Totem Tradicional (Tela de Idioma)
+  // Estados específicos do Totem Tradicional
   const [isIdle, setIsIdle] = useState(true);
   const [lang, setLanguage] = useState('pt');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -132,7 +138,7 @@ function HomeContent({ storeSlug }) {
       buildPizza: "Montar Pizza", howManyFlavors: "Quantos sabores?", chooseFlavors: "Escolha suas metades", confirmPizza: "Confirmar Pizza"
     },
     en: {
-      touchToStart: "Touch to Start", selectLanguage: "Select your language", cancelOrder: "Cancelar Pedido",
+      touchToStart: "Touch to Start", selectLanguage: "Select your language", cancelOrder: "Cancel Order",
       emptyCart: "Your order is empty. Tap items to add.", totalToPay: "Total to Pay",
       checkout: "CHECKOUT", selectCategory: "Select a category",
       namePrompt: "What's your name?", payMethodPrompt: "How would you like to pay?", payNow: "Confirm Order",
@@ -146,7 +152,7 @@ function HomeContent({ storeSlug }) {
       checkout: "FINALIZAR PEDIDO", selectCategory: "Selecciona una categoría",
       namePrompt: "¿Cómo te llamas?", payMethodPrompt: "¿Cómo prefieres pagar?", payNow: "Confirmar Pedido",
       payMachine: "Tarjeta en el Totem", payPix: "Pix", payCash: "Pagar en la Caja", insertingOrder: "Enviando...",
-      orderSuccessTitle: "¡Pedido Confirmado!", orderSuccessSub: "Espera tu nombre ou número en la pantalla.", passwordIs: "Tu Contraseña:",
+      orderSuccessTitle: "¡Pedido Confirmado!", orderSuccessSub: "Espera tu nombre o número en la pantalla.", passwordIs: "Tu Contraseña:",
       buildPizza: "Armar Pizza", howManyFlavors: "¿Cuántos sabores?", chooseFlavors: "Elige tus sabores", confirmPizza: "Confirmar Pizza"
     }
   };
@@ -166,7 +172,7 @@ function HomeContent({ storeSlug }) {
     return response;
   };
 
-  // 🔥 RESTAURADO: Busca dados públicos da loja e cardápio
+  // 🔥 RESTAURADO: Busca dados públicos da loja e cardápio principal
   useEffect(() => {
     if (!storeSlug) return;
     const fetchStoreAndMenu = async () => {
@@ -180,6 +186,7 @@ function HomeContent({ storeSlug }) {
         if (resMenu.ok) {
           const menuData = await resMenu.json();
           setMenu(menuData);
+          if (menuData.length > 0) setActiveCategory(menuData[0].id);
         }
       } catch (error) { console.error("Erro ao carregar dados", error); } finally { setLoading(false); }
     };
@@ -291,18 +298,23 @@ function HomeContent({ storeSlug }) {
   useEffect(() => {
     const timestamp = Date.now();
     Promise.all([
-      fetchWithStore(`${API_URL}/api/menu?_=${timestamp}`).then((res) => res.json()),
       fetchWithStore(`${API_URL}/api/products/highlights?_=${timestamp}`).then((res) => res.json()),
       fetchWithStore(`${API_URL}/api/suppliers?_=${timestamp}`).then((res) => res.ok ? res.json() : []).catch(() => []),
       fetchWithStore(`${API_URL}/api/upsells?_=${timestamp}`).then((res) => res.ok ? res.json() : []).catch(() => []) 
-    ]).then(([menuData, highlightsData, suppliersData, upsellsData]) => {
-      setMenu(menuData); 
+    ]).then(([highlightsData, suppliersData, upsellsData]) => {
       setHighlights(highlightsData); 
       setSuppliers(suppliersData); 
       setUpsells(upsellsData || []);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch(() => {});
   }, []);
+
+  const handleStart = (selectedLang) => {
+    setLanguage(selectedLang); setIsIdle(false);
+    const elem = document.documentElement;
+    if (!document.fullscreenElement) {
+      if (elem.requestFullscreen) elem.requestFullscreen().catch(e => {});
+    }
+  };
 
   const handleOpenCostelaModal = (product) => {
     setCostelaProduct(product); 
@@ -403,6 +415,10 @@ function HomeContent({ storeSlug }) {
     if (cart.length === 1) setView('menu');
   };
 
+  const updateQuantity = (id, delta) => {
+    setCart(prev => prev.map(item => item.id === id ? { ...item, quantity: item.quantity + delta } : item).filter(i => i.quantity > 0));
+  };
+
   const cartTotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
 
   let couponDiscount = 0;
@@ -482,6 +498,41 @@ function HomeContent({ storeSlug }) {
       flavors: item.flavors ? JSON.stringify(item.flavors) : undefined
   }));
 
+  const dispararPagamentoSmartPos = (provider, totalFinal, metodoPagamento, orderId) => {
+    const valorCentavos = Math.round(Number(totalFinal) * 100);
+    
+    let tipoTransacao = 'DEBIT'; 
+    if (metodoPagamento.includes('CREDIT')) tipoTransacao = 'CREDIT';
+    if (metodoPagamento.includes('PIX')) tipoTransacao = 'PIX';
+
+    const returnUrl = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
+    let deepLink = '';
+
+    switch (provider) {
+      case 'stone':
+        deepLink = `stone://pay?amount=${valorCentavos}&editable_amount=0&transaction_type=${tipoTransacao}&return_scheme=${returnUrl}`;
+        break;
+      case 'pagseguro':
+        let pagTipo = 2; if (tipoTransacao === 'CREDIT') pagTipo = 1; if (tipoTransacao === 'PIX') pagTipo = 4;
+        deepLink = `pagseguro://pay?amount=${valorCentavos}&type=${pagTipo}&return_scheme=${returnUrl}`;
+        break;
+      case 'mercado_pago':
+        deepLink = `mercadopago://pay?amount=${Number(totalFinal).toFixed(2)}&return_url=${returnUrl}`;
+        break;
+      case 'simulador':
+        alert(`(SIMULADOR) O sistema chamou a máquina de cartões.\n\nValor: R$ ${Number(totalFinal).toFixed(2)}\nMétodo: ${tipoTransacao}\n\nAguardando cliente digitar a senha...`);
+        setTimeout(() => { alert("(SIMULADOR) Pagamento Aprovado na Máquina! Imprimindo comprovante..."); }, 3000);
+        return true;
+      default: return false;
+    }
+
+    if (provider !== 'simulador') { window.location.href = deepLink; }
+    return true;
+  };
+
+  // =========================================================================
+  // 🔥 FINALIZAÇÃO DE PEDIDO (DELIVERY E TOTEM OFFLINE)
+  // =========================================================================
   const handleCheckoutBtnClick = async (e, customFullAddress) => {
     if (e) e.preventDefault();
     if (isSubmittingOrder) return;
@@ -690,6 +741,17 @@ function HomeContent({ storeSlug }) {
               </div>
             )}
 
+            {view === 'payment_card' && !isTotemMode && (
+              <div className="animate-fade-in-up w-full max-w-2xl mx-auto py-4">
+                <div className="bg-white dark:bg-[#121212] p-4 md:p-8 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/5 transition-colors">
+                  <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2 text-center transition-colors">💳 Pagamento Seguro</h2>
+                  <p className="text-slate-500 dark:text-zinc-400 text-sm text-center mb-6 transition-colors">Processado pelo Mercado Pago</p>
+                  <Payment initialization={mpInitialization} customization={mpCustomization} onSubmit={onSubmitCard} />
+                  <button onClick={() => setView('checkout')} className="w-full text-center mt-8 text-slate-500 dark:text-zinc-400 font-bold hover:text-slate-900 dark:hover:text-white underline text-sm cursor-pointer">⬅ Cancelar e voltar para a sacola</button>
+                </div>
+              </div>
+            )}
+
             {view === 'auth' && !isTotemMode && (
               <AuthView authMode={authMode} setAuthMode={setAuthMode} authForm={authForm} setAuthForm={setAuthForm} handleAuth={handleAuth} showPassword={showPassword} setShowPassword={setShowPassword} recoveryEmail={recoveryEmail} setRecoveryEmail={setRecoveryEmail} handleForgotPassword={handleForgotPassword} isSendingCode={isSendingCode} recoveryCode={recoveryCode} setRecoveryCode={setRecoveryCode} newPassword={newPassword} setNewPassword={setNewPassword} handleResetPassword={handleResetPassword} />
             )}
@@ -705,6 +767,7 @@ function HomeContent({ storeSlug }) {
         
         <ProductDetailsModal product={selectedProductModal} onClose={() => setSelectedProductModal(null)} onAddToCart={addToCart} renderProductBadges={renderProductBadges} menu={menu} user={user} availableCashback={availableCashback} />
 
+        {/* 🍕 MODAL: CONSTRUTOR DE PIZZA */}
         {showPizzaModal && pizzaBase && (
           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in-up">
             <div className="bg-white dark:bg-[#121212] rounded-[2rem] shadow-2xl p-6 w-full max-w-2xl flex flex-col max-h-[90vh] border border-slate-200 dark:border-white/10">
@@ -758,24 +821,7 @@ function HomeContent({ storeSlug }) {
             </div>
           </div>
         )}
-
-        <ReviewModal reviewOrder={reviewOrder} setReviewOrder={setReviewOrder} reviewRating={reviewRating} setReviewRating={setReviewRating} reviewComment={reviewComment} setReviewComment={setReviewComment} isSubmittingReview={isSubmittingReview} handleSubmitReview={handleSubmitReview} />
-        <CostelaModal showCostelaModal={showCostelaModal} setShowCostelaModal={setShowCostelaModal} costelaProduct={costelaProduct} costelaSize={costelaSize} setCostelaSize={setCostelaSize} costelaTime={costelaTime} setCostelaTime={setCostelaTime} confirmCostelaOrder={confirmCostelaOrder} />
-        <UpsellModal showUpsellModal={showUpsellModal} upsellItem={upsellItem} handleAcceptUpsell={handleAcceptUpsell} handleDeclineUpsell={handleDeclineUpsell} />
       </div>
-      
-      {isTotemMode && (
-          <div 
-            onClick={() => {
-              const atual = localStorage.getItem('zenix_print_ip') || '';
-              const novo = prompt("⚙️ Configuração Técnica do Totem\nQual o IP local (Wi-Fi) do Computador do Caixa?", atual);
-              if (novo !== null) { localStorage.setItem('zenix_print_ip', novo); alert("IP Salvo com sucesso: " + novo); }
-            }}
-            className="fixed bottom-2 right-4 text-[10px] text-amber-500 font-bold z-50 cursor-pointer bg-black/80 px-3 py-1.5 rounded-lg border border-amber-500/30 shadow-2xl hover:text-white transition-colors"
-          >
-            ⚙️ Configurar IP Caixa
-          </div>
-      )}
     </div>
   );
 }
