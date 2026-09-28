@@ -3,21 +3,25 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 
+// 🔥 IMPORTAÇÃO DO MOTOR DE SINCRONIZAÇÃO OFFLINE
 import { useOfflineSync } from '@/app/hooks/useOfflineSync';
 
-import Header from '@/app/[storeSlug]/components/Header';
-import Footer from '@/app/[storeSlug]/components/Footer';
-import FloatingCart from '@/app/[storeSlug]/components/FloatingCart';
+import Header from '@/app/components/Header';
+import Footer from '@/app/components/Footer';
+import FloatingCart from '@/app/components/FloatingCart';
 
-import MenuView from '@/app/[storeSlug]/components/views/MenuView';
-import AuthView from '@/app/[storeSlug]/components/views/AuthView';
-import CheckoutView from '@/app/[storeSlug]/components/views/CheckoutView';
-import OrdersView from '@/app/[storeSlug]/components/views/OrdersView';
+import MenuView from '@/app/components/views/MenuView';
+import AuthView from '@/app/components/views/AuthView';
+import CheckoutView from '@/app/components/views/CheckoutView';
+import OrdersView from '@/app/components/views/OrdersView';
+import ProfileView from '@/app/components/views/ProfileView';
+import LiveCamView from '@/app/components/views/LiveCamView';
 
-import ReviewModal from '@/app/[storeSlug]/components/modals/ReviewModal';
-import CostelaModal from '@/app/[storeSlug]/components/modals/CostelaModal';
-import UpsellModal from '@/app/[storeSlug]/components/modals/UpsellModal';
-import ProductDetailsModal from '@/app/[storeSlug]/components/modals/ProductDetailsModal';
+import CarrosselAvaliacoes from '@/app/components/CarrosselAvaliacoes';
+import ReviewModal from '@/app/components/modals/ReviewModal';
+import CostelaModal from '@/app/components/modals/CostelaModal';
+import UpsellModal from '@/app/components/modals/UpsellModal';
+import ProductDetailsModal from '@/app/components/modals/ProductDetailsModal';
 
 //FUNÇÃO INTELIGENTE PARA DEFINIR O ÍCONE DA CATEGORIA
 const getCategoryIcon = (category) => {
@@ -40,6 +44,7 @@ function HomeContent({ storeSlug }) {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [selectedProductModal, setSelectedProductModal] = useState(null);
 
+  const [storeData, setStoreData] = useState(null); // 🔥 RESTAURADO
   const [menu, setMenu] = useState([]);
   const [highlights, setHighlights] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -131,7 +136,7 @@ function HomeContent({ storeSlug }) {
       buildPizza: "Montar Pizza", howManyFlavors: "Quantos sabores?", chooseFlavors: "Escolha suas metades", confirmPizza: "Confirmar Pizza"
     },
     en: {
-      touchToStart: "Touch to Start", selectLanguage: "Select your language", cancelOrder: "Cancel Order",
+      touchToStart: "Touch to Start", selectLanguage: "Select your language", cancelOrder: "Cancelar Pedido",
       emptyCart: "Your order is empty. Tap items to add.", totalToPay: "Total to Pay",
       checkout: "CHECKOUT", selectCategory: "Select a category",
       namePrompt: "What's your name?", payMethodPrompt: "How would you like to pay?", payNow: "Confirm Order",
@@ -145,7 +150,7 @@ function HomeContent({ storeSlug }) {
       checkout: "FINALIZAR PEDIDO", selectCategory: "Selecciona una categoría",
       namePrompt: "¿Cómo te llamas?", payMethodPrompt: "¿Cómo prefieres pagar?", payNow: "Confirmar Pedido",
       payMachine: "Tarjeta en el Totem", payPix: "Pix", payCash: "Pagar en la Caja", insertingOrder: "Enviando...",
-      orderSuccessTitle: "¡Pedido Confirmado!", orderSuccessSub: "Espera tu nombre o número en la pantalla.", passwordIs: "Tu Contraseña:",
+      orderSuccessTitle: "¡Pedido Confirmado!", orderSuccessSub: "Espera tu nombre ou número en la pantalla.", passwordIs: "Tu Contraseña:",
       buildPizza: "Armar Pizza", howManyFlavors: "¿Cuántos sabores?", chooseFlavors: "Elige tus sabores", confirmPizza: "Confirmar Pizza"
     }
   };
@@ -164,6 +169,26 @@ function HomeContent({ storeSlug }) {
     }
     return response;
   };
+
+  // 🔥 RESTAURADO: Busca dados públicos da loja e cardápio
+  useEffect(() => {
+    if (!storeSlug) return;
+    const fetchStoreAndMenu = async () => {
+      try {
+        const [resStore, resMenu] = await Promise.all([
+          fetch(`${API_URL}/api/settings/public/${storeSlug}`),
+          fetch(`${API_URL}/api/menu/public/${storeSlug}`)
+        ]);
+        
+        if (resStore.ok) setStoreData(await resStore.json());
+        if (resMenu.ok) {
+          const menuData = await resMenu.json();
+          setMenu(menuData);
+        }
+      } catch (error) { console.error("Erro ao carregar dados", error); } finally { setLoading(false); }
+    };
+    fetchStoreAndMenu();
+  }, [storeSlug]);
 
   useEffect(() => {
     if (storeSettings?.mercadoPagoPublicKey) {
