@@ -14,10 +14,8 @@ import MenuView from './components/views/MenuView';
 import AuthView from './components/views/AuthView';
 import CheckoutView from './components/views/CheckoutView';
 import OrdersView from './components/views/OrdersView';
-import ProfileView from './components/views/ProfileView';
-import LiveCamView from './components/views/LiveCamView';
 
-import CarrosselAvaliacoes from './components/CarrosselAvaliacoes';
+
 import ReviewModal from './components/modals/ReviewModal';
 import CostelaModal from './components/modals/CostelaModal';
 import UpsellModal from './components/modals/UpsellModal';
